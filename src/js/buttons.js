@@ -3,108 +3,81 @@ import { saveBlob } from './helpers.js';
 import Workbook from './workbook/workbook.js';
 
 /**
- * Generate a CSV file from the table.
+ * Downloads the displayed rows as CSV, escaping delimiters, quotes and line breaks.
  * @param {object} options The button options.
- * @param {object} data The headings and displayed rows.
- * @param {string[]} data.headings The exported headings.
- * @param {Array<Array<*>>} data.rows The displayed row values.
+ * @param {string} [options.title] The download title.
+ * @param {boolean} [options.escapeFormulae=true] Prefix spreadsheet formula-like strings with an apostrophe.
+ * @param {object} data The export data.
+ * @param {string[]} data.headings The headings.
+ * @param {Array<Array<*>>} data.rows The displayed rows.
  */
-export function csv(options, { headings, rows: results }) {
-    if (!options.title) {
-        options.title = $.getText('title');
-    }
-
-    const rows = [
-        headings,
-        ...results,
-    ];
-
-    // build csv data
-    const lines = [];
-
-    for (const row of rows) {
-        const line = row.map(
-            (value) => {
-                value = `${value}`.replace(/"/g, '""');
-
-                if (value.indexOf(',') >= 0) {
-                    return `"${value}"`;
-                }
-
-                return value;
-            },
-        ).join(',');
-
-        lines.push(line);
-    }
-
-    const blob = new Blob(
-        [
-            lines.join('\r\n'),
-        ],
-        { type: 'text/csv;charset=utf-8;' },
-    );
-
-    saveBlob(blob, `${options.title}.csv`);
+export function csv(options, { headings, rows }) {
+    const title = options.title || document.title;
+    const lines = [headings, ...rows].map((row) => row.map((value) => {
+        let text = String(value ?? '');
+        if (options.escapeFormulae !== false && typeof value === 'string' && /^[\s]*[=+\-@\t\r]/.test(text)) {
+            text = `'${text}`;
+        }
+        return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+    }).join(','));
+    saveBlob(new Blob([lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' }), `${title}.csv`);
 };
-/**
- * Generate an excel file from the table.
- * @param {object} options The button options.
- * @param {object} data The headings and displayed rows.
- * @param {string[]} data.headings The exported headings.
- * @param {Array<Array<*>>} data.rows The displayed row values.
- */
-export function excel(options, { headings, rows: results }) {
-    if (!options.title) {
-        options.title = $.getText('title');
-    }
 
+/**
+ * Downloads the displayed rows as an Excel workbook.
+ * @param {object} options The button options.
+ * @param {object} data The export data.
+ * @param {string[]} data.headings The headings.
+ * @param {Array<Array<*>>} data.rows The displayed rows.
+ */
+export function excel(options, { headings, rows }) {
     const workbook = new Workbook();
-    workbook.addSheet({
-        header: headings,
-        rows: results,
-    });
-
-    const blob = workbook.create();
-
-    saveBlob(blob, `${options.title}.xlsx`);
+    workbook.addSheet({ header: headings, rows });
+    saveBlob(workbook.create(), `${options.title || document.title}.xlsx`);
 };
 
 /**
- * Print the table.
+ * Opens a text-only print view and waits for its styles and fonts.
  * @param {object} options The button options.
  * @param {HTMLTableElement} table The table to print.
  * @param {string} classes The table classes.
+ * @returns {Promise<void>} Completion of print preparation, or nothing when blocked.
  */
-export function print(options, table, classes) {
-    if (!options.title) {
-        options.title = $.getText('title');
+export async function print(options, table, classes) {
+    const win = window.open('', '_blank');
+    if (!win) {
+        return;
     }
-
-    const win = window.open('', '');
-
-    win.document.head.innerHTML = `<title>${options.title}</title>`;
-
-    const styles = $.find('link, style');
-    const newStyles = $.clone(styles);
-
-    for (const element of newStyles) {
-        if ($.tagName(element) === 'link') {
-            const oldRel = $.getAttribute(element, 'href');
-            const href = (new URL(oldRel, document.location)).href;
-            $.setAttribute(element, { href });
+    const title = options.title || document.title;
+    win.document.title = title;
+    win.document.documentElement.dir = table.dir || document.documentElement.dir;
+    const heading = win.document.createElement('h1');
+    heading.textContent = title;
+    $.addClass(table, classes || '');
+    win.document.body.append(heading, table);
+    const loads = [];
+    for (const element of document.querySelectorAll('link[rel="stylesheet"], style')) {
+        const clone = win.document.importNode(element, true);
+        if (clone.tagName === 'LINK') {
+            clone.href = element.href;
+            loads.push(new Promise((resolve) => {
+                clone.addEventListener('load', resolve, { once: true });
+                clone.addEventListener('error', resolve, { once: true });
+            }));
         }
-        win.document.head.appendChild(element);
+        win.document.head.append(clone);
     }
-
-    const container = $.create('div');
-    $.addClass(table, classes);
-    $.append(container, table);
-    const tableHtml = $.getHtml(container);
-    win.document.body.innerHTML = `<h1>${options.title}</h1>${tableHtml}`;
-
-    setTimeout((_) => {
+    try {
+        await Promise.all(loads);
+        await win.document.fonts.ready;
+        if (win.closed) {
+            return;
+        }
+        win.focus();
         win.print();
-        win.close();
-    }, 1000);
+    } finally {
+        if (!win.closed) {
+            win.close();
+        }
+    }
 };

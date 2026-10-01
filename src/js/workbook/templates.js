@@ -42,7 +42,7 @@ export const templates = {
         '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="{ref}"/><cols>{cols}</cols><sheetData>{rows}</sheetData></worksheet>',
     'xl/sharedStrings.xml':
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-        '<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="{cnt}" uniqueCount="{cnt}">{strings}</sst>',
+        '<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="{cnt}" uniqueCount="{unique}">{strings}</sst>',
     'xl/styles.xml':
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
         '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
@@ -50,7 +50,7 @@ export const templates = {
         '<fills count="1"><fill><patternFill patternType="none"/></fill></fills>' +
         '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>' +
         '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" /></cellStyleXfs>' +
-        '<cellXfs count="8">' +
+        '<cellXfs count="9">' +
         '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>' +
         '<xf numFmtId="1" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>' +
         '<xf numFmtId="9" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>' +

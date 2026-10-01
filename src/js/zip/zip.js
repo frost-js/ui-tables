@@ -22,21 +22,25 @@ const length = (string) => {
 };
 
 /**
- * Convert a number to an Int16Array.
+ * Encodes an unsigned 16-bit integer in little-endian byte order.
  * @param {number} number The number.
- * @returns {Int16Array} The Int16Array.
+ * @returns {Uint8Array} The encoded bytes.
  */
 const signed16 = (number) => {
-    return new Int16Array([number]);
+    const bytes = new Uint8Array(2);
+    new DataView(bytes.buffer).setUint16(0, number, true);
+    return bytes;
 };
 
 /**
- * Convert a number to an Int32Array.
+ * Encodes an unsigned 32-bit integer in little-endian byte order.
  * @param {number} number The number.
- * @returns {Int32Array} The Int32Array.
+ * @returns {Uint8Array} The encoded bytes.
  */
 const signed32 = (number) => {
-    return new Int32Array([number]);
+    const bytes = new Uint8Array(4);
+    new DataView(bytes.buffer).setUint32(0, number, true);
+    return bytes;
 };
 
 /**
@@ -69,7 +73,7 @@ export default class Zip {
      * @param {string} data The data.
      */
     addFile(filename, data) {
-        const vNeeded = 10;
+        const vNeeded = 20;
 
         const filenameLength = length(filename);
 
@@ -89,28 +93,15 @@ export default class Zip {
 
         const now = new Date;
 
-        let offsetSeconds = now.getSeconds();
-        if (offsetSeconds >= 32) {
-            offsetSeconds -= 32;
-        }
-
-        const offsetYear = now.getYear() - 1980;
-
-        const seconds = `${offsetSeconds.toString(2)}`.padStart(5, '0');
-        const minutes = `${now.getMinutes().toString(2)}`.padStart(6, '0');
-        const hours = `${now.getHours().toString(2)}`.padStart(5, '0');
-        const date = `${now.getDate().toString(2)}`.padStart(5, '0');
-        const month = `${now.getMonth().toString(2)}`.padStart(4, '0');
-        const year = `${offsetYear.toString(2)}`.padStart(7, '0');
-
-        const modTime = parseInt(`${hours}${minutes}${seconds}`, 2);
-        const modDate = parseInt(`${year}${month}${date}`, 2);
+        const year = Math.min(2107, Math.max(1980, now.getFullYear()));
+        const modTime = (now.getHours() << 11) | (now.getMinutes() << 5) | Math.floor(now.getSeconds() / 2);
+        const modDate = ((year - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate();
 
         const dir = [
             encode('\x50\x4b\x01\x02'), // dir signature
             signed16(0), // version made by
             signed16(vNeeded),
-            signed16(0), // bit flag
+            signed16(0x0800), // UTF-8 filenames
             signed16(cMethod),
             signed16(modTime),
             signed16(modDate),
@@ -132,7 +123,7 @@ export default class Zip {
         const file = [
             encode('\x50\x4b\x03\x04'), // zip signature
             signed16(vNeeded),
-            signed16(0), // bit flag
+            signed16(0x0800), // UTF-8 filenames
             signed16(cMethod),
             signed16(modTime),
             signed16(modDate),

@@ -537,7 +537,7 @@ export default class RawDeflate {
             const match = matchList[length - i - 1];
             let matchLength = this.#lz77MinLength;
 
-            if (matchMax > this.#lz77MaxLength) {
+            if (matchMax > this.#lz77MinLength) {
                 for (let j = matchMax; j > this.#lz77MinLength; j--) {
                     if (this.#input[match + j - 1] !== this.#input[position + j - 1]) {
                         continue permatch;
@@ -547,7 +547,7 @@ export default class RawDeflate {
                 matchLength = matchMax;
             }
 
-            while (matchLength < this.#lz77MaxLength && position + matchLength < length && this.#input[match + matchLength] === this.#input[position + matchLength]) {
+            while (matchLength < this.#lz77MaxLength && position + matchLength < this.#input.length && this.#input[match + matchLength] === this.#input[position + matchLength]) {
                 matchLength++;
             }
 

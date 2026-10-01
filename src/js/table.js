@@ -1,5 +1,5 @@
 import $ from '@fr0st/query';
-import { BaseComponent, generateId } from '@fr0st/ui';
+import { BaseComponent, generateId, getDataset } from '@fr0st/ui';
 import { csv, excel, print } from './buttons.js';
 import { getDataFromDOM, getHeadingsFromDOM } from './helpers.js';
 
@@ -24,6 +24,7 @@ import { getDataFromDOM, getHeadingsFromDOM } from './helpers.js';
  * @property {string} [text] The button label.
  * @property {string} [title] The export title, defaulting to the document title.
  * @property {number[]} [columns] The columns to export; defaults to visible columns.
+ * @property {boolean} [escapeFormulae=true] Prefixes formula-like CSV strings with an apostrophe.
  * @property {function(this: Table): void} [callback] Runs with the table as its receiver.
  */
 /**
@@ -45,6 +46,7 @@ import { getDataFromDOM, getHeadingsFromDOM } from './helpers.js';
  * @property {TableRow[]} [data] Local data; otherwise read the table body.
  * @property {function(TableRequest): (TableResults|PromiseLike<TableResults>)} [getResults] Loads remote rows.
  * @property {TableColumn[]|null} [columns=null] The column definitions.
+ * @property {function(string): string} [sanitize] Sanitizes HTML cells and headings; defaults to query sanitization.
  * @property {TableButton[]} [buttons=[]] The export and custom buttons.
  * @property {{top?: string, bottom?: string}} [layout] Comma-separated columns containing pipe-separated controls.
  * @property {Record<string, string|Record<string, string>>} [lang] The interface labels.
@@ -53,7 +55,7 @@ import { getDataFromDOM, getHeadingsFromDOM } from './helpers.js';
  * @property {TableOrder[]} [order] The initial ordering; defaults to column zero ascending.
  * @property {number[]} [lengths] Available page lengths; defaults to 10, 25, 50, and 100.
  * @property {number} [length=10] The initial page length.
- * @property {number} [debounce=250] The remote request delay in milliseconds.
+ * @property {number} [debounce=250] The local search or remote request delay in milliseconds.
  * @property {boolean} [info=true] Whether to render result counts.
  * @property {boolean} [lengthChange=true] Whether users can change the page length.
  * @property {boolean} [ordering=true] Whether rows can be sorted.
@@ -64,7 +66,7 @@ import { getDataFromDOM, getHeadingsFromDOM } from './helpers.js';
  * @property {function(HTMLTableRowElement, TableRow[], number, number, number[]): void} [headerCallback] Receives the heading row and data range.
  * @property {function(HTMLTableSectionElement, TableRow[], number, number, number[]): void} [footerCallback] Receives the footer and data range.
  * @property {function(number, number, number, number, string): string} [infoCallback] Formats the result count text.
- * @property {function(): void} [preDrawCallback] The pre-draw callback, reserved for the data/lifecycle migration.
+ * @property {function(): (boolean|void)} [preDrawCallback] Runs before drawing; return false to keep the existing DOM.
  * @property {function(): void} [drawCallback] Runs after drawing rows.
  */
 
@@ -88,7 +90,7 @@ export default class Table extends BaseComponent {
     };
     // Table classes
     static classes = {
-        bottomRow: 'd-md-flex justify-content-between mx-n2',
+        bottomRow: 'd-md-flex justify-content-between',
         button: 'btn btn-table',
         buttonGroup: 'btn-group btn-group-sm mt-1',
         column: 'd-md-flex',
@@ -100,7 +102,6 @@ export default class Table extends BaseComponent {
         lengthInputContainer: 'form-input d-inline-block',
         lengthInputFilled: 'input-filled input-sm',
         lengthInputOutline: 'input-outline input-sm',
-        lengthInputRipple: 'ripple-line',
         lengthLabel: 'mb-1 mb-md-0',
         lengthLabelText: 'me-2',
         loader: 'position-absolute top-50 start-50 translate-middle z-1',
@@ -115,14 +116,13 @@ export default class Table extends BaseComponent {
         searchInputContainer: 'form-input mx-auto me-md-0',
         searchInputFilled: 'input-filled input-sm',
         searchInputOutline: 'input-outline input-sm',
-        searchInputRipple: 'ripple-line',
         table: 'table table-bordered',
         tableContainer: 'table-responsive',
         tableHeading: 'fw-bold',
         tableSort: 'table-sort',
         tableSortAsc: 'table-sort-asc',
         tableSortDesc: 'table-sort-desc',
-        topRow: 'd-md-flex justify-content-between mb-2 mx-n2',
+        topRow: 'd-md-flex justify-content-between mb-2',
     };
     /** @type {TableOptions} */
     static defaults = {
@@ -139,6 +139,7 @@ export default class Table extends BaseComponent {
             page: 'Page',
             perPage: 'Per Page',
             search: 'Search',
+            loading: 'Loading results',
             paginate: {
                 first: 'First',
                 last: 'Last',
@@ -157,10 +158,11 @@ export default class Table extends BaseComponent {
         },
         icons: {
             first: '&laquo;',
-            last: '&raquo',
+            last: '&raquo;',
             next: '&gt;',
             previous: '&lt;',
         },
+        sanitize: (html) => $.sanitize(html),
         inputStyle: 'filled',
         createdRow: null,
         drawCallback: null,
@@ -203,26 +205,29 @@ export default class Table extends BaseComponent {
     #columns;
     #container;
     #data;
+    #drawVersion = 0;
     #filtered;
-    #filterIndexes;
     #getData;
     #headings;
     #id;
-    #index;
     #infoContainer;
     #lengthSelect;
     #limit;
     #loader;
+    #loadResults;
     #offset;
     #order;
     #original;
+    #originalBusy;
     #originalClass;
     #originalDescription;
     #page;
     #pagination;
-    #request;
+    #pending;
+    #requestVersion = 0;
     #results;
     #rowIndexes;
+    #searchHandler;
     #searchInput;
     #tbody;
     #term;
@@ -237,85 +242,96 @@ export default class Table extends BaseComponent {
      * @param {TableOptions} [options] The component options.
      */
     constructor(node, options) {
+        if (node?.tagName !== 'TABLE') {
+            throw new TypeError('Table requires a table element.');
+        }
+        const configured = { ...new.target.defaults, ...getDataset(node), ...options };
+        for (const key of ['order', 'lengths', 'buttons']) {
+            if (!Array.isArray(configured[key])) {
+                throw new TypeError(`${key} must be an array.`);
+            }
+        }
+        if (configured.columns !== null && !Array.isArray(configured.columns)) {
+            throw new TypeError('Columns must be an array.');
+        }
+        if (typeof configured.sanitize !== 'function') {
+            throw new TypeError('sanitize must be a function.');
+        }
+        if (configured.lengths.some((length) => !Number.isSafeInteger(Number(length)) || Number(length) <= 0)) {
+            throw new RangeError('Page lengths must be positive integers.');
+        }
+        const headings = getHeadingsFromDOM(node);
+        if (configured.columns && headings.length && configured.columns.length !== headings.length) {
+            throw new RangeError('Column definitions must match the heading count.');
+        }
+        if (configured.paging && (!Number.isSafeInteger(Number(configured.length)) || Number(configured.length) <= 0)) {
+            throw new RangeError('Page length must be a positive integer.');
+        }
         super(node, options);
-
-        this.#originalClass = $.getAttribute(this.node, 'class');
-        this.#originalDescription = $.getAttribute(this.node, 'aria-describedby');
-
+        // BaseComponent merges arrays by index. Configuration arrays replace defaults.
+        for (const key of ['order', 'lengths', 'buttons']) {
+            this.options[key].splice(0, this.options[key].length, ...configured[key]);
+        }
+        this.#originalClass = $.getAttribute(node, 'class');
+        this.#originalDescription = $.getAttribute(node, 'aria-describedby');
+        this.#originalBusy = $.getAttribute(node, 'aria-busy');
         this.#data = [];
         this.#results = [];
-        this.#filtered = 0;
+        this.#rowIndexes = [];
         this.#total = 0;
-
-        this.#getData = null;
-
-        let data;
-        if (this.options.getResults) {
-            this.#getResultsInit();
-        } else if ($._isArray(this.options.data)) {
-            data = this.options.data.slice();
-        } else {
-            data = getDataFromDOM(this.node);
-        }
-
-        if (data) {
-            this.#data = data;
-            this.#getDataInit();
-        }
-
-        this.#headings = getHeadingsFromDOM(this.node);
-
-        this.#columns = [];
-
-        if (this.options.columns) {
-            this.#columns = this.options.columns.map((column) => ({ ...column }));
-        } else {
-            this.#columns = new Array(this.#headings.length).fill();
-        }
-
-        this.#columns = this.#columns.map((column, index) => ({
-            class: null,
-            data: index,
-            dir: 'asc',
-            format: null,
-            name: null,
-            orderData: null,
-            orderable: true,
-            searchable: true,
-            visible: true,
-            createdCell: null,
-            ...column,
-        }));
-
-        this.#columnCount = this.#columns.reduce((acc, v) => {
-            if (v.visible) {
-                acc++;
-            }
-
-            return acc;
-        }, 0);
-
+        this.#filtered = 0;
         this.#offset = 0;
-        this.#limit = this.options.paging ?
-            this.options.length :
-            Infinity;
-        this.#order = this.options.order.map((order) => [...order]);
-        this.#term = null;
-
-        const id = $.getAttribute(this.node, 'id');
-
-        if (!id) {
-            $.setAttribute(this.node, { id: generateId('table') });
-            this.#id = true;
+        this.#term = '';
+        this.#limit = this.options.paging ? Number(this.options.length) : Infinity;
+        try {
+            if (!this.options.getResults) {
+                this.#data = this.options.data ?? getDataFromDOM(node);
+                this.#validateRows(this.#data);
+                this.#data = this.#data.slice();
+            }
+            this.#headings = headings;
+            const columns = this.options.columns ?? headings.map((_, data) => ({ data }));
+            this.#columns = columns.map((column, index) => ({
+                class: null, data: index, dir: 'asc', format: null, name: null,
+                orderData: null, orderable: true, searchable: true, visible: true,
+                createdCell: null, ...column,
+            }));
+            if (!headings.length) {
+                this.#headings = this.#columns.map((column) => ({ text: column.name ?? String(column.data), class: null }));
+            }
+            for (const column of this.#columns) {
+                if (column.orderData !== null) {
+                    if (!Array.isArray(column.orderData)) {
+                        throw new TypeError('orderData must be an array of column indexes.');
+                    }
+                    column.orderData.forEach((index) => this.#validateColumn(index));
+                }
+            }
+            this.#order = this.#normalizeOrder(this.options.order);
+            this.#getOrder();
+            this.#columnCount = this.#getVisibleColumns().length;
+            if (!node.id) {
+                node.id = generateId('table');
+                this.#id = true;
+            }
+            if (this.options.getResults) {
+                this.#getResultsInit();
+            } else {
+                this.#getDataInit();
+            }
+            this.#render();
+            if (!this.node) {
+                return;
+            }
+            this.#events();
+            $.triggerEvent(this.node, 'init.ui.table');
+            if (this.node) {
+                this.#getData();
+            }
+        } catch (error) {
+            this.dispose();
+            throw error;
         }
-
-        this.#buildIndex();
-        this.#render();
-        this.#events();
-
-        $.triggerEvent(this.node, 'init.ui.table');
-
-        this.#getData();
     }
 
     /**
@@ -323,40 +339,41 @@ export default class Table extends BaseComponent {
      * @param {Array|object} row The row to add.
      */
     addRow(row) {
-        this.#data.push(row);
-        this.#buildIndex();
-
-        this.#total++;
-        this.#filtered++;
-
-        if (this.options.getResults) {
-            this.#rowIndexes.push(this.#data.length - 1);
-
-            this.#refreshResults();
-            this.#renderResults();
-        } else {
-            this.#getData();
+        if (!this.node) {
+            return;
         }
+        this.#validateRows([row]);
+        this.#data.push(Array.isArray(row) ? [...row] : { ...row });
+        this.#mutated(1);
     }
 
     /**
      * Clear all rows from the data array.
      */
     clear() {
+        if (!this.node) {
+            return;
+        }
+        const requestVersion = this.#cancelRequest();
+        if (!this.node || requestVersion !== this.#requestVersion) {
+            return;
+        }
+        this.#searchHandler?.cancel();
         this.#data = [];
-        this.#index = [];
-        this.#filterIndexes = null;
-        this.#rowIndexes = [];
         this.#results = [];
+        this.#rowIndexes = [];
         this.#offset = 0;
         this.#total = 0;
         this.#filtered = 0;
-
-        if (this.options.searching) {
+        this.#term = '';
+        if (this.#searchInput) {
             $.setValue(this.#searchInput, '');
         }
-
-        this.#renderResults();
+        this.#refreshResults();
+        this.loading({ show: false });
+        if (this.node) {
+            this.#renderResults();
+        }
     }
 
     /**
@@ -366,30 +383,35 @@ export default class Table extends BaseComponent {
         if (!this.node) {
             return;
         }
-
+        const node = this.node;
+        this.#drawVersion++;
+        this.#searchHandler?.cancel();
+        this.#requestVersion++;
+        this.#loadResults?.cancel();
+        const pending = this.#pending;
+        this.#pending = null;
+        super.dispose();
         if (this.#id) {
-            $.removeAttribute(this.node, 'id');
+            node.removeAttribute('id');
         }
-
         for (const [attribute, value] of [
             ['class', this.#originalClass],
             ['aria-describedby', this.#originalDescription],
+            ['aria-busy', this.#originalBusy],
         ]) {
             if (value === null || value === undefined) {
-                $.removeAttribute(this.node, attribute);
+                node.removeAttribute(attribute);
             } else {
-                $.setAttribute(this.node, { [attribute]: value });
+                node.setAttribute(attribute, value);
             }
         }
-
-        $.before(this.#container, this.node);
-        $.remove(this.#container);
-        $.empty(this.node);
-
-        for (const child of $.children(this.#original)) {
-            $.append(this.node, child);
+        if (this.#container) {
+            this.#container.before(node);
+            $.remove(this.#container);
         }
-
+        if (this.#original) {
+            node.replaceChildren(...this.#original.childNodes);
+        }
         this.#original = null;
         this.#container = null;
         this.#loader = null;
@@ -400,18 +422,20 @@ export default class Table extends BaseComponent {
         this.#pagination = null;
         this.#lengthSelect = null;
         this.#searchInput = null;
-        this.#columns = null;
-        this.#headings = null;
-        this.#order = null;
-        this.#data = null;
-        this.#index = null;
-        this.#filterIndexes = null;
-        this.#rowIndexes = null;
-        this.#results = null;
-        this.#request = null;
+        this.#columns = [];
+        this.#headings = [];
+        this.#data = [];
+        this.#results = [];
+        this.#rowIndexes = [];
         this.#getData = null;
-
-        super.dispose();
+        this.#loadResults = null;
+        this.#searchHandler = null;
+        // Restore the DOM before a user cancellation hook can initialize a new instance.
+        try {
+            pending?.cancel?.();
+        } catch {
+            // Disposing still succeeds if a cancellation hook throws.
+        }
     }
 
     /**
@@ -461,8 +485,8 @@ export default class Table extends BaseComponent {
      * @param {number} index The column index.
      */
     hideColumn(index) {
+        this.#validateColumn(index);
         this.#columns[index].visible = false;
-
         this.#renderResults();
     }
 
@@ -484,16 +508,20 @@ export default class Table extends BaseComponent {
      * @param {number} length The length.
      */
     length(length) {
-        if (!this.options.paging) {
+        if (!this.node || !this.options.paging) {
             return;
         }
-
+        length = Number(length);
+        if (!Number.isSafeInteger(length) || length <= 0) {
+            throw new RangeError('Page length must be a positive integer.');
+        }
         this.#limit = length;
-        this.#offset -= (this.#offset % this.#limit);
-
+        this.#offset -= this.#offset % length;
+        this.#syncLength();
         $.triggerEvent(this.node, 'length.ui.table');
-
-        this.#getData();
+        if (this.node) {
+            this.#getData();
+        }
     }
 
     /**
@@ -502,9 +530,13 @@ export default class Table extends BaseComponent {
      * @param {boolean} [options.show=true] Whether to show the loading indicator.
      */
     loading({ show = true } = {}) {
+        if (!this.node) {
+            return;
+        }
+        this.node.setAttribute('aria-busy', String(show));
         if (show) {
-            $.triggerEvent(this.node, 'processing.ui.table');
             $.show(this.#loader);
+            $.triggerEvent(this.node, 'processing.ui.table');
         } else {
             $.hide(this.#loader);
             $.triggerEvent(this.node, 'processed.ui.table');
@@ -516,15 +548,14 @@ export default class Table extends BaseComponent {
      * @param {Array} order The order data.
      */
     order(order) {
-        if (!this.options.ordering) {
+        if (!this.node || !this.options.ordering) {
             return;
         }
-
-        this.#order = order;
-
+        this.#order = this.#normalizeOrder(order);
         $.triggerEvent(this.node, 'order.ui.table');
-
-        this.#getData();
+        if (this.node) {
+            this.#getData();
+        }
     }
 
     /**
@@ -532,15 +563,19 @@ export default class Table extends BaseComponent {
      * @param {number} page The one-based page number.
      */
     page(page) {
-        if (!this.options.paging) {
+        if (!this.node || !this.options.paging) {
             return;
         }
-
-        this.#offset = (page - 1) * this.#limit;
-
+        page = Number(page);
+        if (!Number.isSafeInteger(page)) {
+            throw new RangeError('Page must be an integer.');
+        }
+        const pages = Math.max(1, Math.ceil(this.#filtered / this.#limit));
+        this.#offset = (Math.min(pages, Math.max(1, page)) - 1) * this.#limit;
         $.triggerEvent(this.node, 'page.ui.table');
-
-        this.#getData();
+        if (this.node) {
+            this.#getData();
+        }
     }
 
     /**
@@ -556,6 +591,9 @@ export default class Table extends BaseComponent {
      * @param {boolean} [options.reset=false] Whether to reset the offset.
      */
     reload({ reset = false } = {}) {
+        if (!this.node) {
+            return;
+        }
         if (reset) {
             this.#offset = 0;
         }
@@ -571,12 +609,8 @@ export default class Table extends BaseComponent {
      */
     removeRow(index, { modified = true } = {}) {
         const rowIndex = this.#getIndex(index, { modified });
-
-        this.#data = this.#data.filter((_, dataIndex) => dataIndex !== rowIndex);
-
-        this.#buildIndex();
-        this.#refreshResults();
-        this.#renderResults();
+        this.#data.splice(rowIndex, 1);
+        this.#mutated(-1);
     }
 
     /**
@@ -584,48 +618,19 @@ export default class Table extends BaseComponent {
      * @param {string} term The term to search for.
      */
     search(term) {
-        if (!this.options.searching) {
+        if (!this.node || !this.options.searching) {
             return;
         }
-
-        $.setValue(this.#searchInput, term);
-        this.#term = term;
-
+        this.#searchHandler?.cancel();
+        this.#term = String(term ?? '');
+        this.#offset = 0;
+        if (this.#searchInput) {
+            $.setValue(this.#searchInput, this.#term);
+        }
         $.triggerEvent(this.node, 'search.ui.table');
-
-        if (this.options.getResults) {
+        if (this.node) {
             this.#getData();
-            return;
         }
-
-        if (this.#term) {
-            this.#filterIndexes = [];
-
-            const escapedFilter = $._escapeRegExp(this.#term);
-            const regExp = new RegExp(escapedFilter, 'i');
-
-            // filter results
-            for (const [index, result] of this.#data.entries()) {
-                for (const column of this.#columns) {
-                    if (!column.searchable) {
-                        continue;
-                    }
-
-                    const value = $._getDot(result, `${column.data}`);
-
-                    if (regExp.test(value)) {
-                        this.#filterIndexes.push(index);
-                    }
-                }
-            }
-
-            this.#filtered = this.#filterIndexes.length;
-        } else {
-            this.#filterIndexes = null;
-            this.#filtered = this.#total;
-        }
-
-        this.#getData();
     }
 
     /**
@@ -636,21 +641,14 @@ export default class Table extends BaseComponent {
      * @param {boolean} [options.modified=true] Whether to use modified indexes.
      */
     setColumn(key, column, { modified = true } = {}) {
-        this.#data = this.#data.map((row, index) => {
-            const rowIndex = modified ?
-                this.#rowIndexes.findIndex((otherIndex) => otherIndex == index) :
-                index;
-
-            if (rowIndex >= 0) {
-                $._setDot(row, `${key}`, column[rowIndex]);
-            }
-
-            return row;
-        });
-
-        this.#buildIndex();
-        this.#refreshResults();
-        this.#renderResults();
+        const indexes = modified ? this.#rowIndexes : this.#data.map((_, index) => index);
+        if (!Array.isArray(column) || column.length !== indexes.length) {
+            throw new RangeError('Column values must match the selected row count.');
+        }
+        for (const [index, rowIndex] of indexes.entries()) {
+            $._setDot(this.#data[rowIndex], String(key), column[index]);
+        }
+        this.#mutated();
     }
 
     /**
@@ -662,12 +660,9 @@ export default class Table extends BaseComponent {
      */
     setRow(index, row, { modified = true } = {}) {
         const rowIndex = this.#getIndex(index, { modified });
-
-        this.#data[rowIndex] = row;
-
-        this.#buildIndex();
-        this.#refreshResults();
-        this.#renderResults();
+        this.#validateRows([row]);
+        this.#data[rowIndex] = Array.isArray(row) ? [...row] : { ...row };
+        this.#mutated();
     }
 
     /**
@@ -680,12 +675,8 @@ export default class Table extends BaseComponent {
      */
     setValue(index, key, value, { modified = true } = {}) {
         const rowIndex = this.#getIndex(index, { modified });
-
-        $._setDot(this.#data[rowIndex], `${key}`, value);
-
-        this.#buildIndex();
-        this.#refreshResults();
-        this.#renderResults();
+        $._setDot(this.#data[rowIndex], String(key), value);
+        this.#mutated();
     }
 
     /**
@@ -693,53 +684,9 @@ export default class Table extends BaseComponent {
      * @param {number} index The column index.
      */
     showColumn(index) {
+        this.#validateColumn(index);
         this.#columns[index].visible = true;
-
         this.#renderResults();
-    }
-
-    /**
-     * Rebuild the index.
-     */
-    #buildIndex() {
-        if (this.options.getResults || !this.options.ordering) {
-            return;
-        }
-
-        this.#index = [];
-        for (const column of this.#columns) {
-            if (!column.orderable) {
-                continue;
-            }
-
-            this.#index[column.data] = [];
-
-            const valueLookup = {};
-
-            for (const [index, result] of this.#data.entries()) {
-                const value = $._getDot(result, `${column.data}`);
-
-                if (!(value in valueLookup)) {
-                    valueLookup[value] = [];
-                }
-
-                valueLookup[value].push(index);
-            }
-
-            const values = Object.keys(valueLookup).sort((a, b) => {
-                if ($._isNumeric(a) && $._isNumeric(b)) {
-                    return a - b;
-                }
-
-                const aLower = a.toLowerCase();
-                const bLower = b.toLowerCase();
-                return aLower.localeCompare(bLower);
-            });
-
-            for (const value of values) {
-                this.#index[column.data].push(valueLookup[value]);
-            }
-        }
     }
 
     /**
@@ -749,6 +696,7 @@ export default class Table extends BaseComponent {
      */
     #buildTable(columns) {
         const table = $.create('table');
+        table.dir = getComputedStyle(this.node).direction;
         const thead = $.create('thead');
         const tr = $.create('tr');
 
@@ -782,26 +730,45 @@ export default class Table extends BaseComponent {
     }
 
     /**
+     * Invalidates pending results before invoking an optional cancellation hook.
+     * @returns {number} The invalidation generation.
+     */
+    #cancelRequest() {
+        const version = ++this.#requestVersion;
+        this.#loadResults?.cancel();
+        const pending = this.#pending;
+        this.#pending = null;
+        try {
+            pending?.cancel?.();
+        } catch {
+            // Cancellation is best effort; version checks still reject stale results.
+        }
+        return version;
+    }
+
+    /**
      * Attach events for the Table.
      */
     #events() {
-        if (this.options.lengthChange) {
+        if (this.#lengthSelect) {
             $.addEvent(this.#lengthSelect, 'change.ui.table', (_) => {
                 const length = $.getValue(this.#lengthSelect);
                 this.length(length);
             });
         }
 
-        if (this.options.searching) {
-            $.addEvent(this.#searchInput, 'input.ui.table', $._debounce((_) => {
-                const term = $.getValue(this.#searchInput);
-                this.search(term);
-            }));
+        if (this.#searchInput) {
+            this.#searchHandler = $._debounce(() => {
+                if (this.node) {
+                    this.search($.getValue(this.#searchInput));
+                }
+            }, this.options.getResults ? 0 : this.options.debounce);
+            $.addEvent(this.#searchInput, 'input.ui.table', this.#searchHandler);
         }
 
         if (this.options.ordering) {
             const handleSort = (e) => {
-                const index = $.index(e.currentTarget);
+                const index = Number($.getDataset(e.currentTarget, 'uiIndex'));
 
                 if (!this.#columns[index].orderable) {
                     return;
@@ -865,9 +832,12 @@ export default class Table extends BaseComponent {
             });
         }
 
-        if (this.options.paging) {
+        if (this.#pagination) {
             $.addEventDelegate(this.#pagination, 'click.ui.table', '[data-ui-page]', (e) => {
                 e.preventDefault();
+                if (e.currentTarget.disabled) {
+                    return;
+                }
 
                 let page = $.getDataset(e.currentTarget, 'uiPage');
 
@@ -892,30 +862,91 @@ export default class Table extends BaseComponent {
     }
 
     /**
+     * Loads and validates the newest remote page.
+     * @param {number} version The request generation.
+     * @returns {Promise<void>} Completion of the request.
+     */
+    async #fetchResults(version) {
+        const active = () => this.node && version === this.#requestVersion;
+        if (!active()) {
+            return;
+        }
+        const request = {
+            columns: { ...this.#columns.map((column) => ({
+                ...(column.name ? { name: column.name } : {}), data: column.data,
+                orderable: column.orderable, searchable: column.searchable,
+            })) },
+        };
+        if (this.#term) {
+            request.term = this.#term;
+        }
+        if (this.options.ordering) {
+            request.order = { ...this.#getOrder().map(([column, dir]) => ({ column, dir })) };
+        }
+        if (this.options.paging) {
+            request.offset = this.#offset; request.limit = this.#limit;
+        }
+        let response;
+        try {
+            const pending = this.options.getResults.call(this, request);
+            if (!active()) {
+                Promise.resolve(pending).catch(() => {});
+                pending?.cancel?.();
+                return;
+            }
+            this.#pending = pending;
+            response = await pending;
+            if (!active()) {
+                return;
+            }
+            this.#validateRows(response?.results);
+            if (!Number.isSafeInteger(response.total) || !Number.isSafeInteger(response.filtered) ||
+                response.total < 0 || response.filtered < 0 || response.filtered > response.total ||
+                response.results.length > response.filtered ||
+                (this.options.paging && response.results.length > this.#limit)) {
+                throw new TypeError('Remote counts and rows must describe a valid result page.');
+            }
+        } catch (error) {
+            if (active()) {
+                this.#pending = null;
+                this.loading({ show: false });
+                if (active()) {
+                    $.triggerEvent(this.node, 'error.ui.table', { detail: { error } });
+                }
+            }
+            return;
+        }
+        this.#pending = null;
+        this.#total = response.total;
+        this.#filtered = response.filtered;
+        if (this.options.paging && this.#offset >= this.#filtered && this.#offset > 0) {
+            this.#offset = Math.max(0, (Math.ceil(this.#filtered / this.#limit) - 1) * this.#limit);
+            this.#getData();
+            return;
+        }
+        this.#data = response.results.slice();
+        this.#refreshResults();
+        this.loading({ show: false });
+        if (active()) {
+            this.#renderResults();
+        }
+    }
+
+    /**
      * Initialize preloaded get data.
      */
     #getDataInit() {
-        this.#total = this.#data.length;
-        this.#filtered = this.#total;
-
-        this.#getData = (_) => {
+        this.#getData = () => {
+            const version = ++this.#drawVersion;
             this.loading();
-
-            this.#rowIndexes = this.#filterIndexes;
-
-            // order
-            if (this.options.ordering) {
-                const order = this.#getOrder();
-                this.#rowIndexes = this.#getOrderedIndexes(order, this.#rowIndexes);
+            if (!this.node || version !== this.#drawVersion) {
+                return;
             }
-
-            if (!this.#rowIndexes) {
-                this.#rowIndexes = $._range(this.#offset, this.#offset + this.#limit);
-            }
-
+            this.#updateLocal();
             this.loading({ show: false });
-            this.#refreshResults();
-            this.#renderResults();
+            if (this.node && version === this.#drawVersion) {
+                this.#renderResults();
+            }
         };
     }
 
@@ -939,17 +970,12 @@ export default class Table extends BaseComponent {
      * @returns {Array} The headings.
      */
     #getHeadings(columns) {
-        const headings = [];
-
-        for (const [index, heading] of this.#headings.entries()) {
-            if (!columns.includes(index)) {
-                continue;
-            }
-
-            headings.push(heading.text);
-        }
-
-        return headings;
+        return columns.map((index) => {
+            this.#validateColumn(index);
+            const container = document.createElement('div');
+            container.innerHTML = $.sanitize(String(this.#headings[index].text));
+            return container.textContent;
+        });
     }
 
     /**
@@ -960,9 +986,11 @@ export default class Table extends BaseComponent {
      * @returns {number} The index.
      */
     #getIndex(index, { modified = true } = {}) {
-        return modified ?
-            this.#rowIndexes[index] :
-            index;
+        const count = modified ? this.#rowIndexes.length : this.#data.length;
+        if (!Number.isInteger(index) || index < 0 || index >= count) {
+            throw new RangeError('Row index is out of range.');
+        }
+        return modified ? this.#rowIndexes[index] : index;
     }
 
     /**
@@ -970,73 +998,13 @@ export default class Table extends BaseComponent {
      * @returns {Array} The column ordering data.
      */
     #getOrder() {
-        const order = [];
-
-        for (const [index, direction] of this.#order) {
-            if (this.#columns[index].orderData) {
-                order.push(...this.#columns[index.orderData]);
-            } else {
-                order.push([index, direction]);
-            }
-        }
-
-        return order;
-    }
-
-    /**
-     * Get a range of data indexes for filtered rows, based on order data.
-     * @param {Array} order The order data.
-     * @param {Array} [onlyRows=null] The filtered rows.
-     * @param {number} [offset] The starting offset.
-     * @param {number} [limit] The maximum rows to return.
-     * @param {number} [orderIndex=0] The order index.
-     * @returns {Array} The data indexes.
-     */
-    #getOrderedIndexes(order, onlyRows = null, offset = this.#offset, limit = this.#limit, orderIndex = 0) {
-        const [index, direction] = order[orderIndex];
-        const key = this.#columns[index].data;
-        let rowLookup = this.#index[key];
-
-        if (direction === 'desc') {
-            rowLookup = rowLookup.slice().reverse();
-        }
-
-        let current = 0;
-        const results = [];
-        for (const rows of rowLookup) {
-            let filteredRows = onlyRows ?
-                rows.filter((row) => onlyRows.includes(row)) :
-                rows;
-
-            if (direction === 'desc') {
-                filteredRows = filteredRows.slice().reverse();
-            }
-
-            if (offset > current + filteredRows.length || !filteredRows.length) {
-                current += rows.length;
-                continue;
-            }
-
-            const sortedRows = filteredRows.length > 1 && orderIndex < order.length - 1 ?
-                this.#getOrderedIndexes(order, filteredRows, 0, Math.min(filteredRows.length, limit - results.length), orderIndex + 1) :
-                rows;
-
-            for (const row of sortedRows) {
-                current++;
-
-                if (current <= offset) {
-                    continue;
-                }
-
-                results.push(row);
-
-                if (results.length == limit) {
-                    return results;
-                }
-            }
-        }
-
-        return results;
+        return this.#order.flatMap(([index, direction]) => {
+            const columns = this.#columns[index].orderData ?? [index];
+            return columns.map((column) => {
+                this.#validateColumn(column);
+                return [column, direction];
+            });
+        });
     }
 
     /**
@@ -1045,106 +1013,27 @@ export default class Table extends BaseComponent {
      * @returns {Array} The results.
      */
     #getResultRows(columns) {
-        const rows = [];
-
-        for (const result of this.#results) {
-            const row = [];
-            for (const [index, column] of this.#columns.entries()) {
-                if (!columns.includes(index)) {
-                    continue;
-                }
-
-                const value = $._getDot(result, `${column.data}`);
-
-                row.push(value);
-            }
-            rows.push(row);
+        for (const index of columns) {
+            this.#validateColumn(index);
         }
-
-        return rows;
+        return this.#results.map((row) => columns.map((index) => $._getDot(row, String(this.#columns[index].data))));
     }
 
     /**
      * Initialize get data from callback.
      */
     #getResultsInit() {
-        const load = $._debounce(() => {
-            const options = {};
-
-            if (this.#term) {
-                options.term = this.#term;
+        this.#loadResults = $._debounce((version) => this.#fetchResults(version), this.options.debounce);
+        this.#getData = () => {
+            this.#drawVersion++;
+            const version = this.#cancelRequest();
+            if (!this.node || version !== this.#requestVersion) {
+                return;
             }
-
-            if (this.options.ordering) {
-                options.order = {
-                    ...this.#order.map(([column, dir]) => ({ column, dir })),
-                };
-            }
-
-            if (this.options.paging) {
-                options.offset = this.#offset;
-                options.limit = this.#limit;
-            }
-
-            options.columns = {
-                ...this.#columns.map((column) => {
-                    const data = {};
-
-                    if (column.name) {
-                        data.name = column.name;
-                    }
-
-                    return {
-                        ...data,
-                        data: column.data,
-                        orderable: column.orderable,
-                        searchable: column.searchable,
-                    };
-                }),
-            };
-
-            const request = Promise.resolve(this.options.getResults(options));
-
-            request.then((response) => {
-                if (this.#request !== request) {
-                    return;
-                }
-
-                this.#total = response.total;
-                this.#filtered = response.filtered;
-                this.#data = response.results;
-
-                this.#refreshResults();
-                this.#rowIndexes = $._range(0, this.#results.length - 1);
-
-                this.loading({ show: false });
-                this.#renderResults();
-
-                this.#request = null;
-            }).catch((_) => {
-                if (this.#request !== request) {
-                    return;
-                }
-
-                this.loading({ show: false });
-
-                this.#request = null;
-            });
-
-            this.#request = request;
-        }, this.options.debounce);
-
-        this.#getData = (_) => {
-            // cancel last request
-            if (this.#request && this.#request.cancel) {
-                this.#request.cancel();
-            }
-
-            this.#request = null;
-
             this.loading();
-
-            load();
+            if (this.node && version === this.#requestVersion) {
+                this.#loadResults(version);
+            }
         };
     }
 
@@ -1167,27 +1056,75 @@ export default class Table extends BaseComponent {
     }
 
     /**
+     * Redraws after a row mutation; remote mutations affect the loaded page only.
+     * @param {number} [change=0] The change in the remote row count.
+     */
+    #mutated(change = 0) {
+        if (!this.node) {
+            return;
+        }
+        if (this.options.getResults) {
+            const version = this.#cancelRequest();
+            if (!this.node || version !== this.#requestVersion) {
+                return;
+            }
+            this.#total = Math.max(0, this.#total + change);
+            this.#filtered = Math.max(0, this.#filtered + change);
+            if (!this.#data.length && this.#offset) {
+                this.#offset = Math.max(0, this.#offset - this.#limit);
+                this.#getData();
+                return;
+            }
+            this.#refreshResults();
+            this.loading({ show: false });
+            if (this.node) {
+                this.#renderResults();
+            }
+        } else {
+            this.#getData();
+        }
+    }
+
+    /**
+     * Validates and copies ordering, ignoring nonorderable columns.
+     * @param {TableOrder[]} order The requested order.
+     * @returns {TableOrder[]} The normalized order.
+     */
+    #normalizeOrder(order) {
+        if (!Array.isArray(order)) {
+            throw new TypeError('Order must be an array.');
+        }
+        return order.flatMap((entry) => {
+            if (!Array.isArray(entry) || entry.length !== 2 || !['asc', 'desc'].includes(entry[1])) {
+                throw new TypeError('Order entries must contain a column index and asc/desc direction.');
+            }
+            // The default first-column order is harmless for a table with no columns.
+            if (!this.#columns.length && entry[0] === 0) {
+                return [];
+            }
+            this.#validateColumn(entry[0]);
+            return this.#columns[entry[0]].orderable ? [[...entry]] : [];
+        });
+    }
+
+    /**
      * Refresh the results.
      */
     #refreshResults() {
+        this.#page = this.options.paging ? 1 + this.#offset / this.#limit : 1;
+        this.#totalPages = this.options.paging ? Math.max(1, Math.ceil(this.#filtered / this.#limit)) : 1;
         if (this.options.getResults) {
-            this.#results = this.#data;
-        } else {
-            this.#results = this.#rowIndexes.map((rowIndex) => this.#data[rowIndex]);
+            this.#rowIndexes = this.#data.map((_, index) => index);
         }
-
-        if (this.options.paging) {
-            this.#page = 1 + (this.#offset / this.#limit);
-            this.#totalPages = Math.ceil(this.#filtered / this.#limit) || 1;
-        }
+        this.#results = this.#rowIndexes.map((index) => this.#data[index]);
     }
 
     /**
      * Render the Table.
      */
     #render() {
-        this.#original = $.clone(this.node);
-        $.empty(this.node);
+        this.#original = document.createDocumentFragment();
+        this.#original.append(...this.node.childNodes);
 
         this.#container = $.create('div', {
             class: this.constructor.classes.container,
@@ -1195,6 +1132,7 @@ export default class Table extends BaseComponent {
 
         this.#loader = $.create('div', {
             class: this.constructor.classes.loader,
+            attributes: { 'role': 'progressbar', 'aria-label': this.options.lang.loading },
         });
 
         const loaderIcon = $.create('span', {
@@ -1203,6 +1141,11 @@ export default class Table extends BaseComponent {
         $.append(this.#loader, loaderIcon);
 
         $.addClass(this.node, this.constructor.classes.table);
+
+        const caption = $.findOne('caption', this.#original);
+        if (caption) {
+            $.append(this.node, $.clone(caption));
+        }
 
         const thead = $.create('thead');
         $.append(this.node, thead);
@@ -1215,7 +1158,7 @@ export default class Table extends BaseComponent {
 
         const tfoot = $.findOne('tfoot', this.#original);
         if (tfoot) {
-            this.#tfoot = $.clone(tfoot);
+            this.#tfoot = tfoot.cloneNode(true);
             $.append(this.node, this.#tfoot);
         }
 
@@ -1225,6 +1168,9 @@ export default class Table extends BaseComponent {
 
         if (this.options.layout.top) {
             this.#renderLayoutRow(this.options.layout.top, this.constructor.classes.topRow);
+            if (!this.node) {
+                return;
+            }
         }
 
         const tableContainer = $.create('div', {
@@ -1236,10 +1182,13 @@ export default class Table extends BaseComponent {
 
         if (this.options.layout.bottom) {
             this.#renderLayoutRow(this.options.layout.bottom, this.constructor.classes.bottomRow);
+            if (!this.node) {
+                return;
+            }
         }
         if (this.#infoContainer) {
             $.setAttribute(this.node, {
-                'aria-describedby': $.getAttribute(this.#infoContainer, 'id'),
+                'aria-describedby': [this.#originalDescription, this.#infoContainer.id].filter(Boolean).join(' '),
             });
         }
     }
@@ -1270,7 +1219,7 @@ export default class Table extends BaseComponent {
 
                 if (button.callback) {
                     button.callback.bind(this)();
-                } else if (button.type in this.constructor.buttons) {
+                } else if (Object.hasOwn(this.constructor.buttons, button.type)) {
                     this.constructor.buttons[button.type].bind(this)(button);
                 }
             });
@@ -1285,6 +1234,7 @@ export default class Table extends BaseComponent {
      * Render the table headings.
      */
     #renderHeadings() {
+        const version = this.#drawVersion;
         const children = $.children(this.#theadRow);
 
         const headings = {};
@@ -1309,9 +1259,13 @@ export default class Table extends BaseComponent {
             if (index in headings) {
                 cell = headings[index];
             } else {
+                const html = this.options.sanitize(String(heading.text));
+                if (!this.node || version !== this.#drawVersion) {
+                    return;
+                }
                 cell = $.create('th', {
                     class: this.constructor.classes.tableHeading,
-                    html: heading.text,
+                    html,
                     dataset: {
                         uiIndex: index,
                     },
@@ -1329,8 +1283,11 @@ export default class Table extends BaseComponent {
                     });
                 }
 
+                if (!this.node) {
+                    return;
+                }
                 if (!lastCell) {
-                    $.append(this.#theadRow, cell);
+                    $.prepend(this.#theadRow, cell);
                 } else {
                     $.insertAfter(cell, lastCell);
                 }
@@ -1386,9 +1343,10 @@ export default class Table extends BaseComponent {
      * Render the table info.
      */
     #renderInfo() {
+        const version = this.#drawVersion;
         $.empty(this.#infoContainer);
 
-        const start = this.#offset + 1;
+        const start = this.#results.length ? this.#offset + 1 : 0;
         const end = this.#offset + this.#results.length;
         let infoText = this.#filtered < this.#total ?
             this.options.lang.infoFiltered :
@@ -1406,9 +1364,12 @@ export default class Table extends BaseComponent {
         }
 
         if (this.options.infoCallback) {
-            infoText = this.options.infoCallback(start, end, this.#total, this.#filtered, infoText);
+            infoText = this.options.infoCallback.call(this, start, end, this.#total, this.#filtered, infoText);
         }
 
+        if (!this.node || version !== this.#drawVersion) {
+            return;
+        }
         const text = $.create('small', {
             text: infoText,
         });
@@ -1420,6 +1381,9 @@ export default class Table extends BaseComponent {
      * @param {HTMLElement} container The container to render in.
      */
     #renderInfoContainer(container) {
+        if (!this.options.info) {
+            return;
+        }
         const id = generateId('table-info');
 
         this.#infoContainer = $.create('div', {
@@ -1450,7 +1414,7 @@ export default class Table extends BaseComponent {
             });
 
             for (const element of elements.split('|')) {
-                if (!(element in this.constructor.layout)) {
+                if (!(Object.hasOwn(this.constructor.layout, element))) {
                     continue;
                 }
 
@@ -1458,7 +1422,10 @@ export default class Table extends BaseComponent {
                     class: this.constructor.classes.columnContainer,
                 });
 
-                this.constructor.layout[element].bind(this)(container);
+                this.constructor.layout[element].call(this, container);
+                if (!this.node) {
+                    return;
+                }
 
                 $.append(column, container);
             }
@@ -1517,20 +1484,12 @@ export default class Table extends BaseComponent {
                 text: length,
             });
 
-            if (length == this.#limit) {
-                $.setAttribute(option, { checked: true });
-            }
 
             $.append(this.#lengthSelect, option);
         }
 
-        if (this.options.inputStyle === 'filled') {
-            const ripple = $.create('div', {
-                class: this.constructor.classes.lengthInputRipple,
-            });
-            $.append(inputContainer, ripple);
-        }
 
+        this.#syncLength();
         $.append(container, lengthContainer);
     }
 
@@ -1552,7 +1511,7 @@ export default class Table extends BaseComponent {
                 'title': options.text ?
                     `${options.text} ${this.options.lang.page}` :
                     `${this.options.lang.page} ${options.page}`,
-                'role': 'link',
+                'aria-label': options.text ? `${options.text} ${this.options.lang.page}` : `${this.options.lang.page} ${options.page}`,
                 'aria-controls': $.getAttribute(this.node, 'id'),
             },
             dataset: {
@@ -1570,6 +1529,7 @@ export default class Table extends BaseComponent {
     #renderPagination() {
         const setDisabled = (container, disabled) => {
             const link = $.findOne(':scope > [data-ui-page]', container);
+            link.disabled = disabled;
 
             if (disabled) {
                 $.addClass(container, this.constructor.classes.pageDisabled);
@@ -1667,9 +1627,12 @@ export default class Table extends BaseComponent {
                 $.insertAfter(pageItem, lastLink);
             }
 
+            const pageButton = $.findOne('button', pageItem);
             if (current == this.#page) {
+                pageButton.setAttribute('aria-current', 'page');
                 $.addClass(pageItem, this.constructor.classes.pageActive);
             } else {
+                pageButton.removeAttribute('aria-current');
                 $.removeClass(pageItem, this.constructor.classes.pageActive);
             }
 
@@ -1682,6 +1645,9 @@ export default class Table extends BaseComponent {
      * @param {HTMLElement} container The container to render in.
      */
     #renderPaginationContainer(container) {
+        if (!this.options.paging) {
+            return;
+        }
         const paginationContainer = $.create('div', {
             class: this.constructor.classes.paginationContainer,
         });
@@ -1697,64 +1663,74 @@ export default class Table extends BaseComponent {
      * Render the table results.
      */
     #renderResults() {
-        $.triggerEvent(this.node, 'preDraw.ui.table');
-
-        $.empty(this.#tbody);
-
-        this.#renderHeadings();
-
-        if (this.options.headerCallback) {
-            this.options.headerCallback(this.#theadRow, this.#data, this.#offset, this.#offset + this.#limit, this.#rowIndexes);
+        if (!this.node) {
+            return;
         }
-
-        if (this.options.paging) {
+        const version = ++this.#drawVersion;
+        const active = () => this.node && version === this.#drawVersion;
+        $.triggerEvent(this.node, 'preDraw.ui.table');
+        if (!active()) {
+            return;
+        }
+        const proceed = this.options.preDrawCallback?.call(this);
+        if (!active() || proceed === false) {
+            return;
+        }
+        $.empty(this.#tbody);
+        this.#columnCount = this.#getVisibleColumns().length;
+        this.#renderHeadings();
+        if (!active()) {
+            return;
+        }
+        const end = this.#offset + this.#results.length;
+        this.options.headerCallback?.call(this, this.#theadRow, this.#data, this.#offset, end, [...this.#rowIndexes]);
+        if (!active()) {
+            return;
+        }
+        if (this.#pagination) {
             this.#renderPagination();
         }
-
-        if (this.options.info) {
+        if (this.#infoContainer) {
             this.#renderInfo();
         }
-
+        if (!active()) {
+            return;
+        }
         if (!this.#results.length) {
             const row = $.create('tr');
-
-            const cell = $.create('td', {
+            $.append(row, $.create('td', {
                 class: this.constructor.classes.emptyCell,
-                html: this.#term ?
-                    this.options.lang.noResults :
-                    this.options.lang.noData,
-                attributes: {
-                    colspan: this.#columnCount,
-                },
-            });
-            $.append(row, cell);
-
+                text: this.#term ? this.options.lang.noResults : this.options.lang.noData,
+                attributes: { colspan: Math.max(1, this.#columnCount) },
+            }));
             $.append(this.#tbody, row);
         } else {
             for (const [index, result] of this.#results.entries()) {
                 const row = this.#renderRow(result, index);
-
-                if (this.options.rowCallback) {
-                    this.options.rowCallback(row, result, index, this.#offset + index, this.#rowIndexes[index]);
+                if (!active()) {
+                    return;
                 }
-
+                this.options.rowCallback?.call(this, row, result, index, this.#offset + index, this.#rowIndexes[index]);
+                if (!active()) {
+                    return;
+                }
                 $.append(this.#tbody, row);
-
-                if (this.options.createdRow) {
-                    this.options.createdRow(row, result, index);
+                this.options.createdRow?.call(this, row, result, index);
+                if (!active()) {
+                    return;
                 }
             }
         }
-
-        if (this.options.drawCallback) {
-            this.options.drawCallback();
+        this.options.drawCallback?.call(this);
+        if (!active()) {
+            return;
         }
-
-        if (this.#tfoot && this.options.footerCallback) {
-            this.options.footerCallback(this.#tfoot, this.#data, this.#offset, this.#offset + this.#limit, this.#rowIndexes);
+        if (this.#tfoot) {
+            this.options.footerCallback?.call(this, this.#tfoot, this.#data, this.#offset, end, [...this.#rowIndexes]);
         }
-
-        $.triggerEvent(this.node, 'draw.ui.table');
+        if (active()) {
+            $.triggerEvent(this.node, 'draw.ui.table');
+        }
     }
 
     /**
@@ -1765,31 +1741,27 @@ export default class Table extends BaseComponent {
      */
     #renderRow(data, rowIndex) {
         const row = $.create('tr');
-
+        const version = this.#drawVersion;
         for (const [index, column] of this.#columns.entries()) {
             if (!column.visible) {
                 continue;
             }
-
-            const value = $._getDot(data, `${column.data}`);
-
-            const cell = $.create('td', {
-                html: column.format ?
-                    column.format(value) :
-                    value,
-            });
-
-            if (column.class) {
-                $.addClass(column.class);
+            const value = $._getDot(data, String(column.data));
+            const formatted = column.format ? column.format.call(this, value) : value;
+            if (!this.node || version !== this.#drawVersion) {
+                return row;
             }
-
-            if (column.createdCell) {
-                column.createdCell(cell, value, data, rowIndex, index);
+            const html = this.options.sanitize(String(formatted ?? ''));
+            if (!this.node || version !== this.#drawVersion) {
+                return row;
             }
-
+            const cell = $.create('td', { html, class: column.class || '' });
+            column.createdCell?.call(this, cell, value, data, rowIndex, index);
+            if (!this.node || version !== this.#drawVersion) {
+                return row;
+            }
             $.append(row, cell);
         }
-
         return row;
     }
 
@@ -1821,18 +1793,80 @@ export default class Table extends BaseComponent {
             attributes: {
                 'type': 'search',
                 'placeholder': this.options.lang.search,
+                'aria-label': this.options.lang.search,
                 'aria-controls': $.getAttribute(this.node, 'id'),
             },
         });
         $.append(inputContainer, this.#searchInput);
 
-        if (this.options.inputStyle === 'filled') {
-            const ripple = $.create('div', {
-                class: this.constructor.classes.searchInputRipple,
-            });
-            $.append(inputContainer, ripple);
-        }
 
         $.append(container, searchContainer);
+    }
+
+    /**
+     * Selects the current length, including a programmatically requested length.
+     */
+    #syncLength() {
+        if (!this.#lengthSelect) {
+            return;
+        }
+        if (![...this.#lengthSelect.options].some((option) => Number(option.value) === this.#limit)) {
+            $.append(this.#lengthSelect, $.create('option', { value: this.#limit, text: this.#limit }));
+        }
+        $.setValue(this.#lengthSelect, this.#limit);
+    }
+
+    /**
+     * Recomputes local matching, stable ordering, counts, and the current page.
+     */
+    #updateLocal() {
+        this.#total = this.#data.length;
+        const term = this.#term.toLocaleLowerCase();
+        let indexes = this.#data.map((_, index) => index).filter((index) => !term || this.#columns.some((column) =>
+            column.searchable && String($._getDot(this.#data[index], String(column.data)) ?? '').toLocaleLowerCase().includes(term)));
+        this.#filtered = indexes.length;
+        const order = this.options.ordering ? this.#getOrder() : [];
+        indexes.sort((a, b) => {
+            for (const [index, direction] of order) {
+                const key = String(this.#columns[index].data);
+                const av = $._getDot(this.#data[a], key);
+                const bv = $._getDot(this.#data[b], key);
+                const diff = $._isNumeric(av) && $._isNumeric(bv) ? Number(av) - Number(bv) :
+                    String(av ?? '').toLocaleLowerCase().localeCompare(String(bv ?? '').toLocaleLowerCase());
+                if (diff) {
+                    return direction === 'desc' ? -diff : diff;
+                }
+            }
+            return a - b;
+        });
+        if (this.options.paging) {
+            const lastOffset = Math.max(0, (Math.ceil(indexes.length / this.#limit) - 1) * this.#limit);
+            this.#offset = Math.min(this.#offset, lastOffset);
+            indexes = indexes.slice(this.#offset, this.#offset + this.#limit);
+        } else {
+            this.#offset = 0;
+        }
+        this.#rowIndexes = indexes;
+        this.#refreshResults();
+    }
+
+    /**
+     * Validates a data column index.
+     * @param {number} index The column index.
+     */
+    #validateColumn(index) {
+        if (!Number.isInteger(index) || index < 0 || index >= this.#columns.length) {
+            throw new RangeError('Column index is out of range.');
+        }
+    }
+
+    /**
+     * Validates a local or remote row collection.
+     * @param {TableRow[]} rows The supplied rows.
+     */
+    #validateRows(rows) {
+        if (!Array.isArray(rows) || rows.some((row) => !Array.isArray(row) && !$._isPlainObject(row))) {
+            throw new TypeError('Results must be an array of arrays or plain objects.');
+        }
     }
 }

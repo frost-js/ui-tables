@@ -1,13 +1,15 @@
-@import "vars";
+@forward "vars";
+
+@use "vars";
 
 .table-sort {
     position: relative;
-    padding-right: ($table-sort-right * 2) + ($table-sort-size * 2) !important;
+    padding-inline-end: (vars.$table-sort-right * 2) + (vars.$table-sort-size * 2) !important;
     cursor: pointer;
 
     &:focus-visible {
         outline: 0;
-        box-shadow: $table-sort-focus-box-shadow;
+        box-shadow: vars.$table-sort-focus-box-shadow;
     }
 
     &::before,
@@ -20,35 +22,39 @@
     }
 
     &::before {
-        top: calc(50% - (#{$table-border-width} * 2));
-        right: $table-sort-right;
-        border-width: 0 $table-sort-size $table-sort-size;
-        border-bottom-color: $table-sort-border-color;
+        inset-block-start: calc(50% - (#{vars.$table-border-width} * 2));
+        inset-inline-end: vars.$table-sort-right;
+        border-width: 0 vars.$table-sort-size vars.$table-sort-size;
+        border-bottom-color: vars.$table-sort-border-color;
         transform: translateY(-100%);
     }
 
     &::after {
-        right: $table-sort-right;
-        bottom: calc(50% - (#{$table-border-width} * 2));
-        border-width: $table-sort-size $table-sort-size 0;
-        border-top-color: $table-sort-border-color;
+        inset-block-end: calc(50% - (#{vars.$table-border-width} * 2));
+        inset-inline-end: vars.$table-sort-right;
+        border-width: vars.$table-sort-size vars.$table-sort-size 0;
+        border-top-color: vars.$table-sort-border-color;
         transform: translateY(100%);
     }
 }
 
 .table-sort-asc::before {
-    border-bottom-color: $table-sort-active-border-color;
+    border-bottom-color: vars.$table-sort-active-border-color;
 }
 
 .table-sort-desc::after {
-    border-top-color: $table-sort-active-border-color;
+    border-top-color: vars.$table-sort-active-border-color;
 }
 
 .btn-table {
-    --ui-btn-color: #{$btn-table-color};
-    --ui-btn-border-color: #{$btn-table-border-color};
-    --ui-btn-hover-bg: #{$btn-table-hover-bg};
-    --ui-btn-hover-border-color: #{$btn-table-border-color};
-    --ui-ripple-bg: #{$btn-table-ripple-bg};
-    --ui-btn-focus-shadow-rgb: #{$btn-table-focus-shadow-rgb};
+    --ui-btn-bg: #{vars.$btn-table-bg};
+    --ui-btn-active-bg: #{vars.$btn-table-active-bg};
+    --ui-btn-active-color: #{vars.$btn-table-color};
+    --ui-btn-active-border-color: #{vars.$btn-table-border-color};
+    --ui-btn-color: #{vars.$btn-table-color};
+    --ui-btn-border-color: #{vars.$btn-table-border-color};
+    --ui-btn-hover-bg: #{vars.$btn-table-hover-bg};
+    --ui-btn-hover-border-color: #{vars.$btn-table-border-color};
+    --ui-ripple-bg: #{vars.$btn-table-ripple-bg};
+    --ui-btn-focus-shadow-color: #{vars.$btn-table-focus-shadow-color};
 }

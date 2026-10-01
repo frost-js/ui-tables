@@ -1,0 +1,14 @@
+$table-border-width: var(--ui-border-width) !default;
+$table-sort-size: .35rem !default;
+$table-sort-right: .5rem !default;
+$table-sort-border-color: var(--ui-border-color-translucent) !default;
+$table-sort-active-border-color: var(--ui-primary) !default;
+$table-sort-focus-box-shadow: inset 0 0 0 9999px color-mix(in srgb, var(--ui-primary) 20%, transparent) !default;
+
+$btn-table-color: var(--ui-secondary-color) !default;
+$btn-table-bg: transparent !default;
+$btn-table-border-color: var(--ui-secondary-color) !default;
+$btn-table-hover-bg: color-mix(in srgb, var(--ui-secondary-color) 20%, transparent) !default;
+$btn-table-active-bg: color-mix(in srgb, var(--ui-secondary-color) 30%, transparent) !default;
+$btn-table-ripple-bg: color-mix(in srgb, var(--ui-secondary-color) 20%, transparent) !default;
+$btn-table-focus-shadow-color: var(--ui-secondary-color) !default;

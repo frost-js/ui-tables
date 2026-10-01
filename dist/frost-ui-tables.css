@@ -1,11 +1,11 @@
 .table-sort {
   position: relative;
-  padding-right: 1.7rem !important;
+  padding-inline-end: 1.7rem !important;
   cursor: pointer;
 }
 .table-sort:focus-visible {
   outline: 0;
-  box-shadow: inset 0 0 0 9999px rgba(var(--ui-primary-rgb), 0.2);
+  box-shadow: inset 0 0 0 9999px color-mix(in srgb, var(--ui-primary) 20%, transparent);
 }
 .table-sort::before, .table-sort::after {
   position: absolute;
@@ -15,15 +15,15 @@
   border-style: solid;
 }
 .table-sort::before {
-  top: calc(50% - var(--ui-border-width) * 2);
-  right: 0.5rem;
+  inset-block-start: calc(50% - var(--ui-border-width) * 2);
+  inset-inline-end: 0.5rem;
   border-width: 0 0.35rem 0.35rem;
   border-bottom-color: var(--ui-border-color-translucent);
   transform: translateY(-100%);
 }
 .table-sort::after {
-  right: 0.5rem;
-  bottom: calc(50% - var(--ui-border-width) * 2);
+  inset-block-end: calc(50% - var(--ui-border-width) * 2);
+  inset-inline-end: 0.5rem;
   border-width: 0.35rem 0.35rem 0;
   border-top-color: var(--ui-border-color-translucent);
   transform: translateY(100%);
@@ -38,12 +38,16 @@
 }
 
 .btn-table {
+  --ui-btn-bg: transparent;
+  --ui-btn-active-bg: color-mix(in srgb, var(--ui-secondary-color) 30%, transparent);
+  --ui-btn-active-color: var(--ui-secondary-color);
+  --ui-btn-active-border-color: var(--ui-secondary-color);
   --ui-btn-color: var(--ui-secondary-color);
   --ui-btn-border-color: var(--ui-secondary-color);
-  --ui-btn-hover-bg: rgba(var(--ui-secondary-color-rgb), 0.2);
+  --ui-btn-hover-bg: color-mix(in srgb, var(--ui-secondary-color) 20%, transparent);
   --ui-btn-hover-border-color: var(--ui-secondary-color);
-  --ui-ripple-bg: rgba(var(--ui-secondary-color-rgb), var(--ui-ripple-opacity));
-  --ui-btn-focus-shadow-rgb: var(--ui-secondary-color-rgb);
+  --ui-ripple-bg: color-mix(in srgb, var(--ui-secondary-color) 20%, transparent);
+  --ui-btn-focus-shadow-color: var(--ui-secondary-color);
 }
 
 /*# sourceMappingURL=frost-ui-tables.css.map */

@@ -49,8 +49,10 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 	* @returns {Array} The parsed data.
 	*/
 	function getHeadingsFromDOM(element) {
-		const tbody = _fr0st_query.default.findOne("thead", element);
-		const row = _fr0st_query.default.children(tbody, "tr").shift();
+		const thead = element.tHead;
+		if (!thead) return [];
+		if (thead.rows.length > 1 || [...thead.querySelectorAll("th")].some((cell) => cell.colSpan !== 1 || cell.rowSpan !== 1)) throw new RangeError("Table supports one heading row without spanning cells.");
+		const row = thead.rows[0];
 		return _fr0st_query.default.children(row, "th").map((cell) => ({
 			text: _fr0st_query.default.getHtml(cell),
 			class: _fr0st_query.default.getAttribute(cell, "class")
@@ -62,13 +64,18 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 	* @param {string} filename The filename.
 	*/
 	function saveBlob(blob, filename) {
+		const url = URL.createObjectURL(blob);
 		const link = _fr0st_query.default.create("a", { attributes: {
-			href: URL.createObjectURL(blob),
+			href: url,
 			download: filename
 		} });
-		_fr0st_query.default.append(document.body, link);
-		_fr0st_query.default.click(link);
-		_fr0st_query.default.detach(link);
+		try {
+			_fr0st_query.default.append(document.body, link);
+			_fr0st_query.default.click(link);
+		} finally {
+			_fr0st_query.default.detach(link);
+			setTimeout(() => URL.revokeObjectURL(url), 0);
+		}
 	}
 
 //#endregion
@@ -1108,11 +1115,11 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			permatch: for (let i = 0; i < length; i++) {
 				const match = matchList[length - i - 1];
 				let matchLength = this.#lz77MinLength;
-				if (matchMax > this.#lz77MaxLength) {
+				if (matchMax > this.#lz77MinLength) {
 					for (let j = matchMax; j > this.#lz77MinLength; j--) if (this.#input[match + j - 1] !== this.#input[position + j - 1]) continue permatch;
 					matchLength = matchMax;
 				}
-				while (matchLength < this.#lz77MaxLength && position + matchLength < length && this.#input[match + matchLength] === this.#input[position + matchLength]) matchLength++;
+				while (matchLength < this.#lz77MaxLength && position + matchLength < this.#input.length && this.#input[match + matchLength] === this.#input[position + matchLength]) matchLength++;
 				if (matchLength > matchMax) {
 					currentMatch = match;
 					matchMax = matchLength;
@@ -1143,20 +1150,24 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		return encode(string).length;
 	};
 	/**
-	* Convert a number to an Int16Array.
+	* Encodes an unsigned 16-bit integer in little-endian byte order.
 	* @param {number} number The number.
-	* @returns {Int16Array} The Int16Array.
+	* @returns {Uint8Array} The encoded bytes.
 	*/
 	var signed16 = (number) => {
-		return new Int16Array([number]);
+		const bytes = /* @__PURE__ */ new Uint8Array(2);
+		new DataView(bytes.buffer).setUint16(0, number, true);
+		return bytes;
 	};
 	/**
-	* Convert a number to an Int32Array.
+	* Encodes an unsigned 32-bit integer in little-endian byte order.
 	* @param {number} number The number.
-	* @returns {Int32Array} The Int32Array.
+	* @returns {Uint8Array} The encoded bytes.
 	*/
 	var signed32 = (number) => {
-		return new Int32Array([number]);
+		const bytes = /* @__PURE__ */ new Uint8Array(4);
+		new DataView(bytes.buffer).setUint32(0, number, true);
+		return bytes;
 	};
 	/**
 	* Zip Class
@@ -1186,7 +1197,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		* @param {string} data The data.
 		*/
 		addFile(filename, data) {
-			const vNeeded = 10;
+			const vNeeded = 20;
 			const filenameLength = length(filename);
 			data = encode(data);
 			const uncompressedSize = data.byteLength;
@@ -1199,22 +1210,14 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 				cMethod = 8;
 			}
 			const now = /* @__PURE__ */ new Date();
-			let offsetSeconds = now.getSeconds();
-			if (offsetSeconds >= 32) offsetSeconds -= 32;
-			const offsetYear = now.getYear() - 1980;
-			const seconds = `${offsetSeconds.toString(2)}`.padStart(5, "0");
-			const minutes = `${now.getMinutes().toString(2)}`.padStart(6, "0");
-			const hours = `${now.getHours().toString(2)}`.padStart(5, "0");
-			const date = `${now.getDate().toString(2)}`.padStart(5, "0");
-			const month = `${now.getMonth().toString(2)}`.padStart(4, "0");
-			const year = `${offsetYear.toString(2)}`.padStart(7, "0");
-			const modTime = parseInt(`${hours}${minutes}${seconds}`, 2);
-			const modDate = parseInt(`${year}${month}${date}`, 2);
+			const year = Math.min(2107, Math.max(1980, now.getFullYear()));
+			const modTime = now.getHours() << 11 | now.getMinutes() << 5 | Math.floor(now.getSeconds() / 2);
+			const modDate = year - 1980 << 9 | now.getMonth() + 1 << 5 | now.getDate();
 			const dir = [
 				encode("PK"),
 				signed16(0),
 				signed16(vNeeded),
-				signed16(0),
+				signed16(2048),
 				signed16(cMethod),
 				signed16(modTime),
 				signed16(modDate),
@@ -1234,7 +1237,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			const file = [
 				encode("PK"),
 				signed16(vNeeded),
-				signed16(0),
+				signed16(2048),
 				signed16(cMethod),
 				signed16(modTime),
 				signed16(modDate),
@@ -1274,52 +1277,69 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 //#endregion
 //#region src/js/workbook/helpers.js
 /**
-	* Convert a column number to name.
-	* @param {number} num The number.
+	* Converts a one-based Excel column number to its letter name.
+	* @param {number} num The column number.
 	* @returns {string} The column name.
 	*/
 	function colName(num) {
-		const code = 65 + (num - 1) % 26;
-		const letter = String.fromCharCode(code);
-		const nextNum = Math.round((num - 1) / 26);
-		if (nextNum > 0) return colName(nextNum) + letter;
-		return letter;
+		if (!Number.isInteger(num) || num < 1) throw new RangeError("Column must be a positive integer.");
+		let result = "";
+		while (num) {
+			num--;
+			result = String.fromCharCode(65 + num % 26) + result;
+			num = Math.floor(num / 26);
+		}
+		return result;
 	}
 	/**
-	* Escape a string for Excel.
-	* @param {string} string The input string.
-	* @returns {string} The escaped string.
+	* Escapes XML text and attributes, removing characters forbidden by XML 1.0.
+	* @param {string} string The input text.
+	* @returns {string} The escaped text.
 	*/
 	function escape(string) {
-		string = string.replace("&", "&amp;");
-		string = string.replace("<", "&lt;");
-		string = string.replace(">", "&gt;");
-		string = string.replace("", "");
-		return string;
+		return Array.from(String(string)).filter((character) => {
+			const code = character.codePointAt(0);
+			return (code >= 32 || [
+				9,
+				10,
+				13
+			].includes(code)) && code !== 65534 && code !== 65535;
+		}).join("").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll("\"", "&quot;").replaceAll("'", "&apos;");
 	}
 	/**
-	* Convert a date to Excel format.
-	* @param {number} year The year.
-	* @param {number} month The month.
-	* @param {number} day The day.
-	* @param {number} [hours] The hours.
-	* @param {number} [minutes] The minutes.
-	* @param {number} [seconds] The seconds.
-	* @returns {number} The Excel timestamp.
+	* Converts date parts to the Excel 1900 date system, including its leap-day convention.
+	* @param {number|string} year The year; zero represents a time without a date.
+	* @param {number|string} month The one-based month.
+	* @param {number|string} day The day.
+	* @param {number|string} [hours=0] The hours.
+	* @param {number|string} [minutes=0] The minutes.
+	* @param {number|string} [seconds=0] The seconds.
+	* @returns {number} The Excel serial value.
 	*/
 	function formatDate(year, month, day, hours = 0, minutes = 0, seconds = 0) {
-		const time = (hours * 3600 + minutes * 60 + seconds) / 86400;
-		if (!year) return time;
-		let leapAdjust = 1;
-		if (year == 1900 && month <= 2) leapAdjust = 0;
-		if (month > 2) month -= 3;
-		else {
-			month += 9;
-			year--;
-		}
-		const century = year.substring(0, 2);
-		const decade = year.substring(2);
-		return Math.floor(146097 * century / 4) + Math.floor(1461 * decade / 4) + Math.floor(153 * (month + 2) / 5) + day + 1721119 - 2415020 + leapAdjust;
+		[year, month, day, hours, minutes, seconds] = [
+			year,
+			month,
+			day,
+			hours,
+			minutes,
+			seconds
+		].map(Number);
+		if (![
+			year,
+			month,
+			day,
+			hours,
+			minutes,
+			seconds
+		].every(Number.isInteger) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59 || seconds < 0 || seconds > 59) throw new RangeError("Invalid date or time.");
+		const fraction = (hours * 3600 + minutes * 60 + seconds) / 86400;
+		if (!year) return fraction;
+		if (year === 1900 && month === 2 && day === 29) return 60 + fraction;
+		const date = new Date(Date.UTC(year, month - 1, day));
+		if (year < 1900 || year > 9999 || date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) throw new RangeError("Invalid date.");
+		const days = (date.getTime() - Date.UTC(1899, 11, 31)) / 864e5;
+		return days + (days >= 60 ? 1 : 0) + fraction;
 	}
 
 //#endregion
@@ -1331,8 +1351,8 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		"docProps/core.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><cp:coreProperties xmlns:cp=\"http://schemas.openxmlformats.org/package/2006/metadata/core-properties\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:dcterms=\"http://purl.org/dc/terms/\" xmlns:dcmitype=\"http://purl.org/dc/dcmitype/\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"><dcterms:created xsi:type=\"dcterms:W3CDTF\">{date}</dcterms:created><dc:language>en-US</dc:language><dcterms:modified xsi:type=\"dcterms:W3CDTF\">{date}</dcterms:modified><cp:revision>1</cp:revision></cp:coreProperties>",
 		"xl/_rels/workbook.xml.rels": "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\"><Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles\" Target=\"styles.xml\"/>{sheets}",
 		"xl/worksheets/sheet1.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><dimension ref=\"{ref}\"/><cols>{cols}</cols><sheetData>{rows}</sheetData></worksheet>",
-		"xl/sharedStrings.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><sst xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" count=\"{cnt}\" uniqueCount=\"{cnt}\">{strings}</sst>",
-		"xl/styles.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><styleSheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><fonts count=\"2\"><font><name val=\"Calibri\"/><family val=\"2\"/></font><font><name val=\"Calibri\"/><family val=\"2\"/><b/></font></fonts><fills count=\"1\"><fill><patternFill patternType=\"none\"/></fill></fills><borders count=\"1\"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count=\"1\"><xf numFmtId=\"0\" fontId=\"0\" fillId=\"0\" borderId=\"0\" /></cellStyleXfs><cellXfs count=\"8\"><xf numFmtId=\"0\" fontId=\"0\" fillId=\"0\" borderId=\"0\" xfId=\"0\"/><xf numFmtId=\"1\" fontId=\"0\" fillId=\"0\" borderId=\"0\" xfId=\"0\" applyNumberFormat=\"1\"/><xf numFmtId=\"9\" fontId=\"0\" fillId=\"0\" borderId=\"0\" xfId=\"0\" applyNumberFormat=\"1\"/><xf numFmtId=\"10\" fontId=\"0\" fillId=\"0\" borderId=\"0\" xfId=\"0\" applyNumberFormat=\"1\"/><xf numFmtId=\"14\" fontId=\"0\" fillId=\"0\" borderId=\"0\" xfId=\"0\" applyNumberFormat=\"1\"/><xf numFmtId=\"20\" fontId=\"0\" fillId=\"0\" borderId=\"0\" xfId=\"0\" applyNumberFormat=\"1\"/><xf numFmtId=\"22\" fontId=\"0\" fillId=\"0\" borderId=\"0\" xfId=\"0\" applyNumberFormat=\"1\"/><xf numFmtId=\"0\" fontId=\"0\" fillId=\"0\" borderId=\"0\" xfId=\"0\" applyNumberFormat=\"1\" applyAlignment=\"1\"><alignment horizontal=\"right\"/></xf><xf numFmtId=\"0\" fontId=\"1\" fillId=\"0\" borderId=\"0\" applyFont=\"1\" applyFill=\"1\" applyBorder=\"1\"/></cellXfs><cellStyles count=\"1\"><cellStyle name=\"Normal\" xfId=\"0\" builtinId=\"0\"/></cellStyles></styleSheet>",
+		"xl/sharedStrings.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><sst xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" count=\"{cnt}\" uniqueCount=\"{unique}\">{strings}</sst>",
+		"xl/styles.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><styleSheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><fonts count=\"2\"><font><name val=\"Calibri\"/><family val=\"2\"/></font><font><name val=\"Calibri\"/><family val=\"2\"/><b/></font></fonts><fills count=\"1\"><fill><patternFill patternType=\"none\"/></fill></fills><borders count=\"1\"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count=\"1\"><xf numFmtId=\"0\" fontId=\"0\" fillId=\"0\" borderId=\"0\" /></cellStyleXfs><cellXfs count=\"9\"><xf numFmtId=\"0\" fontId=\"0\" fillId=\"0\" borderId=\"0\" xfId=\"0\"/><xf numFmtId=\"1\" fontId=\"0\" fillId=\"0\" borderId=\"0\" xfId=\"0\" applyNumberFormat=\"1\"/><xf numFmtId=\"9\" fontId=\"0\" fillId=\"0\" borderId=\"0\" xfId=\"0\" applyNumberFormat=\"1\"/><xf numFmtId=\"10\" fontId=\"0\" fillId=\"0\" borderId=\"0\" xfId=\"0\" applyNumberFormat=\"1\"/><xf numFmtId=\"14\" fontId=\"0\" fillId=\"0\" borderId=\"0\" xfId=\"0\" applyNumberFormat=\"1\"/><xf numFmtId=\"20\" fontId=\"0\" fillId=\"0\" borderId=\"0\" xfId=\"0\" applyNumberFormat=\"1\"/><xf numFmtId=\"22\" fontId=\"0\" fillId=\"0\" borderId=\"0\" xfId=\"0\" applyNumberFormat=\"1\"/><xf numFmtId=\"0\" fontId=\"0\" fillId=\"0\" borderId=\"0\" xfId=\"0\" applyNumberFormat=\"1\" applyAlignment=\"1\"><alignment horizontal=\"right\"/></xf><xf numFmtId=\"0\" fontId=\"1\" fillId=\"0\" borderId=\"0\" applyFont=\"1\" applyFill=\"1\" applyBorder=\"1\"/></cellXfs><cellStyles count=\"1\"><cellStyle name=\"Normal\" xfId=\"0\" builtinId=\"0\"/></cellStyles></styleSheet>",
 		"xl/workbook.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\"><fileVersion appName=\"FrostUI-Tables\"/><sheets>{sheets}</sheets></workbook>"
 	};
 
@@ -1347,6 +1367,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		#current;
 		#sheets;
 		#sKeys;
+		#stringCount = 0;
 		#sValues;
 		/**
 		* New Workbook constructor.
@@ -1354,7 +1375,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		constructor() {
 			this.#current = 0;
 			this.#sheets = [];
-			this.#sKeys = {};
+			this.#sKeys = /* @__PURE__ */ new Map();
 			this.#sValues = [];
 		}
 		/**
@@ -1365,6 +1386,13 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		addSheet(data, name = null) {
 			this.#current++;
 			if (!name) name = `Sheet${this.#current}`;
+			name = String(name).replace(/[\\/?*[\]:]/g, "").replace(/^'+|'+$/g, "").slice(0, 31) || `Sheet${this.#current}`;
+			const base = name;
+			let suffix = 1;
+			while (this.#sheets.some((sheet) => sheet.name.toLowerCase() === name.toLowerCase())) {
+				const tail = ` (${suffix++})`;
+				name = base.slice(0, 31 - tail.length) + tail;
+			}
 			this.#sheets.push({
 				name,
 				data
@@ -1375,6 +1403,11 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		* @returns {Blob} The xlsx file.
 		*/
 		create() {
+			if (!this.#sheets.length) this.addSheet({ rows: [] });
+			this.#sKeys = /* @__PURE__ */ new Map();
+			this.#sValues = [];
+			this.#stringCount = 0;
+			const worksheets = this.#sheets.map((sheet) => this.#sheetToXml(sheet, templates["xl/worksheets/sheet1.xml"]));
 			const zip = new Zip("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
 			for (let [filename, template] of Object.entries(templates)) switch (filename) {
 				case "[Content_Types].xml": {
@@ -1391,7 +1424,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 					break;
 				}
 				case "xl/workbook.xml": {
-					const sheets = this.#sheets.map((sheet, index) => `<sheet name="${sheet.name}" sheetId="${index + 1}" state="visible" r:id="rId${index + 2}"/>`);
+					const sheets = this.#sheets.map((sheet, index) => `<sheet name="${escape(sheet.name)}" sheetId="${index + 1}" state="visible" r:id="rId${index + 2}"/>`).join("");
 					template = template.replace("{sheets}", sheets);
 					zip.addFile(filename, template);
 					break;
@@ -1403,17 +1436,15 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 					break;
 				}
 				case "xl/sharedStrings.xml": {
-					if (!this.#sValues.length) this.#sValues.push("No Data");
-					const strings = this.#sValues.map((string) => `<si><t>${string}</t></si>`).join("\r\n");
-					template = template.replaceAll("{cnt}", `${this.#sValues.length}`);
+					const strings = this.#sValues.map((string) => `<si><t xml:space="preserve">${string}</t></si>`).join("\r\n");
+					template = template.replace("{cnt}", String(this.#stringCount)).replace("{unique}", String(this.#sValues.length));
 					template = template.replace("{strings}", strings);
 					zip.addFile(filename, template);
 					break;
 				}
 				case "xl/worksheets/sheet1.xml":
-					for (const [index, sheet] of this.#sheets.entries()) {
+					for (const [index, xml] of worksheets.entries()) {
 						filename = `xl/worksheets/sheet${index + 1}.xml`;
-						const xml = this.#sheetToXml(sheet, template);
 						zip.addFile(filename, xml);
 					}
 					break;
@@ -1422,170 +1453,168 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			return zip.zip();
 		}
 		/**
+		* Serializes a value without interpreting strings as spreadsheet formulas.
+		* @param {*} value The cell value.
+		* @param {string} reference The cell reference.
+		* @param {number|null} forceStyle The optional header/footer style.
+		* @returns {string} The cell XML.
+		*/
+		#cellToXml(value, reference, forceStyle) {
+			if (value === null || value === void 0 || value === "") return "";
+			let type = null;
+			let style = forceStyle;
+			let content;
+			const text = String(value);
+			if (typeof value === "boolean") {
+				type = "b";
+				content = value ? 1 : 0;
+			} else if (typeof value === "number" && Number.isFinite(value) || /^[-+]?(?:0|[1-9]\d{0,14})(?:\.\d+)?$/.test(text)) content = Number(value);
+			else if (/^[-+]?\d+(?:\.\d+)?%$/.test(text)) {
+				content = parseFloat(text) / 100;
+				style ??= text.includes(".") ? 3 : 2;
+			} else {
+				const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})(?: (\d{2}):(\d{2}):(\d{2}))?$/);
+				const dmy = text.match(/^(\d{2})\/(\d{2})\/(\d{4})(?: (\d{2}):(\d{2}):(\d{2}))?$/);
+				const time = text.match(/^(\d{2}):(\d{2}):(\d{2})$/);
+				try {
+					if (iso || dmy) {
+						const match = iso || dmy;
+						content = formatDate(iso ? match[1] : match[3], match[2], iso ? match[3] : match[1], match[4] || 0, match[5] || 0, match[6] || 0);
+						style ??= match[4] ? 6 : 4;
+					} else if (time) {
+						content = formatDate(0, 0, 0, ...time.slice(1));
+						style ??= 5;
+					}
+				} catch {}
+				if (content === void 0) {
+					const escaped = escape(text);
+					if (text.length > 160) {
+						type = "inlineStr";
+						content = escaped;
+					} else {
+						type = "s";
+						this.#stringCount++;
+						if (!this.#sKeys.has(escaped)) {
+							this.#sKeys.set(escaped, this.#sValues.length);
+							this.#sValues.push(escaped);
+						}
+						content = this.#sKeys.get(escaped);
+					}
+				}
+			}
+			return `<c r="${reference}"${type ? ` t="${type}"` : ""}${style !== null ? ` s="${style}"` : ""}>` + (type === "inlineStr" ? `<is><t xml:space="preserve">${content}</t></is>` : `<v>${content}</v>`) + "</c>";
+		}
+		/**
 		* Convert a sheet object to an XML string.
 		* @param {object} sheet The sheet.
 		* @param {string} template The XML template.
 		* @returns {string} The XML string.
 		*/
 		#sheetToXml(sheet, template) {
-			const colLengths = {};
-			const cols = [];
+			const widths = [];
 			const rows = [];
-			let currentRow = 0;
-			const addRow = (data, forceStyle = null) => {
-				currentRow++;
-				let row = `<row r="${currentRow}">`;
-				let currentCol = 0;
-				for (let value of data) {
-					currentCol++;
-					if (currentRow === 1) colLengths[currentCol] = 0;
-					if (!value) continue;
-					const cName = colName(currentCol) + currentRow;
-					value = `${value}`;
-					const length = value.length;
-					let cType;
-					let cStyle;
-					let cValue;
-					if (value === "0" || /^[-+]?[1-9]\d{0,14}$/.test(value)) {
-						cValue = value.trimStart("+");
-						if (length > 10) cStyle = 1;
-					} else if (/^[-+]?(?:0|[1-9]\d*)\.\d+$/.test(value)) cValue = value.trimStart("+");
-					else if (/^[-+]?\d+%$/.test(value)) {
-						value = parseInt(value) / 100;
-						cValue = value.toFixed(2);
-						cStyle = 2;
-					} else if (/^[-+]?\d+\.\d+%$/.test(value)) {
-						value = Math.round(parseFloat(value) * 100) / 1e4;
-						cValue = value.toFixed(4);
-						cStyle = 3;
-					} else if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-						const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-						cValue = formatDate(match[1], match[2], match[3]);
-						cStyle = 4;
-					} else if (/^\d{2}\/\d{2}\/\d{4}$/.test(value)) {
-						const match = value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-						cValue = formatDate(match[3], match[2], match[1]);
-						cStyle = 4;
-					} else if (/\d{2}:\d{2}:\d{2}$/.test(value)) {
-						const match = value.match(/(\d{2}):(\d{2}):(\d{2})$/);
-						cValue = formatDate(0, 0, 0, match[1], match[2], match[3]);
-						cStyle = 5;
-					} else if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value)) {
-						const match = value.match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/);
-						cValue = formatDate(match[1], match[2], match[3], match[4], match[5], match[6]);
-						cStyle = 6;
-					} else if (/^\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}:\d{2}$/.test(value)) {
-						const match = value.match(/^(\d{2})\/(\d{2})\/(\d{4}) (\d{2}):(\d{2}):(\d{2})$/);
-						cValue = formatDate(match[3], match[2], match[1], match[4], match[5], match[6]);
-						cStyle = 6;
-					} else if (length > 160) {
-						cType = "inlineStr";
-						cValue = escape(value);
-					} else {
-						if (/^[0-9+-.]+$/.test(value)) cStyle = 7;
-						cType = "s";
-						value = value.trimStart("\0");
-						value = escape(value);
-						const sKey = `~${value}`;
-						if (sKey in this.#sKeys) cValue = this.#sKeys[sKey];
-						else {
-							this.#sValues.push(value);
-							cValue = this.#sValues.length - 1;
-							this.#sKeys[sKey] = cValue;
-						}
-					}
-					colLengths[currentCol] = Math.max(length, colLengths[currentCol]);
-					const attributes = { r: cName };
-					if (cType) attributes.t = cType;
-					if (forceStyle) cStyle = forceStyle;
-					if (cStyle) attributes.s = cStyle;
-					row += `<c ${Object.keys(attributes).map((attr) => `${attr}="${attributes[attr]}"`).join(" ")}>` + (cType === "inlineStr" ? `<is><t>${cValue}</t></is>` : `<v>${cValue}</v>`) + "</c>";
-				}
-				row += "</row>";
-				rows.push(row);
-			};
-			if (sheet.data.header) addRow(sheet.data.header, 8);
-			if (sheet.data.rows) for (const data of sheet.data.rows) addRow(data);
-			if (sheet.data.footer) addRow(sheet.data.footer, 8);
-			for (const [key, max] of Object.entries(colLengths)) cols.push(`<col min="${key}" max="${key}" width="${Math.min(max + 5, 60)}" />`);
-			const ref = `A1:${colName(cols.length)}${rows.length}`;
-			template = template.replace("{ref}", ref);
-			template = template.replace("{cols}", cols.join("\r\n"));
-			template = template.replace("{rows}", rows.join("\r\n"));
-			return template;
+			const data = [
+				...sheet.data.header ? [{
+					values: sheet.data.header,
+					style: 8
+				}] : [],
+				...(sheet.data.rows || []).map((values) => ({
+					values,
+					style: null
+				})),
+				...sheet.data.footer ? [{
+					values: sheet.data.footer,
+					style: 8
+				}] : []
+			];
+			if (data.length > 1048576) throw new RangeError("Too many worksheet rows.");
+			for (const [index, { values, style }] of data.entries()) {
+				if (!Array.isArray(values) || values.length > 16384) throw new RangeError("Invalid worksheet row.");
+				const cells = values.map((value, column) => {
+					widths[column] = Math.max(widths[column] || 0, String(value ?? "").length);
+					return this.#cellToXml(value, `${colName(column + 1)}${index + 1}`, style);
+				}).join("");
+				rows.push(`<row r="${index + 1}">${cells}</row>`);
+			}
+			const cols = widths.map((width, index) => `<col min="${index + 1}" max="${index + 1}" width="${Math.min(width + 5, 60)}"/>`);
+			const ref = rows.length && widths.length ? `A1:${colName(widths.length)}${rows.length}` : "A1";
+			return template.replace("{ref}", ref).replace("{cols}", cols.join("")).replace("{rows}", rows.join(""));
 		}
 	};
 
 //#endregion
 //#region src/js/buttons.js
 /**
-	* Generate a CSV file from the table.
+	* Downloads the displayed rows as CSV, escaping delimiters, quotes and line breaks.
 	* @param {object} options The button options.
-	* @param {object} data The headings and displayed rows.
-	* @param {string[]} data.headings The exported headings.
-	* @param {Array<Array<*>>} data.rows The displayed row values.
+	* @param {string} [options.title] The download title.
+	* @param {boolean} [options.escapeFormulae=true] Prefix spreadsheet formula-like strings with an apostrophe.
+	* @param {object} data The export data.
+	* @param {string[]} data.headings The headings.
+	* @param {Array<Array<*>>} data.rows The displayed rows.
 	*/
-	function csv(options, { headings, rows: results }) {
-		if (!options.title) options.title = _fr0st_query.default.getText("title");
-		const rows = [headings, ...results];
-		const lines = [];
-		for (const row of rows) {
-			const line = row.map((value) => {
-				value = `${value}`.replace(/"/g, "\"\"");
-				if (value.indexOf(",") >= 0) return `"${value}"`;
-				return value;
-			}).join(",");
-			lines.push(line);
-		}
-		const blob = new Blob([lines.join("\r\n")], { type: "text/csv;charset=utf-8;" });
-		saveBlob(blob, `${options.title}.csv`);
+	function csv(options, { headings, rows }) {
+		const title = options.title || document.title;
+		const lines = [headings, ...rows].map((row) => row.map((value) => {
+			let text = String(value ?? "");
+			if (options.escapeFormulae !== false && typeof value === "string" && /^[\s]*[=+\-@\t\r]/.test(text)) text = `'${text}`;
+			return /[",\r\n]/.test(text) ? `"${text.replaceAll("\"", "\"\"")}"` : text;
+		}).join(","));
+		saveBlob(new Blob([lines.join("\r\n")], { type: "text/csv;charset=utf-8;" }), `${title}.csv`);
 	}
 	/**
-	* Generate an excel file from the table.
+	* Downloads the displayed rows as an Excel workbook.
 	* @param {object} options The button options.
-	* @param {object} data The headings and displayed rows.
-	* @param {string[]} data.headings The exported headings.
-	* @param {Array<Array<*>>} data.rows The displayed row values.
+	* @param {object} data The export data.
+	* @param {string[]} data.headings The headings.
+	* @param {Array<Array<*>>} data.rows The displayed rows.
 	*/
-	function excel(options, { headings, rows: results }) {
-		if (!options.title) options.title = _fr0st_query.default.getText("title");
+	function excel(options, { headings, rows }) {
 		const workbook = new Workbook();
 		workbook.addSheet({
 			header: headings,
-			rows: results
+			rows
 		});
-		const blob = workbook.create();
-		saveBlob(blob, `${options.title}.xlsx`);
+		saveBlob(workbook.create(), `${options.title || document.title}.xlsx`);
 	}
 	/**
-	* Print the table.
+	* Opens a text-only print view and waits for its styles and fonts.
 	* @param {object} options The button options.
 	* @param {HTMLTableElement} table The table to print.
 	* @param {string} classes The table classes.
+	* @returns {Promise<void>} Completion of print preparation, or nothing when blocked.
 	*/
-	function print(options, table, classes) {
-		if (!options.title) options.title = _fr0st_query.default.getText("title");
-		const win = window.open("", "");
-		win.document.head.innerHTML = `<title>${options.title}</title>`;
-		const styles = _fr0st_query.default.find("link, style");
-		const newStyles = _fr0st_query.default.clone(styles);
-		for (const element of newStyles) {
-			if (_fr0st_query.default.tagName(element) === "link") {
-				const oldRel = _fr0st_query.default.getAttribute(element, "href");
-				const href = new URL(oldRel, document.location).href;
-				_fr0st_query.default.setAttribute(element, { href });
+	async function print(options, table, classes) {
+		const win = window.open("", "_blank");
+		if (!win) return;
+		const title = options.title || document.title;
+		win.document.title = title;
+		win.document.documentElement.dir = table.dir || document.documentElement.dir;
+		const heading = win.document.createElement("h1");
+		heading.textContent = title;
+		_fr0st_query.default.addClass(table, classes || "");
+		win.document.body.append(heading, table);
+		const loads = [];
+		for (const element of document.querySelectorAll("link[rel=\"stylesheet\"], style")) {
+			const clone = win.document.importNode(element, true);
+			if (clone.tagName === "LINK") {
+				clone.href = element.href;
+				loads.push(new Promise((resolve) => {
+					clone.addEventListener("load", resolve, { once: true });
+					clone.addEventListener("error", resolve, { once: true });
+				}));
 			}
-			win.document.head.appendChild(element);
+			win.document.head.append(clone);
 		}
-		const container = _fr0st_query.default.create("div");
-		_fr0st_query.default.addClass(table, classes);
-		_fr0st_query.default.append(container, table);
-		const tableHtml = _fr0st_query.default.getHtml(container);
-		win.document.body.innerHTML = `<h1>${options.title}</h1>${tableHtml}`;
-		setTimeout((_) => {
+		try {
+			await Promise.all(loads);
+			await win.document.fonts.ready;
+			if (win.closed) return;
+			win.focus();
 			win.print();
-			win.close();
-		}, 1e3);
+		} finally {
+			if (!win.closed) win.close();
+		}
 	}
 
 //#endregion
@@ -1611,6 +1640,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 	* @property {string} [text] The button label.
 	* @property {string} [title] The export title, defaulting to the document title.
 	* @property {number[]} [columns] The columns to export; defaults to visible columns.
+	* @property {boolean} [escapeFormulae=true] Prefixes formula-like CSV strings with an apostrophe.
 	* @property {function(this: Table): void} [callback] Runs with the table as its receiver.
 	*/
 	/**
@@ -1632,6 +1662,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 	* @property {TableRow[]} [data] Local data; otherwise read the table body.
 	* @property {function(TableRequest): (TableResults|PromiseLike<TableResults>)} [getResults] Loads remote rows.
 	* @property {TableColumn[]|null} [columns=null] The column definitions.
+	* @property {function(string): string} [sanitize] Sanitizes HTML cells and headings; defaults to query sanitization.
 	* @property {TableButton[]} [buttons=[]] The export and custom buttons.
 	* @property {{top?: string, bottom?: string}} [layout] Comma-separated columns containing pipe-separated controls.
 	* @property {Record<string, string|Record<string, string>>} [lang] The interface labels.
@@ -1640,7 +1671,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 	* @property {TableOrder[]} [order] The initial ordering; defaults to column zero ascending.
 	* @property {number[]} [lengths] Available page lengths; defaults to 10, 25, 50, and 100.
 	* @property {number} [length=10] The initial page length.
-	* @property {number} [debounce=250] The remote request delay in milliseconds.
+	* @property {number} [debounce=250] The local search or remote request delay in milliseconds.
 	* @property {boolean} [info=true] Whether to render result counts.
 	* @property {boolean} [lengthChange=true] Whether users can change the page length.
 	* @property {boolean} [ordering=true] Whether rows can be sorted.
@@ -1651,7 +1682,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 	* @property {function(HTMLTableRowElement, TableRow[], number, number, number[]): void} [headerCallback] Receives the heading row and data range.
 	* @property {function(HTMLTableSectionElement, TableRow[], number, number, number[]): void} [footerCallback] Receives the footer and data range.
 	* @property {function(number, number, number, number, string): string} [infoCallback] Formats the result count text.
-	* @property {function(): void} [preDrawCallback] The pre-draw callback, reserved for the data/lifecycle migration.
+	* @property {function(): (boolean|void)} [preDrawCallback] Runs before drawing; return false to keep the existing DOM.
 	* @property {function(): void} [drawCallback] Runs after drawing rows.
 	*/
 	/**
@@ -1672,7 +1703,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			}
 		};
 		static classes = {
-			bottomRow: "d-md-flex justify-content-between mx-n2",
+			bottomRow: "d-md-flex justify-content-between",
 			button: "btn btn-table",
 			buttonGroup: "btn-group btn-group-sm mt-1",
 			column: "d-md-flex",
@@ -1684,7 +1715,6 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			lengthInputContainer: "form-input d-inline-block",
 			lengthInputFilled: "input-filled input-sm",
 			lengthInputOutline: "input-outline input-sm",
-			lengthInputRipple: "ripple-line",
 			lengthLabel: "mb-1 mb-md-0",
 			lengthLabelText: "me-2",
 			loader: "position-absolute top-50 start-50 translate-middle z-1",
@@ -1699,14 +1729,13 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			searchInputContainer: "form-input mx-auto me-md-0",
 			searchInputFilled: "input-filled input-sm",
 			searchInputOutline: "input-outline input-sm",
-			searchInputRipple: "ripple-line",
 			table: "table table-bordered",
 			tableContainer: "table-responsive",
 			tableHeading: "fw-bold",
 			tableSort: "table-sort",
 			tableSortAsc: "table-sort-asc",
 			tableSortDesc: "table-sort-desc",
-			topRow: "d-md-flex justify-content-between mb-2 mx-n2"
+			topRow: "d-md-flex justify-content-between mb-2"
 		};
 		/** @type {TableOptions} */
 		static defaults = {
@@ -1723,6 +1752,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 				page: "Page",
 				perPage: "Per Page",
 				search: "Search",
+				loading: "Loading results",
 				paginate: {
 					first: "First",
 					last: "Last",
@@ -1741,10 +1771,11 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			},
 			icons: {
 				first: "&laquo;",
-				last: "&raquo",
+				last: "&raquo;",
 				next: "&gt;",
 				previous: "&lt;"
 			},
+			sanitize: (html) => _fr0st_query.default.sanitize(html),
 			inputStyle: "filled",
 			createdRow: null,
 			drawCallback: null,
@@ -1790,26 +1821,29 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		#columns;
 		#container;
 		#data;
+		#drawVersion = 0;
 		#filtered;
-		#filterIndexes;
 		#getData;
 		#headings;
 		#id;
-		#index;
 		#infoContainer;
 		#lengthSelect;
 		#limit;
 		#loader;
+		#loadResults;
 		#offset;
 		#order;
 		#original;
+		#originalBusy;
 		#originalClass;
 		#originalDescription;
 		#page;
 		#pagination;
-		#request;
+		#pending;
+		#requestVersion = 0;
 		#results;
 		#rowIndexes;
+		#searchHandler;
 		#searchInput;
 		#tbody;
 		#term;
@@ -1823,99 +1857,143 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		* @param {TableOptions} [options] The component options.
 		*/
 		constructor(node, options) {
+			if (node?.tagName !== "TABLE") throw new TypeError("Table requires a table element.");
+			const configured = {
+				...new.target.defaults,
+				...(0, _fr0st_ui.getDataset)(node),
+				...options
+			};
+			for (const key of [
+				"order",
+				"lengths",
+				"buttons"
+			]) if (!Array.isArray(configured[key])) throw new TypeError(`${key} must be an array.`);
+			if (configured.columns !== null && !Array.isArray(configured.columns)) throw new TypeError("Columns must be an array.");
+			if (typeof configured.sanitize !== "function") throw new TypeError("sanitize must be a function.");
+			if (configured.lengths.some((length) => !Number.isSafeInteger(Number(length)) || Number(length) <= 0)) throw new RangeError("Page lengths must be positive integers.");
+			const headings = getHeadingsFromDOM(node);
+			if (configured.columns && headings.length && configured.columns.length !== headings.length) throw new RangeError("Column definitions must match the heading count.");
+			if (configured.paging && (!Number.isSafeInteger(Number(configured.length)) || Number(configured.length) <= 0)) throw new RangeError("Page length must be a positive integer.");
 			super(node, options);
-			this.#originalClass = _fr0st_query.default.getAttribute(this.node, "class");
-			this.#originalDescription = _fr0st_query.default.getAttribute(this.node, "aria-describedby");
+			for (const key of [
+				"order",
+				"lengths",
+				"buttons"
+			]) this.options[key].splice(0, this.options[key].length, ...configured[key]);
+			this.#originalClass = _fr0st_query.default.getAttribute(node, "class");
+			this.#originalDescription = _fr0st_query.default.getAttribute(node, "aria-describedby");
+			this.#originalBusy = _fr0st_query.default.getAttribute(node, "aria-busy");
 			this.#data = [];
 			this.#results = [];
-			this.#filtered = 0;
+			this.#rowIndexes = [];
 			this.#total = 0;
-			this.#getData = null;
-			let data;
-			if (this.options.getResults) this.#getResultsInit();
-			else if (_fr0st_query.default._isArray(this.options.data)) data = this.options.data.slice();
-			else data = getDataFromDOM(this.node);
-			if (data) {
-				this.#data = data;
-				this.#getDataInit();
-			}
-			this.#headings = getHeadingsFromDOM(this.node);
-			this.#columns = [];
-			if (this.options.columns) this.#columns = this.options.columns.map((column) => ({ ...column }));
-			else this.#columns = new Array(this.#headings.length).fill();
-			this.#columns = this.#columns.map((column, index) => ({
-				class: null,
-				data: index,
-				dir: "asc",
-				format: null,
-				name: null,
-				orderData: null,
-				orderable: true,
-				searchable: true,
-				visible: true,
-				createdCell: null,
-				...column
-			}));
-			this.#columnCount = this.#columns.reduce((acc, v) => {
-				if (v.visible) acc++;
-				return acc;
-			}, 0);
+			this.#filtered = 0;
 			this.#offset = 0;
-			this.#limit = this.options.paging ? this.options.length : Infinity;
-			this.#order = this.options.order.map((order) => [...order]);
-			this.#term = null;
-			if (!_fr0st_query.default.getAttribute(this.node, "id")) {
-				_fr0st_query.default.setAttribute(this.node, { id: (0, _fr0st_ui.generateId)("table") });
-				this.#id = true;
+			this.#term = "";
+			this.#limit = this.options.paging ? Number(this.options.length) : Infinity;
+			try {
+				if (!this.options.getResults) {
+					this.#data = this.options.data ?? getDataFromDOM(node);
+					this.#validateRows(this.#data);
+					this.#data = this.#data.slice();
+				}
+				this.#headings = headings;
+				const columns = this.options.columns ?? headings.map((_, data) => ({ data }));
+				this.#columns = columns.map((column, index) => ({
+					class: null,
+					data: index,
+					dir: "asc",
+					format: null,
+					name: null,
+					orderData: null,
+					orderable: true,
+					searchable: true,
+					visible: true,
+					createdCell: null,
+					...column
+				}));
+				if (!headings.length) this.#headings = this.#columns.map((column) => ({
+					text: column.name ?? String(column.data),
+					class: null
+				}));
+				for (const column of this.#columns) if (column.orderData !== null) {
+					if (!Array.isArray(column.orderData)) throw new TypeError("orderData must be an array of column indexes.");
+					column.orderData.forEach((index) => this.#validateColumn(index));
+				}
+				this.#order = this.#normalizeOrder(this.options.order);
+				this.#getOrder();
+				this.#columnCount = this.#getVisibleColumns().length;
+				if (!node.id) {
+					node.id = (0, _fr0st_ui.generateId)("table");
+					this.#id = true;
+				}
+				if (this.options.getResults) this.#getResultsInit();
+				else this.#getDataInit();
+				this.#render();
+				if (!this.node) return;
+				this.#events();
+				_fr0st_query.default.triggerEvent(this.node, "init.ui.table");
+				if (this.node) this.#getData();
+			} catch (error) {
+				this.dispose();
+				throw error;
 			}
-			this.#buildIndex();
-			this.#render();
-			this.#events();
-			_fr0st_query.default.triggerEvent(this.node, "init.ui.table");
-			this.#getData();
 		}
 		/**
 		* Add a row to the data array.
 		* @param {Array|object} row The row to add.
 		*/
 		addRow(row) {
-			this.#data.push(row);
-			this.#buildIndex();
-			this.#total++;
-			this.#filtered++;
-			if (this.options.getResults) {
-				this.#rowIndexes.push(this.#data.length - 1);
-				this.#refreshResults();
-				this.#renderResults();
-			} else this.#getData();
+			if (!this.node) return;
+			this.#validateRows([row]);
+			this.#data.push(Array.isArray(row) ? [...row] : { ...row });
+			this.#mutated(1);
 		}
 		/**
 		* Clear all rows from the data array.
 		*/
 		clear() {
+			if (!this.node) return;
+			const requestVersion = this.#cancelRequest();
+			if (!this.node || requestVersion !== this.#requestVersion) return;
+			this.#searchHandler?.cancel();
 			this.#data = [];
-			this.#index = [];
-			this.#filterIndexes = null;
-			this.#rowIndexes = [];
 			this.#results = [];
+			this.#rowIndexes = [];
 			this.#offset = 0;
 			this.#total = 0;
 			this.#filtered = 0;
-			if (this.options.searching) _fr0st_query.default.setValue(this.#searchInput, "");
-			this.#renderResults();
+			this.#term = "";
+			if (this.#searchInput) _fr0st_query.default.setValue(this.#searchInput, "");
+			this.#refreshResults();
+			this.loading({ show: false });
+			if (this.node) this.#renderResults();
 		}
 		/**
 		* Dispose the Table.
 		*/
 		dispose() {
 			if (!this.node) return;
-			if (this.#id) _fr0st_query.default.removeAttribute(this.node, "id");
-			for (const [attribute, value] of [["class", this.#originalClass], ["aria-describedby", this.#originalDescription]]) if (value === null || value === void 0) _fr0st_query.default.removeAttribute(this.node, attribute);
-			else _fr0st_query.default.setAttribute(this.node, { [attribute]: value });
-			_fr0st_query.default.before(this.#container, this.node);
-			_fr0st_query.default.remove(this.#container);
-			_fr0st_query.default.empty(this.node);
-			for (const child of _fr0st_query.default.children(this.#original)) _fr0st_query.default.append(this.node, child);
+			const node = this.node;
+			this.#drawVersion++;
+			this.#searchHandler?.cancel();
+			this.#requestVersion++;
+			this.#loadResults?.cancel();
+			const pending = this.#pending;
+			this.#pending = null;
+			super.dispose();
+			if (this.#id) node.removeAttribute("id");
+			for (const [attribute, value] of [
+				["class", this.#originalClass],
+				["aria-describedby", this.#originalDescription],
+				["aria-busy", this.#originalBusy]
+			]) if (value === null || value === void 0) node.removeAttribute(attribute);
+			else node.setAttribute(attribute, value);
+			if (this.#container) {
+				this.#container.before(node);
+				_fr0st_query.default.remove(this.#container);
+			}
+			if (this.#original) node.replaceChildren(...this.#original.childNodes);
 			this.#original = null;
 			this.#container = null;
 			this.#loader = null;
@@ -1926,17 +2004,17 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			this.#pagination = null;
 			this.#lengthSelect = null;
 			this.#searchInput = null;
-			this.#columns = null;
-			this.#headings = null;
-			this.#order = null;
-			this.#data = null;
-			this.#index = null;
-			this.#filterIndexes = null;
-			this.#rowIndexes = null;
-			this.#results = null;
-			this.#request = null;
+			this.#columns = [];
+			this.#headings = [];
+			this.#data = [];
+			this.#results = [];
+			this.#rowIndexes = [];
 			this.#getData = null;
-			super.dispose();
+			this.#loadResults = null;
+			this.#searchHandler = null;
+			try {
+				pending?.cancel?.();
+			} catch {}
 		}
 		/**
 		* Get values for a single column.
@@ -1976,6 +2054,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		* @param {number} index The column index.
 		*/
 		hideColumn(index) {
+			this.#validateColumn(index);
 			this.#columns[index].visible = false;
 			this.#renderResults();
 		}
@@ -1996,11 +2075,14 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		* @param {number} length The length.
 		*/
 		length(length) {
-			if (!this.options.paging) return;
+			if (!this.node || !this.options.paging) return;
+			length = Number(length);
+			if (!Number.isSafeInteger(length) || length <= 0) throw new RangeError("Page length must be a positive integer.");
 			this.#limit = length;
-			this.#offset -= this.#offset % this.#limit;
+			this.#offset -= this.#offset % length;
+			this.#syncLength();
 			_fr0st_query.default.triggerEvent(this.node, "length.ui.table");
-			this.#getData();
+			if (this.node) this.#getData();
 		}
 		/**
 		* Trigger the loading indicator.
@@ -2008,9 +2090,11 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		* @param {boolean} [options.show=true] Whether to show the loading indicator.
 		*/
 		loading({ show = true } = {}) {
+			if (!this.node) return;
+			this.node.setAttribute("aria-busy", String(show));
 			if (show) {
-				_fr0st_query.default.triggerEvent(this.node, "processing.ui.table");
 				_fr0st_query.default.show(this.#loader);
+				_fr0st_query.default.triggerEvent(this.node, "processing.ui.table");
 			} else {
 				_fr0st_query.default.hide(this.#loader);
 				_fr0st_query.default.triggerEvent(this.node, "processed.ui.table");
@@ -2021,20 +2105,23 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		* @param {Array} order The order data.
 		*/
 		order(order) {
-			if (!this.options.ordering) return;
-			this.#order = order;
+			if (!this.node || !this.options.ordering) return;
+			this.#order = this.#normalizeOrder(order);
 			_fr0st_query.default.triggerEvent(this.node, "order.ui.table");
-			this.#getData();
+			if (this.node) this.#getData();
 		}
 		/**
 		* Set the Table page.
 		* @param {number} page The one-based page number.
 		*/
 		page(page) {
-			if (!this.options.paging) return;
-			this.#offset = (page - 1) * this.#limit;
+			if (!this.node || !this.options.paging) return;
+			page = Number(page);
+			if (!Number.isSafeInteger(page)) throw new RangeError("Page must be an integer.");
+			const pages = Math.max(1, Math.ceil(this.#filtered / this.#limit));
+			this.#offset = (Math.min(pages, Math.max(1, page)) - 1) * this.#limit;
 			_fr0st_query.default.triggerEvent(this.node, "page.ui.table");
-			this.#getData();
+			if (this.node) this.#getData();
 		}
 		/**
 		* Redraw the Table.
@@ -2048,6 +2135,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		* @param {boolean} [options.reset=false] Whether to reset the offset.
 		*/
 		reload({ reset = false } = {}) {
+			if (!this.node) return;
 			if (reset) this.#offset = 0;
 			this.#getData();
 		}
@@ -2059,39 +2147,21 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		*/
 		removeRow(index, { modified = true } = {}) {
 			const rowIndex = this.#getIndex(index, { modified });
-			this.#data = this.#data.filter((_, dataIndex) => dataIndex !== rowIndex);
-			this.#buildIndex();
-			this.#refreshResults();
-			this.#renderResults();
+			this.#data.splice(rowIndex, 1);
+			this.#mutated(-1);
 		}
 		/**
 		* Search the Table for a term.
 		* @param {string} term The term to search for.
 		*/
 		search(term) {
-			if (!this.options.searching) return;
-			_fr0st_query.default.setValue(this.#searchInput, term);
-			this.#term = term;
+			if (!this.node || !this.options.searching) return;
+			this.#searchHandler?.cancel();
+			this.#term = String(term ?? "");
+			this.#offset = 0;
+			if (this.#searchInput) _fr0st_query.default.setValue(this.#searchInput, this.#term);
 			_fr0st_query.default.triggerEvent(this.node, "search.ui.table");
-			if (this.options.getResults) {
-				this.#getData();
-				return;
-			}
-			if (this.#term) {
-				this.#filterIndexes = [];
-				const escapedFilter = _fr0st_query.default._escapeRegExp(this.#term);
-				const regExp = new RegExp(escapedFilter, "i");
-				for (const [index, result] of this.#data.entries()) for (const column of this.#columns) {
-					if (!column.searchable) continue;
-					const value = _fr0st_query.default._getDot(result, `${column.data}`);
-					if (regExp.test(value)) this.#filterIndexes.push(index);
-				}
-				this.#filtered = this.#filterIndexes.length;
-			} else {
-				this.#filterIndexes = null;
-				this.#filtered = this.#total;
-			}
-			this.#getData();
+			if (this.node) this.#getData();
 		}
 		/**
 		* Set values for a single column.
@@ -2101,14 +2171,10 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		* @param {boolean} [options.modified=true] Whether to use modified indexes.
 		*/
 		setColumn(key, column, { modified = true } = {}) {
-			this.#data = this.#data.map((row, index) => {
-				const rowIndex = modified ? this.#rowIndexes.findIndex((otherIndex) => otherIndex == index) : index;
-				if (rowIndex >= 0) _fr0st_query.default._setDot(row, `${key}`, column[rowIndex]);
-				return row;
-			});
-			this.#buildIndex();
-			this.#refreshResults();
-			this.#renderResults();
+			const indexes = modified ? this.#rowIndexes : this.#data.map((_, index) => index);
+			if (!Array.isArray(column) || column.length !== indexes.length) throw new RangeError("Column values must match the selected row count.");
+			for (const [index, rowIndex] of indexes.entries()) _fr0st_query.default._setDot(this.#data[rowIndex], String(key), column[index]);
+			this.#mutated();
 		}
 		/**
 		* Set values for a single row.
@@ -2119,10 +2185,9 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		*/
 		setRow(index, row, { modified = true } = {}) {
 			const rowIndex = this.#getIndex(index, { modified });
-			this.#data[rowIndex] = row;
-			this.#buildIndex();
-			this.#refreshResults();
-			this.#renderResults();
+			this.#validateRows([row]);
+			this.#data[rowIndex] = Array.isArray(row) ? [...row] : { ...row };
+			this.#mutated();
 		}
 		/**
 		* Set a single value for a row.
@@ -2134,42 +2199,17 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		*/
 		setValue(index, key, value, { modified = true } = {}) {
 			const rowIndex = this.#getIndex(index, { modified });
-			_fr0st_query.default._setDot(this.#data[rowIndex], `${key}`, value);
-			this.#buildIndex();
-			this.#refreshResults();
-			this.#renderResults();
+			_fr0st_query.default._setDot(this.#data[rowIndex], String(key), value);
+			this.#mutated();
 		}
 		/**
 		* Toggle a column as visible.
 		* @param {number} index The column index.
 		*/
 		showColumn(index) {
+			this.#validateColumn(index);
 			this.#columns[index].visible = true;
 			this.#renderResults();
-		}
-		/**
-		* Rebuild the index.
-		*/
-		#buildIndex() {
-			if (this.options.getResults || !this.options.ordering) return;
-			this.#index = [];
-			for (const column of this.#columns) {
-				if (!column.orderable) continue;
-				this.#index[column.data] = [];
-				const valueLookup = {};
-				for (const [index, result] of this.#data.entries()) {
-					const value = _fr0st_query.default._getDot(result, `${column.data}`);
-					if (!(value in valueLookup)) valueLookup[value] = [];
-					valueLookup[value].push(index);
-				}
-				const values = Object.keys(valueLookup).sort((a, b) => {
-					if (_fr0st_query.default._isNumeric(a) && _fr0st_query.default._isNumeric(b)) return a - b;
-					const aLower = a.toLowerCase();
-					const bLower = b.toLowerCase();
-					return aLower.localeCompare(bLower);
-				});
-				for (const value of values) this.#index[column.data].push(valueLookup[value]);
-			}
 		}
 		/**
 		* Render a table for specific columns.
@@ -2178,6 +2218,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		*/
 		#buildTable(columns) {
 			const table = _fr0st_query.default.create("table");
+			table.dir = getComputedStyle(this.node).direction;
 			const thead = _fr0st_query.default.create("thead");
 			const tr = _fr0st_query.default.create("tr");
 			for (const heading of this.#getHeadings(columns)) {
@@ -2199,20 +2240,36 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			return table;
 		}
 		/**
+		* Invalidates pending results before invoking an optional cancellation hook.
+		* @returns {number} The invalidation generation.
+		*/
+		#cancelRequest() {
+			const version = ++this.#requestVersion;
+			this.#loadResults?.cancel();
+			const pending = this.#pending;
+			this.#pending = null;
+			try {
+				pending?.cancel?.();
+			} catch {}
+			return version;
+		}
+		/**
 		* Attach events for the Table.
 		*/
 		#events() {
-			if (this.options.lengthChange) _fr0st_query.default.addEvent(this.#lengthSelect, "change.ui.table", (_) => {
+			if (this.#lengthSelect) _fr0st_query.default.addEvent(this.#lengthSelect, "change.ui.table", (_) => {
 				const length = _fr0st_query.default.getValue(this.#lengthSelect);
 				this.length(length);
 			});
-			if (this.options.searching) _fr0st_query.default.addEvent(this.#searchInput, "input.ui.table", _fr0st_query.default._debounce((_) => {
-				const term = _fr0st_query.default.getValue(this.#searchInput);
-				this.search(term);
-			}));
+			if (this.#searchInput) {
+				this.#searchHandler = _fr0st_query.default._debounce(() => {
+					if (this.node) this.search(_fr0st_query.default.getValue(this.#searchInput));
+				}, this.options.getResults ? 0 : this.options.debounce);
+				_fr0st_query.default.addEvent(this.#searchInput, "input.ui.table", this.#searchHandler);
+			}
 			if (this.options.ordering) {
 				const handleSort = (e) => {
-					const index = _fr0st_query.default.index(e.currentTarget);
+					const index = Number(_fr0st_query.default.getDataset(e.currentTarget, "uiIndex"));
 					if (!this.#columns[index].orderable) return;
 					e.preventDefault();
 					const defaultDir = this.#columns[index].dir;
@@ -2246,8 +2303,9 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 					}
 				});
 			}
-			if (this.options.paging) _fr0st_query.default.addEventDelegate(this.#pagination, "click.ui.table", "[data-ui-page]", (e) => {
+			if (this.#pagination) _fr0st_query.default.addEventDelegate(this.#pagination, "click.ui.table", "[data-ui-page]", (e) => {
 				e.preventDefault();
+				if (e.currentTarget.disabled) return;
 				let page = _fr0st_query.default.getDataset(e.currentTarget, "uiPage");
 				switch (page) {
 					case "first":
@@ -2265,22 +2323,73 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			});
 		}
 		/**
+		* Loads and validates the newest remote page.
+		* @param {number} version The request generation.
+		* @returns {Promise<void>} Completion of the request.
+		*/
+		async #fetchResults(version) {
+			const active = () => this.node && version === this.#requestVersion;
+			if (!active()) return;
+			const request = { columns: { ...this.#columns.map((column) => ({
+				...column.name ? { name: column.name } : {},
+				data: column.data,
+				orderable: column.orderable,
+				searchable: column.searchable
+			})) } };
+			if (this.#term) request.term = this.#term;
+			if (this.options.ordering) request.order = { ...this.#getOrder().map(([column, dir]) => ({
+				column,
+				dir
+			})) };
+			if (this.options.paging) {
+				request.offset = this.#offset;
+				request.limit = this.#limit;
+			}
+			let response;
+			try {
+				const pending = this.options.getResults.call(this, request);
+				if (!active()) {
+					Promise.resolve(pending).catch(() => {});
+					pending?.cancel?.();
+					return;
+				}
+				this.#pending = pending;
+				response = await pending;
+				if (!active()) return;
+				this.#validateRows(response?.results);
+				if (!Number.isSafeInteger(response.total) || !Number.isSafeInteger(response.filtered) || response.total < 0 || response.filtered < 0 || response.filtered > response.total || response.results.length > response.filtered || this.options.paging && response.results.length > this.#limit) throw new TypeError("Remote counts and rows must describe a valid result page.");
+			} catch (error) {
+				if (active()) {
+					this.#pending = null;
+					this.loading({ show: false });
+					if (active()) _fr0st_query.default.triggerEvent(this.node, "error.ui.table", { detail: { error } });
+				}
+				return;
+			}
+			this.#pending = null;
+			this.#total = response.total;
+			this.#filtered = response.filtered;
+			if (this.options.paging && this.#offset >= this.#filtered && this.#offset > 0) {
+				this.#offset = Math.max(0, (Math.ceil(this.#filtered / this.#limit) - 1) * this.#limit);
+				this.#getData();
+				return;
+			}
+			this.#data = response.results.slice();
+			this.#refreshResults();
+			this.loading({ show: false });
+			if (active()) this.#renderResults();
+		}
+		/**
 		* Initialize preloaded get data.
 		*/
 		#getDataInit() {
-			this.#total = this.#data.length;
-			this.#filtered = this.#total;
-			this.#getData = (_) => {
+			this.#getData = () => {
+				const version = ++this.#drawVersion;
 				this.loading();
-				this.#rowIndexes = this.#filterIndexes;
-				if (this.options.ordering) {
-					const order = this.#getOrder();
-					this.#rowIndexes = this.#getOrderedIndexes(order, this.#rowIndexes);
-				}
-				if (!this.#rowIndexes) this.#rowIndexes = _fr0st_query.default._range(this.#offset, this.#offset + this.#limit);
+				if (!this.node || version !== this.#drawVersion) return;
+				this.#updateLocal();
 				this.loading({ show: false });
-				this.#refreshResults();
-				this.#renderResults();
+				if (this.node && version === this.#drawVersion) this.#renderResults();
 			};
 		}
 		/**
@@ -2301,12 +2410,12 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		* @returns {Array} The headings.
 		*/
 		#getHeadings(columns) {
-			const headings = [];
-			for (const [index, heading] of this.#headings.entries()) {
-				if (!columns.includes(index)) continue;
-				headings.push(heading.text);
-			}
-			return headings;
+			return columns.map((index) => {
+				this.#validateColumn(index);
+				const container = document.createElement("div");
+				container.innerHTML = _fr0st_query.default.sanitize(String(this.#headings[index].text));
+				return container.textContent;
+			});
 		}
 		/**
 		* Get an index (optionally modified).
@@ -2316,6 +2425,8 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		* @returns {number} The index.
 		*/
 		#getIndex(index, { modified = true } = {}) {
+			const count = modified ? this.#rowIndexes.length : this.#data.length;
+			if (!Number.isInteger(index) || index < 0 || index >= count) throw new RangeError("Row index is out of range.");
 			return modified ? this.#rowIndexes[index] : index;
 		}
 		/**
@@ -2323,43 +2434,12 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		* @returns {Array} The column ordering data.
 		*/
 		#getOrder() {
-			const order = [];
-			for (const [index, direction] of this.#order) if (this.#columns[index].orderData) order.push(...this.#columns[index.orderData]);
-			else order.push([index, direction]);
-			return order;
-		}
-		/**
-		* Get a range of data indexes for filtered rows, based on order data.
-		* @param {Array} order The order data.
-		* @param {Array} [onlyRows=null] The filtered rows.
-		* @param {number} [offset] The starting offset.
-		* @param {number} [limit] The maximum rows to return.
-		* @param {number} [orderIndex=0] The order index.
-		* @returns {Array} The data indexes.
-		*/
-		#getOrderedIndexes(order, onlyRows = null, offset = this.#offset, limit = this.#limit, orderIndex = 0) {
-			const [index, direction] = order[orderIndex];
-			const key = this.#columns[index].data;
-			let rowLookup = this.#index[key];
-			if (direction === "desc") rowLookup = rowLookup.slice().reverse();
-			let current = 0;
-			const results = [];
-			for (const rows of rowLookup) {
-				let filteredRows = onlyRows ? rows.filter((row) => onlyRows.includes(row)) : rows;
-				if (direction === "desc") filteredRows = filteredRows.slice().reverse();
-				if (offset > current + filteredRows.length || !filteredRows.length) {
-					current += rows.length;
-					continue;
-				}
-				const sortedRows = filteredRows.length > 1 && orderIndex < order.length - 1 ? this.#getOrderedIndexes(order, filteredRows, 0, Math.min(filteredRows.length, limit - results.length), orderIndex + 1) : rows;
-				for (const row of sortedRows) {
-					current++;
-					if (current <= offset) continue;
-					results.push(row);
-					if (results.length == limit) return results;
-				}
-			}
-			return results;
+			return this.#order.flatMap(([index, direction]) => {
+				return (this.#columns[index].orderData ?? [index]).map((column) => {
+					this.#validateColumn(column);
+					return [column, direction];
+				});
+			});
 		}
 		/**
 		* Get results for specific columns.
@@ -2367,66 +2447,20 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		* @returns {Array} The results.
 		*/
 		#getResultRows(columns) {
-			const rows = [];
-			for (const result of this.#results) {
-				const row = [];
-				for (const [index, column] of this.#columns.entries()) {
-					if (!columns.includes(index)) continue;
-					const value = _fr0st_query.default._getDot(result, `${column.data}`);
-					row.push(value);
-				}
-				rows.push(row);
-			}
-			return rows;
+			for (const index of columns) this.#validateColumn(index);
+			return this.#results.map((row) => columns.map((index) => _fr0st_query.default._getDot(row, String(this.#columns[index].data))));
 		}
 		/**
 		* Initialize get data from callback.
 		*/
 		#getResultsInit() {
-			const load = _fr0st_query.default._debounce(() => {
-				const options = {};
-				if (this.#term) options.term = this.#term;
-				if (this.options.ordering) options.order = { ...this.#order.map(([column, dir]) => ({
-					column,
-					dir
-				})) };
-				if (this.options.paging) {
-					options.offset = this.#offset;
-					options.limit = this.#limit;
-				}
-				options.columns = { ...this.#columns.map((column) => {
-					const data = {};
-					if (column.name) data.name = column.name;
-					return {
-						...data,
-						data: column.data,
-						orderable: column.orderable,
-						searchable: column.searchable
-					};
-				}) };
-				const request = Promise.resolve(this.options.getResults(options));
-				request.then((response) => {
-					if (this.#request !== request) return;
-					this.#total = response.total;
-					this.#filtered = response.filtered;
-					this.#data = response.results;
-					this.#refreshResults();
-					this.#rowIndexes = _fr0st_query.default._range(0, this.#results.length - 1);
-					this.loading({ show: false });
-					this.#renderResults();
-					this.#request = null;
-				}).catch((_) => {
-					if (this.#request !== request) return;
-					this.loading({ show: false });
-					this.#request = null;
-				});
-				this.#request = request;
-			}, this.options.debounce);
-			this.#getData = (_) => {
-				if (this.#request && this.#request.cancel) this.#request.cancel();
-				this.#request = null;
+			this.#loadResults = _fr0st_query.default._debounce((version) => this.#fetchResults(version), this.options.debounce);
+			this.#getData = () => {
+				this.#drawVersion++;
+				const version = this.#cancelRequest();
+				if (!this.node || version !== this.#requestVersion) return;
 				this.loading();
-				load();
+				if (this.node && version === this.#requestVersion) this.#loadResults(version);
 			};
 		}
 		/**
@@ -2442,27 +2476,68 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			return columns;
 		}
 		/**
+		* Redraws after a row mutation; remote mutations affect the loaded page only.
+		* @param {number} [change=0] The change in the remote row count.
+		*/
+		#mutated(change = 0) {
+			if (!this.node) return;
+			if (this.options.getResults) {
+				const version = this.#cancelRequest();
+				if (!this.node || version !== this.#requestVersion) return;
+				this.#total = Math.max(0, this.#total + change);
+				this.#filtered = Math.max(0, this.#filtered + change);
+				if (!this.#data.length && this.#offset) {
+					this.#offset = Math.max(0, this.#offset - this.#limit);
+					this.#getData();
+					return;
+				}
+				this.#refreshResults();
+				this.loading({ show: false });
+				if (this.node) this.#renderResults();
+			} else this.#getData();
+		}
+		/**
+		* Validates and copies ordering, ignoring nonorderable columns.
+		* @param {TableOrder[]} order The requested order.
+		* @returns {TableOrder[]} The normalized order.
+		*/
+		#normalizeOrder(order) {
+			if (!Array.isArray(order)) throw new TypeError("Order must be an array.");
+			return order.flatMap((entry) => {
+				if (!Array.isArray(entry) || entry.length !== 2 || !["asc", "desc"].includes(entry[1])) throw new TypeError("Order entries must contain a column index and asc/desc direction.");
+				if (!this.#columns.length && entry[0] === 0) return [];
+				this.#validateColumn(entry[0]);
+				return this.#columns[entry[0]].orderable ? [[...entry]] : [];
+			});
+		}
+		/**
 		* Refresh the results.
 		*/
 		#refreshResults() {
-			if (this.options.getResults) this.#results = this.#data;
-			else this.#results = this.#rowIndexes.map((rowIndex) => this.#data[rowIndex]);
-			if (this.options.paging) {
-				this.#page = 1 + this.#offset / this.#limit;
-				this.#totalPages = Math.ceil(this.#filtered / this.#limit) || 1;
-			}
+			this.#page = this.options.paging ? 1 + this.#offset / this.#limit : 1;
+			this.#totalPages = this.options.paging ? Math.max(1, Math.ceil(this.#filtered / this.#limit)) : 1;
+			if (this.options.getResults) this.#rowIndexes = this.#data.map((_, index) => index);
+			this.#results = this.#rowIndexes.map((index) => this.#data[index]);
 		}
 		/**
 		* Render the Table.
 		*/
 		#render() {
-			this.#original = _fr0st_query.default.clone(this.node);
-			_fr0st_query.default.empty(this.node);
+			this.#original = document.createDocumentFragment();
+			this.#original.append(...this.node.childNodes);
 			this.#container = _fr0st_query.default.create("div", { class: this.constructor.classes.container });
-			this.#loader = _fr0st_query.default.create("div", { class: this.constructor.classes.loader });
+			this.#loader = _fr0st_query.default.create("div", {
+				class: this.constructor.classes.loader,
+				attributes: {
+					"role": "progressbar",
+					"aria-label": this.options.lang.loading
+				}
+			});
 			const loaderIcon = _fr0st_query.default.create("span", { class: this.constructor.classes.loaderIcon });
 			_fr0st_query.default.append(this.#loader, loaderIcon);
 			_fr0st_query.default.addClass(this.node, this.constructor.classes.table);
+			const caption = _fr0st_query.default.findOne("caption", this.#original);
+			if (caption) _fr0st_query.default.append(this.node, _fr0st_query.default.clone(caption));
 			const thead = _fr0st_query.default.create("thead");
 			_fr0st_query.default.append(this.node, thead);
 			this.#theadRow = _fr0st_query.default.create("tr");
@@ -2471,18 +2546,24 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			_fr0st_query.default.append(this.node, this.#tbody);
 			const tfoot = _fr0st_query.default.findOne("tfoot", this.#original);
 			if (tfoot) {
-				this.#tfoot = _fr0st_query.default.clone(tfoot);
+				this.#tfoot = tfoot.cloneNode(true);
 				_fr0st_query.default.append(this.node, this.#tfoot);
 			}
 			_fr0st_query.default.hide(this.#loader);
 			_fr0st_query.default.after(this.node, this.#container);
 			_fr0st_query.default.append(this.#container, this.#loader);
-			if (this.options.layout.top) this.#renderLayoutRow(this.options.layout.top, this.constructor.classes.topRow);
+			if (this.options.layout.top) {
+				this.#renderLayoutRow(this.options.layout.top, this.constructor.classes.topRow);
+				if (!this.node) return;
+			}
 			const tableContainer = _fr0st_query.default.create("div", { class: this.constructor.classes.tableContainer });
 			_fr0st_query.default.append(tableContainer, this.node);
 			_fr0st_query.default.append(this.#container, tableContainer);
-			if (this.options.layout.bottom) this.#renderLayoutRow(this.options.layout.bottom, this.constructor.classes.bottomRow);
-			if (this.#infoContainer) _fr0st_query.default.setAttribute(this.node, { "aria-describedby": _fr0st_query.default.getAttribute(this.#infoContainer, "id") });
+			if (this.options.layout.bottom) {
+				this.#renderLayoutRow(this.options.layout.bottom, this.constructor.classes.bottomRow);
+				if (!this.node) return;
+			}
+			if (this.#infoContainer) _fr0st_query.default.setAttribute(this.node, { "aria-describedby": [this.#originalDescription, this.#infoContainer.id].filter(Boolean).join(" ") });
 		}
 		/**
 		* Render the table buttons.
@@ -2502,7 +2583,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 				_fr0st_query.default.addEvent(btn, "click.ui.table", (e) => {
 					e.preventDefault();
 					if (button.callback) button.callback.bind(this)();
-					else if (button.type in this.constructor.buttons) this.constructor.buttons[button.type].bind(this)(button);
+					else if (Object.hasOwn(this.constructor.buttons, button.type)) this.constructor.buttons[button.type].bind(this)(button);
 				});
 				_fr0st_query.default.append(btnGroup, btn);
 			}
@@ -2512,6 +2593,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		* Render the table headings.
 		*/
 		#renderHeadings() {
+			const version = this.#drawVersion;
 			const children = _fr0st_query.default.children(this.#theadRow);
 			const headings = {};
 			for (const child of children) {
@@ -2525,9 +2607,11 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 				let cell;
 				if (index in headings) cell = headings[index];
 				else {
+					const html = this.options.sanitize(String(heading.text));
+					if (!this.node || version !== this.#drawVersion) return;
 					cell = _fr0st_query.default.create("th", {
 						class: this.constructor.classes.tableHeading,
-						html: heading.text,
+						html,
 						dataset: { uiIndex: index }
 					});
 					if (heading.class) _fr0st_query.default.addClass(cell, heading.class);
@@ -2538,7 +2622,8 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 							"aria-controls": _fr0st_query.default.getAttribute(this.node, "id")
 						});
 					}
-					if (!lastCell) _fr0st_query.default.append(this.#theadRow, cell);
+					if (!this.node) return;
+					if (!lastCell) _fr0st_query.default.prepend(this.#theadRow, cell);
 					else _fr0st_query.default.insertAfter(cell, lastCell);
 				}
 				lastCell = cell;
@@ -2573,8 +2658,9 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		* Render the table info.
 		*/
 		#renderInfo() {
+			const version = this.#drawVersion;
 			_fr0st_query.default.empty(this.#infoContainer);
-			const start = this.#offset + 1;
+			const start = this.#results.length ? this.#offset + 1 : 0;
 			const end = this.#offset + this.#results.length;
 			let infoText = this.#filtered < this.#total ? this.options.lang.infoFiltered : this.options.lang.info;
 			const replacements = {
@@ -2584,7 +2670,8 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 				total: this.#total
 			};
 			for (const [key, value] of Object.entries(replacements)) infoText = infoText.replace(`{${key}}`, value);
-			if (this.options.infoCallback) infoText = this.options.infoCallback(start, end, this.#total, this.#filtered, infoText);
+			if (this.options.infoCallback) infoText = this.options.infoCallback.call(this, start, end, this.#total, this.#filtered, infoText);
+			if (!this.node || version !== this.#drawVersion) return;
 			const text = _fr0st_query.default.create("small", { text: infoText });
 			_fr0st_query.default.append(this.#infoContainer, text);
 		}
@@ -2593,6 +2680,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		* @param {HTMLElement} container The container to render in.
 		*/
 		#renderInfoContainer(container) {
+			if (!this.options.info) return;
 			const id = (0, _fr0st_ui.generateId)("table-info");
 			this.#infoContainer = _fr0st_query.default.create("div", {
 				class: this.constructor.classes.infoContainer,
@@ -2614,9 +2702,10 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			for (const elements of columns.split(",")) {
 				const column = _fr0st_query.default.create("div", { class: this.constructor.classes.column });
 				for (const element of elements.split("|")) {
-					if (!(element in this.constructor.layout)) continue;
+					if (!Object.hasOwn(this.constructor.layout, element)) continue;
 					const container = _fr0st_query.default.create("div", { class: this.constructor.classes.columnContainer });
-					this.constructor.layout[element].bind(this)(container);
+					this.constructor.layout[element].call(this, container);
+					if (!this.node) return;
 					_fr0st_query.default.append(column, container);
 				}
 				_fr0st_query.default.append(row, column);
@@ -2652,13 +2741,9 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 					value: length,
 					text: length
 				});
-				if (length == this.#limit) _fr0st_query.default.setAttribute(option, { checked: true });
 				_fr0st_query.default.append(this.#lengthSelect, option);
 			}
-			if (this.options.inputStyle === "filled") {
-				const ripple = _fr0st_query.default.create("div", { class: this.constructor.classes.lengthInputRipple });
-				_fr0st_query.default.append(inputContainer, ripple);
-			}
+			this.#syncLength();
 			_fr0st_query.default.append(container, lengthContainer);
 		}
 		/**
@@ -2674,7 +2759,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 				attributes: {
 					"type": "button",
 					"title": options.text ? `${options.text} ${this.options.lang.page}` : `${this.options.lang.page} ${options.page}`,
-					"role": "link",
+					"aria-label": options.text ? `${options.text} ${this.options.lang.page}` : `${this.options.lang.page} ${options.page}`,
 					"aria-controls": _fr0st_query.default.getAttribute(this.node, "id")
 				},
 				dataset: { uiPage: options.page }
@@ -2688,6 +2773,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		#renderPagination() {
 			const setDisabled = (container, disabled) => {
 				const link = _fr0st_query.default.findOne(":scope > [data-ui-page]", container);
+				link.disabled = disabled;
 				if (disabled) {
 					_fr0st_query.default.addClass(container, this.constructor.classes.pageDisabled);
 					_fr0st_query.default.setAttribute(link, {
@@ -2759,8 +2845,14 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 					pageItem = this.#renderPageItem({ page: current });
 					_fr0st_query.default.insertAfter(pageItem, lastLink);
 				}
-				if (current == this.#page) _fr0st_query.default.addClass(pageItem, this.constructor.classes.pageActive);
-				else _fr0st_query.default.removeClass(pageItem, this.constructor.classes.pageActive);
+				const pageButton = _fr0st_query.default.findOne("button", pageItem);
+				if (current == this.#page) {
+					pageButton.setAttribute("aria-current", "page");
+					_fr0st_query.default.addClass(pageItem, this.constructor.classes.pageActive);
+				} else {
+					pageButton.removeAttribute("aria-current");
+					_fr0st_query.default.removeClass(pageItem, this.constructor.classes.pageActive);
+				}
 				lastLink = pageItem;
 			}
 		}
@@ -2769,6 +2861,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		* @param {HTMLElement} container The container to render in.
 		*/
 		#renderPaginationContainer(container) {
+			if (!this.options.paging) return;
 			const paginationContainer = _fr0st_query.default.create("div", { class: this.constructor.classes.paginationContainer });
 			_fr0st_query.default.append(container, paginationContainer);
 			this.#pagination = _fr0st_query.default.create("div", { class: this.constructor.classes.pagination });
@@ -2778,30 +2871,44 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		* Render the table results.
 		*/
 		#renderResults() {
+			if (!this.node) return;
+			const version = ++this.#drawVersion;
+			const active = () => this.node && version === this.#drawVersion;
 			_fr0st_query.default.triggerEvent(this.node, "preDraw.ui.table");
+			if (!active()) return;
+			const proceed = this.options.preDrawCallback?.call(this);
+			if (!active() || proceed === false) return;
 			_fr0st_query.default.empty(this.#tbody);
+			this.#columnCount = this.#getVisibleColumns().length;
 			this.#renderHeadings();
-			if (this.options.headerCallback) this.options.headerCallback(this.#theadRow, this.#data, this.#offset, this.#offset + this.#limit, this.#rowIndexes);
-			if (this.options.paging) this.#renderPagination();
-			if (this.options.info) this.#renderInfo();
+			if (!active()) return;
+			const end = this.#offset + this.#results.length;
+			this.options.headerCallback?.call(this, this.#theadRow, this.#data, this.#offset, end, [...this.#rowIndexes]);
+			if (!active()) return;
+			if (this.#pagination) this.#renderPagination();
+			if (this.#infoContainer) this.#renderInfo();
+			if (!active()) return;
 			if (!this.#results.length) {
 				const row = _fr0st_query.default.create("tr");
-				const cell = _fr0st_query.default.create("td", {
+				_fr0st_query.default.append(row, _fr0st_query.default.create("td", {
 					class: this.constructor.classes.emptyCell,
-					html: this.#term ? this.options.lang.noResults : this.options.lang.noData,
-					attributes: { colspan: this.#columnCount }
-				});
-				_fr0st_query.default.append(row, cell);
+					text: this.#term ? this.options.lang.noResults : this.options.lang.noData,
+					attributes: { colspan: Math.max(1, this.#columnCount) }
+				}));
 				_fr0st_query.default.append(this.#tbody, row);
 			} else for (const [index, result] of this.#results.entries()) {
 				const row = this.#renderRow(result, index);
-				if (this.options.rowCallback) this.options.rowCallback(row, result, index, this.#offset + index, this.#rowIndexes[index]);
+				if (!active()) return;
+				this.options.rowCallback?.call(this, row, result, index, this.#offset + index, this.#rowIndexes[index]);
+				if (!active()) return;
 				_fr0st_query.default.append(this.#tbody, row);
-				if (this.options.createdRow) this.options.createdRow(row, result, index);
+				this.options.createdRow?.call(this, row, result, index);
+				if (!active()) return;
 			}
-			if (this.options.drawCallback) this.options.drawCallback();
-			if (this.#tfoot && this.options.footerCallback) this.options.footerCallback(this.#tfoot, this.#data, this.#offset, this.#offset + this.#limit, this.#rowIndexes);
-			_fr0st_query.default.triggerEvent(this.node, "draw.ui.table");
+			this.options.drawCallback?.call(this);
+			if (!active()) return;
+			if (this.#tfoot) this.options.footerCallback?.call(this, this.#tfoot, this.#data, this.#offset, end, [...this.#rowIndexes]);
+			if (active()) _fr0st_query.default.triggerEvent(this.node, "draw.ui.table");
 		}
 		/**
 		* Render a result row.
@@ -2811,12 +2918,20 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		*/
 		#renderRow(data, rowIndex) {
 			const row = _fr0st_query.default.create("tr");
+			const version = this.#drawVersion;
 			for (const [index, column] of this.#columns.entries()) {
 				if (!column.visible) continue;
-				const value = _fr0st_query.default._getDot(data, `${column.data}`);
-				const cell = _fr0st_query.default.create("td", { html: column.format ? column.format(value) : value });
-				if (column.class) _fr0st_query.default.addClass(column.class);
-				if (column.createdCell) column.createdCell(cell, value, data, rowIndex, index);
+				const value = _fr0st_query.default._getDot(data, String(column.data));
+				const formatted = column.format ? column.format.call(this, value) : value;
+				if (!this.node || version !== this.#drawVersion) return row;
+				const html = this.options.sanitize(String(formatted ?? ""));
+				if (!this.node || version !== this.#drawVersion) return row;
+				const cell = _fr0st_query.default.create("td", {
+					html,
+					class: column.class || ""
+				});
+				column.createdCell?.call(this, cell, value, data, rowIndex, index);
+				if (!this.node || version !== this.#drawVersion) return row;
 				_fr0st_query.default.append(row, cell);
 			}
 			return row;
@@ -2838,15 +2953,64 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 				attributes: {
 					"type": "search",
 					"placeholder": this.options.lang.search,
+					"aria-label": this.options.lang.search,
 					"aria-controls": _fr0st_query.default.getAttribute(this.node, "id")
 				}
 			});
 			_fr0st_query.default.append(inputContainer, this.#searchInput);
-			if (this.options.inputStyle === "filled") {
-				const ripple = _fr0st_query.default.create("div", { class: this.constructor.classes.searchInputRipple });
-				_fr0st_query.default.append(inputContainer, ripple);
-			}
 			_fr0st_query.default.append(container, searchContainer);
+		}
+		/**
+		* Selects the current length, including a programmatically requested length.
+		*/
+		#syncLength() {
+			if (!this.#lengthSelect) return;
+			if (![...this.#lengthSelect.options].some((option) => Number(option.value) === this.#limit)) _fr0st_query.default.append(this.#lengthSelect, _fr0st_query.default.create("option", {
+				value: this.#limit,
+				text: this.#limit
+			}));
+			_fr0st_query.default.setValue(this.#lengthSelect, this.#limit);
+		}
+		/**
+		* Recomputes local matching, stable ordering, counts, and the current page.
+		*/
+		#updateLocal() {
+			this.#total = this.#data.length;
+			const term = this.#term.toLocaleLowerCase();
+			let indexes = this.#data.map((_, index) => index).filter((index) => !term || this.#columns.some((column) => column.searchable && String(_fr0st_query.default._getDot(this.#data[index], String(column.data)) ?? "").toLocaleLowerCase().includes(term)));
+			this.#filtered = indexes.length;
+			const order = this.options.ordering ? this.#getOrder() : [];
+			indexes.sort((a, b) => {
+				for (const [index, direction] of order) {
+					const key = String(this.#columns[index].data);
+					const av = _fr0st_query.default._getDot(this.#data[a], key);
+					const bv = _fr0st_query.default._getDot(this.#data[b], key);
+					const diff = _fr0st_query.default._isNumeric(av) && _fr0st_query.default._isNumeric(bv) ? Number(av) - Number(bv) : String(av ?? "").toLocaleLowerCase().localeCompare(String(bv ?? "").toLocaleLowerCase());
+					if (diff) return direction === "desc" ? -diff : diff;
+				}
+				return a - b;
+			});
+			if (this.options.paging) {
+				const lastOffset = Math.max(0, (Math.ceil(indexes.length / this.#limit) - 1) * this.#limit);
+				this.#offset = Math.min(this.#offset, lastOffset);
+				indexes = indexes.slice(this.#offset, this.#offset + this.#limit);
+			} else this.#offset = 0;
+			this.#rowIndexes = indexes;
+			this.#refreshResults();
+		}
+		/**
+		* Validates a data column index.
+		* @param {number} index The column index.
+		*/
+		#validateColumn(index) {
+			if (!Number.isInteger(index) || index < 0 || index >= this.#columns.length) throw new RangeError("Column index is out of range.");
+		}
+		/**
+		* Validates a local or remote row collection.
+		* @param {TableRow[]} rows The supplied rows.
+		*/
+		#validateRows(rows) {
+			if (!Array.isArray(rows) || rows.some((row) => !Array.isArray(row) && !_fr0st_query.default._isPlainObject(row))) throw new TypeError("Results must be an array of arrays or plain objects.");
 		}
 	};
 

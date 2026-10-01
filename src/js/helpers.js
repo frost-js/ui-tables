@@ -18,8 +18,14 @@ export function getDataFromDOM(element) {
  * @returns {Array} The parsed data.
  */
 export function getHeadingsFromDOM(element) {
-    const tbody = $.findOne('thead', element);
-    const row = $.children(tbody, 'tr').shift();
+    const thead = element.tHead;
+    if (!thead) {
+        return [];
+    }
+    if (thead.rows.length > 1 || [...thead.querySelectorAll('th')].some((cell) => cell.colSpan !== 1 || cell.rowSpan !== 1)) {
+        throw new RangeError('Table supports one heading row without spanning cells.');
+    }
+    const row = thead.rows[0];
 
     return $.children(row, 'th').map((cell) => ({
         text: $.getHtml(cell),
@@ -33,13 +39,18 @@ export function getHeadingsFromDOM(element) {
  * @param {string} filename The filename.
  */
 export function saveBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
     const link = $.create('a', {
         attributes: {
-            href: URL.createObjectURL(blob),
+            href: url,
             download: filename,
         },
     });
-    $.append(document.body, link);
-    $.click(link);
-    $.detach(link);
+    try {
+        $.append(document.body, link);
+        $.click(link);
+    } finally {
+        $.detach(link);
+        setTimeout(() => URL.revokeObjectURL(url), 0);
+    }
 };
