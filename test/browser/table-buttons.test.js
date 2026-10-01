@@ -53,6 +53,40 @@ test.describe('Table buttons', () => {
     });
 
     test.describe('excel', () => {
+        test('round-trips a large workbook and preserves date boundaries, percentages and blanks', async ({ page }) => {
+            const rows = await page.evaluate((_) => {
+                let seed = 123456;
+                const rows = Array.from({ length: 96 }, (_, index) => {
+                    let text = `Record ${index}: `;
+                    for (let count = 0; count < 2048; count++) {
+                        seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5;
+                        text += String.fromCharCode(65 + ((seed >>> 0) % 26));
+                    }
+                    return [text, index];
+                });
+                rows.push(['29/02/1900', '1900-03-01'], ['12.5%', '25%'], [null, ''], ['2024-02-30', '25:00:00']);
+                UI.Table.init(document.querySelector('#table'), { data: rows, order: [], paging: false, buttons: [{ type: 'excel' }] });
+                return rows;
+            });
+            const pending = page.waitForEvent('download');
+            await page.getByRole('button', { name: 'Excel', exact: true }).click();
+            const files = readZip(await readDownload(await pending));
+            const values = await page.evaluate((entries) => {
+                const xml = Object.fromEntries(entries.map(([name, value]) => [name, new DOMParser().parseFromString(value.text, 'application/xml')]));
+                const strings = [...xml['xl/sharedStrings.xml'].querySelectorAll('si')].map((item) => item.textContent);
+                return [...xml['xl/worksheets/sheet1.xml'].querySelectorAll('row')].slice(1).map((row) => {
+                    return [...row.querySelectorAll('c')].map((cell) => {
+                        const type = cell.getAttribute('t');
+                        return type === 's' ? strings[Number(cell.textContent)] : cell.textContent;
+                    });
+                });
+            }, [...files]);
+            expect(values.slice(0, 96)).toEqual(rows.slice(0, 96).map(([value, index]) => [value, String(index)]));
+            expect(values[96]).toEqual(['60', '61']);
+            expect(values[97]).toEqual(['0.125', '0.25']);
+            expect(values[98]).toHaveLength(0);
+            expect(values[99]).toEqual(['2024-02-30', '25:00:00']);
+        });
         test('downloads valid XML with dates, zero, booleans, escaping, and wide columns', async ({ page }) => {
             await page.evaluate((_) => {
                 const values = [0, false, true, 'A & B & C < D < E', 'Café 🌨️', '2024-01-15', '2024-03-15 12:30:00', '12:30:00', '=1+1', 'x'.repeat(200)];

@@ -296,6 +296,41 @@ test.describe('Table', () => {
     });
 
     test.describe('user events', () => {
+        test('pages through a long result set using first, previous, numbered and last controls', async ({ page }) => {
+            await page.evaluate(() => window.createTable({ data: Array.from({ length: 40 }, (_, i) => [`Row ${i + 1}`, i + 1]), order: [[1, 'asc']] }));
+            await page.getByRole('button', { name: 'Last Page', exact: true }).click();
+            await expect(page.locator('tbody td')).toHaveText(['Row 39', '39', 'Row 40', '40']);
+            await page.getByRole('button', { name: 'Previous Page', exact: true }).click();
+            await expect(page.getByRole('button', { name: 'Page 19', exact: true })).toHaveAttribute('aria-current', 'page');
+            await page.getByRole('button', { name: 'First Page', exact: true }).click();
+            await page.getByRole('button', { name: 'Page 3', exact: true }).click();
+            await expect(page.locator('tbody td')).toHaveText(['Row 5', '5', 'Row 6', '6']);
+            await page.getByRole('combobox').selectOption('4');
+            await expect(page.locator('tbody tr')).toHaveCount(4);
+            await page.evaluate(() => $('#table').table('reload', { reset: true }));
+            await expect(page.locator('tbody td:first-child')).toHaveText(['Row 1', 'Row 2', 'Row 3', 'Row 4']);
+        });
+        test('debounces typed local search and appends a shift-sort key', async ({ page }) => {
+            await page.evaluate(() => window.createTable({ debounce: 20 }));
+            await page.getByRole('searchbox').fill('A');
+            await expect(page.locator('tbody td')).toHaveText(['A', '1', 'A', '3']);
+            await expect(page.getByRole('status')).toContainText('of 2 (filtered from 4 total)');
+            await page.getByRole('columnheader', { name: /Score/ }).click({ modifiers: ['Shift'] });
+            await page.getByRole('columnheader', { name: /Score/ }).click({ modifiers: ['Shift'] });
+            await expect(page.locator('tbody td')).toHaveText(['A', '3', 'A', '1']);
+        });
+        test('leaves nonorderable headings and disabled features unchanged', async ({ page }) => {
+            await page.evaluate(() => window.createTable({ columns: [{ orderable: false }, {}], paging: false, searching: false }));
+            await page.getByRole('columnheader', { name: 'Name', exact: true }).click();
+            await page.evaluate((_) => {
+                const table = $('#table').table();
+                table.search('missing'); table.page(5); table.length(1);
+            });
+            await expect(page.locator('tbody tr')).toHaveCount(4);
+            await expect(page.getByRole('searchbox')).toHaveCount(0);
+            await expect(page.getByRole('columnheader', { name: 'Name', exact: true })).not.toHaveAttribute('tabindex');
+        });
+
         test('sorts the correct column after an earlier column is hidden', async ({ page }) => {
             await page.evaluate(() => window.createTable({ columns: [{ visible: false }, {}] }));
             await page.getByRole('columnheader', { name: /Score/ }).press('Enter');

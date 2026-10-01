@@ -42,6 +42,24 @@ test.describe('Table remote results', () => {
     });
 
     test.describe('errors and retry', () => {
+        for (const response of [
+            { results: [['One']], total: 0, filtered: 1 },
+            { results: [['One'], ['Two'], ['Three']], total: 3, filtered: 3 },
+            { results: [], total: 1.5, filtered: 0 },
+        ]) {
+            test(`rejects inconsistent remote counts (${JSON.stringify(response)})`, async ({ page }) => {
+                await page.evaluate((response) => {
+                    $.addEvent('#table', 'error.ui.table', (event) => {
+                        document.body.dataset.error = event.detail.error.name;
+                    });
+                    window.startRemote({ getResults: () => response });
+                }, response);
+                await page.clock.runFor(25);
+                await expect(page.locator('body')).toHaveAttribute('data-error', 'TypeError');
+                await expect(page.locator('#table')).toHaveAttribute('aria-busy', 'false');
+            });
+        }
+
         for (const failure of ['throw', 'reject', 'invalid']) {
             test(`handles ${failure} and permits retry`, async ({ page }) => {
                 await page.evaluate((failure) => {
@@ -169,6 +187,27 @@ test.describe('Table remote results', () => {
     });
 
     test.describe('pagination', () => {
+        test('edits a loaded remote page and refetches after removing its final row', async ({ page }) => {
+            await page.evaluate(() => window.startRemote());
+            await page.clock.runFor(25);
+            await page.evaluate(() => window.requests[0].resolve({ results: [['One'], ['Two']], total: 3, filtered: 3 }));
+            await expect(page.locator('tbody td')).toHaveText(['One', 'Two']);
+            await page.evaluate(() => $('#table').table('setValue', 0, 0, 'Edited'));
+            await expect(page.locator('tbody td')).toHaveText(['Edited', 'Two']);
+            await page.evaluate(() => $('#table').table('addRow', ['Added']));
+            await expect(page.locator('tbody td')).toHaveText(['Edited', 'Two', 'Added']);
+            await page.evaluate(() => $('#table').table('page', 2));
+            await page.clock.runFor(25);
+            await page.evaluate(() => window.requests[1].resolve({ results: [['Three']], total: 3, filtered: 3 }));
+            await expect(page.locator('tbody td')).toHaveText('Three');
+            await page.evaluate(() => $('#table').table('removeRow', 0));
+            await page.clock.runFor(25);
+            expect(await page.evaluate(() => window.requests[2].request.offset)).toBe(0);
+            await page.evaluate(() => window.requests[2].resolve({ results: [['One'], ['Two']], total: 2, filtered: 2 }));
+            await expect(page.locator('tbody td')).toHaveText(['One', 'Two']);
+            await expect(page.getByRole('status')).toHaveText('Showing results 1 to 2 of 2');
+        });
+
         test('reloads the clamped page when the remote count shrinks', async ({ page }) => {
             await page.evaluate(() => window.startRemote());
             await page.clock.runFor(25);

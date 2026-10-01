@@ -1,0 +1,21 @@
+section[id] {
+    scroll-margin-top: 6rem;
+}
+
+.demo-event-log {
+    height: 16rem;
+}
+
+.demo-request-log {
+    max-height: 12rem;
+}
+
+.card-body,
+.row > * {
+    min-width: 0;
+}
+
+pre {
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+}

@@ -20,7 +20,7 @@ Additional issues found during steps 1 and 2: Git tracked `Workbook`/`Zip` and s
 
 ### Steps 3 and 4
 
-Implemented the data/lifecycle and export/style work:
+Committed as **`1b78e3f`** (`Fix table data lifecycle, exports, and UI 4 styling`). Implemented the data/lifecycle and export/style work:
 
 - Replaced the bucket/index pipeline with filter-once, stable multi-column sorting, page clamping, and slicing. Local edits rerun the complete pipeline, including counts. Fixed empty ordering, `orderData`, prototype-like sort values, duplicate search matches, stale mutation indexes, empty-page counts, and hidden-column sorting.
 - Validated initialization, page lengths, order definitions, row/column indexes, and remote responses. Configuration arrays replace defaults exactly, including empty order and custom lengths. Omitted controls work independently of enabled features, and programmatic search/length changes synchronize their controls.
@@ -47,7 +47,26 @@ Additional confirmed issues fixed during these steps: captions disappeared while
 - Cells, headings and formatter HTML use query's sanitizer by default. `sanitize(html)` is the explicit customization hook. This may remove markup accepted by 2.x; applications needing additional safe markup should supply an appropriate sanitizer.
 - All built-in exports use current displayed rows, raw data values, and visible columns by default. `columns` overrides selection and order, including explicitly selected hidden columns. Exports do not invoke display formatters or fetch other server pages. CSV prefixes formula-like strings with an apostrophe by default (`escapeFormulae: false` opts out); numeric negatives remain numbers. XLSX stores formula-like strings as text, retains recognized ISO/day-first dates and times, and uses the Excel 1900 date convention. Print values and titles are text.
 
-Steps **5 and 6 remain pending**: the README/demo rewrite, final coverage review, and CI/Codecov/publishing integration. The audit table below is historical: its code paths and findings describe the pre-migration implementation, while the progress above records their fixes. The former prototype functions now live in `src/js/table.js`.
+### Steps 5 and 6
+
+The repository implementation is complete:
+
+- Rewrote [README.md](./README.md) with installation and ESM/UMD examples, all options/columns/methods/events, request/response records, callbacks, sanitization, export scope, indexing, Sass, accessibility and 2.x migration notes. Browser dependency majors match the installed peers (UI 4, query 5, core 4).
+- Replaced the 32 legacy demo pages with [one showcase](./demo/index.html), `demo/assets/demo.js` and `demo/assets/demo.css`. It retains the original examples and adds feature controls, visibility, RTL, cancellable simulated requests, failure/retry, an API playground, an event log and a system/light/dark selector. The README maps old demo filenames to the new sections.
+- Added browser tests for the actual demo using installed UI assets in place of its public CDN URLs. Checked desktop/mobile screenshots, responsive overflow, export downloads, control changes, footer formatting, disposal/reinitialization, remote cancellation/retry and theme persistence.
+- Added [CI](./.github/workflows/ci.yml), [Codecov policy](./.github/codecov.yml), and [publishing](./.github/workflows/publish.yml) aligned with UI/SelectMenu. CI uses the five reference Node/browser entries, lint/build/tests, Sass checks, Codecov OIDC, tracked/untracked bundle validation and package validation. Publishing requires a matching `v<version>` release tag and runs checks before provenance publication.
+- Expanded meaningful coverage for pagination controls, typed local search, shift sorting, disabled features, remote mutations/count validation, and larger XLSX payloads. The larger workbook test independently inflates and CRC-checks the archive, then round-trips data and checks date boundaries, percentages, blanks and invalid dates. Production code and coverage exclusions did not need changes in this phase.
+- Recorded external activation and release steps in [.github/RELEASE.md](./.github/RELEASE.md). Workflow files do not activate Codecov, configure npm account trust, create a GitHub release, or publish the package.
+
+Validation: **615 passing tests across the five local matrix runs** (123 each: Node 20.20.2 Chromium, Node 22.23.3 Chromium, and Node 24.21.0 Chromium coverage/Firefox/WebKit). The Node 24 suite covers all three browsers, with no skips or retries. Source coverage is **96.48% lines**, **96.38% statements**, **89.49% branches**, and **98.30% functions** in Monocart; uploaded LCOV totals are **1,411/1,464 executable lines (96.38%)**, above the 95% target. Workbook/ZIP implementation remains included.
+
+Clean installations and builds were exercised in a temporary Linux checkout with the supported Node toolchains, including lint, Sass and bundle comparisons. Node 20, 22 and 24 reproduce the tracked artifacts byte for byte. Actionlint validates both workflows; local documentation links resolve. The actual tarball contains only the expected 31 package files. A separate consumer installs that tarball and its peers, resolves the package's compiled ESM entry, and renders through ESM plus expanded/minified UMD without duplicating UI/query instances.
+
+Additional maintenance issue: `clean-css-cli@5.6.3` pulls deprecated `glob@7.2.3` and `inflight@1.0.6`. Clean installation reports these deprecations but **zero audited vulnerabilities**. This release retains the shared reference CSS pipeline; replacing its transitive tooling is separate work.
+
+External release verification remains: the [Codecov repository status](https://api.codecov.io/api/v2/github/elusivecodes/repos/FrostUI-Tables/) reports **`active: false`, `activated: false`**, so account-side activation is still required. Hosted GitHub CI/Codecov upload must run after these changes are pushed, and npm trusted-publisher settings must be verified by an authenticated package owner. The local npm account check returned **401 Unauthorized**, so npm account configuration was not verified or changed. The exact owner/repository/workflow settings are in the release document. No release or package was published.
+
+The audit table below is historical: its code paths and findings describe the pre-migration implementation, while the progress above records their fixes. The former prototype functions now live in `src/js/table.js`.
 
 ## 1. Reference projects and alignment
 

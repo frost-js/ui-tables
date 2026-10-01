@@ -8,6 +8,12 @@ const resolveModule = (specifier) => new URL(import.meta.resolve(specifier));
 
 const routes = new Map([
     ['/', { contentType: html, file: new URL('../app/index.html', import.meta.url) }],
+    ['/demo/', { contentType: html, file: new URL('../../../demo/index.html', import.meta.url) }],
+    ['/demo/index.html', { contentType: html, file: new URL('../../../demo/index.html', import.meta.url) }],
+    ['/demo/assets/demo.js', { contentType: javaScript, file: new URL('../../../demo/assets/demo.js', import.meta.url) }],
+    ['/demo/assets/demo.css', { contentType: css, file: new URL('../../../demo/assets/demo.css', import.meta.url) }],
+    ['/dist/frost-ui-tables.js', { contentType: javaScript, file: new URL('../../../dist/frost-ui-tables.js', import.meta.url) }],
+    ['/dist/frost-ui-tables.css', { contentType: css, file: new URL('../../../dist/frost-ui-tables.css', import.meta.url) }],
     ['/esm.html', { contentType: html, file: new URL('../app/esm.html', import.meta.url) }],
     ['/umd-min.html', { contentType: html, file: new URL('../app/umd-min.html', import.meta.url) }],
     ['/assets/frost-ui-tables.js', { contentType: javaScript, file: new URL('../../../dist/frost-ui-tables.js', import.meta.url) }],
