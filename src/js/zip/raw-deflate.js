@@ -5,7 +5,7 @@ import Lz77Match from './lz77-match.js';
 /**
  * Get the Huffman codes from the code lengths.
  * @param {Uint8Array} lengths The code lengths.
- * @return {Uint16Array} The Huffman codes.
+ * @returns {Uint16Array} The Huffman codes.
  */
 const getCodesFromLengths = (lengths) => {
     const codes = new Uint16Array(lengths.length);
@@ -41,7 +41,7 @@ const getCodesFromLengths = (lengths) => {
  * Get the lengths of a Huffman code.
  * @param {Uint32Array} freqs The frequency counts.
  * @param {number} limit The code length limit.
- * @return {Uint8Array} The code lengths.
+ * @returns {Uint8Array} The code lengths.
  */
 const getLengths = (freqs, limit) => {
     const heap = new Heap(2 * 286);
@@ -81,7 +81,7 @@ const getLengths = (freqs, limit) => {
  * @param {Uint8Array} litLenLengths The literal lengths and length codes.
  * @param {number} hDist The HDIST.
  * @param {Uint8Array} distLengths The distance code lengths.
- * @return {object} The tree symbols.
+ * @returns {object} The tree symbols.
  */
 const getTreeSymbols = (hLit, litLenLengths, hDist, distLengths) => {
     const src = new Uint32Array(hLit + hDist);
@@ -101,7 +101,9 @@ const getTreeSymbols = (hLit, litLenLengths, hDist, distLengths) => {
     let nResult = 0;
 
     for (let i = 0; i < src.length; i += j) {
-        for (j = 1; i + j < src.length && src[i + j] === src[i]; j++) { }
+        for (j = 1; i + j < src.length && src[i + j] === src[i]; j++) {
+            // Count consecutive symbols without emitting values.
+        }
 
         let runLength = j;
 
@@ -171,7 +173,7 @@ const getTreeSymbols = (hLit, litLenLengths, hDist, distLengths) => {
  * @param {Uint32Array} freqs The value frequencies.
  * @param {number} symbols The number of symbols.
  * @param {number} limit The code length limit.
- * @return {Uint8Array} The code lengths.
+ * @returns {Uint8Array} The code lengths.
  */
 const reversePackageMerge = (freqs, symbols, limit) => {
     const minimumCost = new Uint16Array(limit);
@@ -274,6 +276,25 @@ const reversePackageMerge = (freqs, symbols, limit) => {
  * @class
  */
 export default class RawDeflate {
+    #freqsDist;
+    #freqsLitLen;
+    #input;
+    #lazy;
+    #lz77MaxLength;
+    #lz77MinLength;
+    #output;
+    #outputIndex;
+
+    /**
+     * Compress the data.
+     * @param {Uint8Array} data The input data.
+     * @param {object} options The options to create the RawDeflate with.
+     * @returns {Uint8Array} The compressed data.
+     */
+    static compress(data, options) {
+        return (new this(data, options)).compress();
+    }
+
     /**
      * New RawDeflate constructor.
      * @param {Uint8Array} input The input data.
@@ -287,20 +308,20 @@ export default class RawDeflate {
             ...options,
         };
 
-        this._input = input;
-        this._lazy = options.lazy;
-        this._lz77MinLength = options.lz77MinLength;
-        this._lz77MaxLength = options.lz77MaxLength;
-        this._outputIndex = 0;
-        this._output = new Uint8Array(0x8000);
+        this.#input = input;
+        this.#lazy = options.lazy;
+        this.#lz77MinLength = options.lz77MinLength;
+        this.#lz77MaxLength = options.lz77MaxLength;
+        this.#outputIndex = 0;
+        this.#output = new Uint8Array(0x8000);
     }
 
     /**
      * Compress the data.
-     * @return {Uint8Array} The compressed data.
+     * @returns {Uint8Array} The compressed data.
      */
     compress() {
-        const stream = new BitStream(new Uint8Array(this._output.buffer), this._outputIndex);
+        const stream = new BitStream(new Uint8Array(this.#output.buffer), this.#outputIndex);
 
         const bFinal = 1;
         const bType = 2;
@@ -308,17 +329,21 @@ export default class RawDeflate {
         stream.writeBits(bFinal, 1, true);
         stream.writeBits(bType, 2, true);
 
-        const data = this._lz77();
+        const data = this.#lz77();
 
-        const litLenLengths = getLengths(this.freqsLitLen, 15);
+        const litLenLengths = getLengths(this.#freqsLitLen, 15);
         const litLenCodes = getCodesFromLengths(litLenLengths);
-        const distLengths = getLengths(this.freqsDist, 7);
+        const distLengths = getLengths(this.#freqsDist, 7);
         const distCodes = getCodesFromLengths(distLengths);
 
         // hlit, hdist
         let hLit; let hDist;
-        for (hLit = 286; hLit > 257 && litLenLengths[hLit - 1] === 0; hLit--) { }
-        for (hDist = 30; hDist > 1 && distLengths[hDist - 1] === 0; hDist--) { }
+        for (hLit = 286; hLit > 257 && litLenLengths[hLit - 1] === 0; hLit--) {
+            // Count consecutive symbols without emitting values.
+        }
+        for (hDist = 30; hDist > 1 && distLengths[hDist - 1] === 0; hDist--) {
+            // Count consecutive symbols without emitting values.
+        }
 
         // hclen
         const treeSymbols = getTreeSymbols(hLit, litLenLengths, hDist, distLengths);
@@ -331,7 +356,9 @@ export default class RawDeflate {
         }
 
         let hcLen;
-        for (hcLen = 19; hcLen > 4 && transLengths[hcLen - 1] === 0; hcLen--) { }
+        for (hcLen = 19; hcLen > 4 && transLengths[hcLen - 1] === 0; hcLen--) {
+            // Count consecutive symbols without emitting values.
+        }
 
         const treeCodes = getCodesFromLengths(treeLengths);
 
@@ -383,28 +410,18 @@ export default class RawDeflate {
             }
         }
 
-        this._output = stream.finish();
-        this._outputIndex = this._output.length;
+        this.#output = stream.finish();
+        this.#outputIndex = this.#output.length;
 
-        return this._output;
-    }
-
-    /**
-     * Compress the data.
-     * @param {Uint8Array} data The input data.
-     * @param {object} options The options to create the RawDeflate with.
-     * @return {Uint8Array} The compressed data.
-     */
-    static compress(data, options) {
-        return (new this(data, options)).compress();
+        return this.#output;
     }
 
     /**
      * Calculate the LZ77 array.
-     * @return {Uint16Array} The LZ77 array.
+     * @returns {Uint16Array} The LZ77 array.
      */
-    _lz77() {
-        const lz77buf = new Uint16Array(this._input.length * 2);
+    #lz77() {
+        const lz77buf = new Uint16Array(this.#input.length * 2);
         const freqsLitLen = new Uint32Array(286);
         const freqsDist = new Uint32Array(30);
 
@@ -429,14 +446,14 @@ export default class RawDeflate {
             prevMatch = null;
         };
 
-        for (let position = 0; position < this._input.length; position++) {
+        for (let position = 0; position < this.#input.length; position++) {
             let matchKey = 0;
-            for (let i = 0; i < this._lz77MinLength; i++) {
-                if (position + i === this._input.length) {
+            for (let i = 0; i < this.#lz77MinLength; i++) {
+                if (position + i === this.#input.length) {
                     break;
                 }
 
-                matchKey = (matchKey << 8) | this._input[position + i];
+                matchKey = (matchKey << 8) | this.#input[position + i];
             }
 
             if (!(matchKey in table)) {
@@ -454,13 +471,13 @@ export default class RawDeflate {
                 matchList.shift();
             }
 
-            if (position + this._lz77MinLength >= this._input.length) {
+            if (position + this.#lz77MinLength >= this.#input.length) {
                 if (prevMatch) {
                     writeMatch(prevMatch, -1);
                 }
 
-                for (let i = 0; i < this._input.length - position; i++) {
-                    const tmp = this._input[position + i];
+                for (let i = 0; i < this.#input.length - position; i++) {
+                    const tmp = this.#input[position + i];
                     lz77buf[pos++] = tmp;
                     freqsLitLen[tmp]++;
                 }
@@ -468,11 +485,11 @@ export default class RawDeflate {
             }
 
             if (matchList.length) {
-                const longestMatch = this._searchLongestMatch(position, matchList);
+                const longestMatch = this.#searchLongestMatch(position, matchList);
 
                 if (prevMatch) {
                     if (prevMatch.length < longestMatch.length) {
-                        const tmp = this._input[position - 1];
+                        const tmp = this.#input[position - 1];
                         lz77buf[pos++] = tmp;
                         freqsLitLen[tmp]++;
 
@@ -480,7 +497,7 @@ export default class RawDeflate {
                     } else {
                         writeMatch(prevMatch, -1);
                     }
-                } else if (longestMatch.length < this._lazy) {
+                } else if (longestMatch.length < this.#lazy) {
                     prevMatch = longestMatch;
                 } else {
                     writeMatch(longestMatch, 0);
@@ -488,7 +505,7 @@ export default class RawDeflate {
             } else if (prevMatch) {
                 writeMatch(prevMatch, -1);
             } else {
-                const tmp = this._input[position];
+                const tmp = this.#input[position];
                 lz77buf[pos++] = tmp;
                 freqsLitLen[tmp]++;
             }
@@ -498,8 +515,8 @@ export default class RawDeflate {
 
         lz77buf[pos++] = 256;
         freqsLitLen[256]++;
-        this.freqsLitLen = freqsLitLen;
-        this.freqsDist = freqsDist;
+        this.#freqsLitLen = freqsLitLen;
+        this.#freqsDist = freqsDist;
 
         return lz77buf.subarray(0, pos);
     }
@@ -507,10 +524,10 @@ export default class RawDeflate {
     /**
      * Find the longest match from the list of matches.
      * @param {number} position The array position.
-     * @param {array} matchList The list of matches.
-     * @return {Lz77Match} The Lz77Match.
+     * @param {Array} matchList The list of matches.
+     * @returns {Lz77Match} The Lz77Match.
      */
-    _searchLongestMatch(position, matchList) {
+    #searchLongestMatch(position, matchList) {
         let currentMatch;
         let matchMax = 0;
         const length = matchList.length;
@@ -518,11 +535,11 @@ export default class RawDeflate {
         permatch:
         for (let i = 0; i < length; i++) {
             const match = matchList[length - i - 1];
-            let matchLength = this._lz77MinLength;
+            let matchLength = this.#lz77MinLength;
 
-            if (matchMax > this._lz77MaxLength) {
-                for (j = matchMax; j > this._lz77MinLength; j--) {
-                    if (this._input[match + j - 1] !== this._input[position + j - 1]) {
+            if (matchMax > this.#lz77MaxLength) {
+                for (let j = matchMax; j > this.#lz77MinLength; j--) {
+                    if (this.#input[match + j - 1] !== this.#input[position + j - 1]) {
                         continue permatch;
                     }
                 }
@@ -530,7 +547,7 @@ export default class RawDeflate {
                 matchLength = matchMax;
             }
 
-            while (matchLength < this._lz77MaxLength && position + matchLength < length && this._input[match + matchLength] === this._input[position + matchLength]) {
+            while (matchLength < this.#lz77MaxLength && position + matchLength < length && this.#input[match + matchLength] === this.#input[position + matchLength]) {
                 matchLength++;
             }
 
@@ -539,7 +556,7 @@ export default class RawDeflate {
                 matchMax = matchLength;
             }
 
-            if (matchLength === this._lz77MaxLength) {
+            if (matchLength === this.#lz77MaxLength) {
                 break;
             }
         }

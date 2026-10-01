@@ -3,7 +3,7 @@ let lengthCodeTable = null;
 /**
  * Generate the length codes.
  * @param {number} length The length.
- * @return {array} The LZ77 length codes.
+ * @returns {Array} The LZ77 length codes.
  */
 const generateLengthCodes = (length) => {
     switch (true) {
@@ -70,7 +70,7 @@ const generateLengthCodes = (length) => {
 
 /**
  * Generate the length code table.
- * @return {array} The length code table.
+ * @returns {Array} The length code table.
  */
 const generateLengthTable = () => {
     if (!lengthCodeTable) {
@@ -87,7 +87,7 @@ const generateLengthTable = () => {
 /**
  * Get the distance code.
  * @param {number} dist The distance.
- * @return {array} The distance code.
+ * @returns {Array} The distance code.
  */
 const getDistanceCode = (dist) => {
     switch (true) {
@@ -157,7 +157,7 @@ const getDistanceCode = (dist) => {
 /**
  * Get the length code.
  * @param {number} length The length.
- * @return {number} The length code.
+ * @returns {number} The length code.
  */
 const getLengthCode = (length) => {
     return generateLengthTable()[length];
@@ -169,33 +169,44 @@ const getLengthCode = (length) => {
  * @class
  */
 export default class Lz77Match {
+    #backwardDistance;
+    #length;
+
     /**
      * New Lz77Match constructor.
      * @param {number} length The length of the match.
      * @param {number} backwardDistance The distanch to match position.
      */
     constructor(length, backwardDistance) {
-        this.length = length;
-        this._backwardDistance = backwardDistance;
+        this.#length = length;
+        this.#backwardDistance = backwardDistance;
+    }
+
+    /**
+     * Gets the current length.
+     * @returns {number} The length.
+     */
+    get length() {
+        return this.#length;
     }
 
     /**
      * Get the LZ77 coded array.
-     * @return {array} The LZ77 Array.
+     * @returns {Array} The LZ77 Array.
      */
     toLz77Array() {
         const codeArray = [];
         let pos = 0;
 
-        const lengthCode = getLengthCode(this.length);
+        const lengthCode = getLengthCode(this.#length);
         codeArray[pos++] = lengthCode & 0xffff;
         codeArray[pos++] = (lengthCode >> 16) & 0xff;
         codeArray[pos++] = lengthCode >> 24;
 
-        const distCode = getDistanceCode(this._backwardDistance);
+        const distCode = getDistanceCode(this.#backwardDistance);
         codeArray[pos++] = distCode[0];
         codeArray[pos++] = distCode[1];
-        codeArray[pos++] = distCode[2];
+        codeArray[pos] = distCode[2];
 
         return codeArray;
     }

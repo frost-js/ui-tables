@@ -1,6 +1,6 @@
+import Zip from './../zip/zip.js';
 import { colName, escape, formatDate } from './helpers.js';
 import { templates } from './templates.js';
-import Zip from './../zip/zip.js';
 
 /**
  * Workbook Class
@@ -8,14 +8,19 @@ import Zip from './../zip/zip.js';
  * @class
  */
 export default class Workbook {
+    #current;
+    #sheets;
+    #sKeys;
+    #sValues;
+
     /**
      * New Workbook constructor.
      */
     constructor() {
-        this._current = 0;
-        this._sheets = [];
-        this._sKeys = {};
-        this._sValues = [];
+        this.#current = 0;
+        this.#sheets = [];
+        this.#sKeys = {};
+        this.#sValues = [];
     }
 
     /**
@@ -24,13 +29,13 @@ export default class Workbook {
      * @param {string} [name] The name of the sheet.
      */
     addSheet(data, name = null) {
-        this._current++;
+        this.#current++;
 
         if (!name) {
-            name = `Sheet${this._current}`;
+            name = `Sheet${this.#current}`;
         }
 
-        this._sheets.push({
+        this.#sheets.push({
             name,
             data,
         });
@@ -38,15 +43,15 @@ export default class Workbook {
 
     /**
      * Create an xlsx file.
-     * @return {Blob} The xlsx file.
+     * @returns {Blob} The xlsx file.
      */
     create() {
         const zip = new Zip('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
 
         for (let [filename, template] of Object.entries(templates)) {
             switch (filename) {
-                case '[Content_Types].xml':
-                    const override = this._sheets.map((_, index) =>
+                case '[Content_Types].xml': {
+                    const override = this.#sheets.map((_, index) =>
                         `<Override PartName="/xl/worksheets/sheet${index + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`,
                     ).join('');
 
@@ -54,19 +59,21 @@ export default class Workbook {
 
                     zip.addFile(filename, template);
                     break;
-                case 'xl/_rels/workbook.xml.rels':
-                    let relationships = this._sheets.map((_, index) =>
-                        `<Relationship Id="rId${index + 2}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${index + 1}.xml\"/>\n`,
+                }
+                case 'xl/_rels/workbook.xml.rels': {
+                    let relationships = this.#sheets.map((_, index) =>
+                        `<Relationship Id="rId${index + 2}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${index + 1}.xml"/>\n`,
                     ).join('');
 
-                    relationships += `<Relationship Id="rId${this._sheets.length + 3}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/></Relationships>`;
+                    relationships += `<Relationship Id="rId${this.#sheets.length + 3}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/></Relationships>`;
 
                     template = template.replace('{sheets}', relationships);
 
                     zip.addFile(filename, template);
                     break;
-                case 'xl/workbook.xml':
-                    const sheets = this._sheets.map((sheet, index) =>
+                }
+                case 'xl/workbook.xml': {
+                    const sheets = this.#sheets.map((sheet, index) =>
                         `<sheet name="${sheet.name}" sheetId="${index + 1}" state="visible" r:id="rId${index + 2}"/>`,
                     );
 
@@ -74,35 +81,39 @@ export default class Workbook {
 
                     zip.addFile(filename, template);
                     break;
-                case 'docProps/core.xml':
+                }
+                case 'docProps/core.xml': {
                     const date = (new Date).toISOString().substring(0, 19) + 'Z';
                     template = template.replaceAll('{date}', date);
 
                     zip.addFile(filename, template);
                     break;
-                case 'xl/sharedStrings.xml':
-                    if (!this._sValues.length) {
-                        this._sValues.push('No Data');
+                }
+                case 'xl/sharedStrings.xml': {
+                    if (!this.#sValues.length) {
+                        this.#sValues.push('No Data');
                     }
 
-                    const strings = this._sValues.map((string) =>
+                    const strings = this.#sValues.map((string) =>
                         `<si><t>${string}</t></si>`,
                     ).join('\r\n');
 
-                    template = template.replaceAll('{cnt}', `${this._sValues.length}`);
+                    template = template.replaceAll('{cnt}', `${this.#sValues.length}`);
                     template = template.replace('{strings}', strings);
 
                     zip.addFile(filename, template);
                     break;
-                case 'xl/worksheets/sheet1.xml':
-                    for (const [index, sheet] of this._sheets.entries()) {
+                }
+                case 'xl/worksheets/sheet1.xml': {
+                    for (const [index, sheet] of this.#sheets.entries()) {
                         filename = `xl/worksheets/sheet${index + 1}.xml`;
-                        const xml = this._sheetToXml(sheet, template);
+                        const xml = this.#sheetToXml(sheet, template);
 
                         zip.addFile(filename, xml);
                     }
 
                     break;
+                }
                 default:
                     zip.addFile(filename, template);
                     break;
@@ -116,9 +127,9 @@ export default class Workbook {
      * Convert a sheet object to an XML string.
      * @param {object} sheet The sheet.
      * @param {string} template The XML template.
-     * @return {string} The XML string.
+     * @returns {string} The XML string.
      */
-    _sheetToXml(sheet, template) {
+    #sheetToXml(sheet, template) {
         const colLengths = {};
         const cols = [];
         const rows = [];
@@ -199,12 +210,12 @@ export default class Workbook {
 
                     const sKey = `~${value}`;
 
-                    if (sKey in this._sKeys) {
-                        cValue = this._sKeys[sKey];
+                    if (sKey in this.#sKeys) {
+                        cValue = this.#sKeys[sKey];
                     } else {
-                        this._sValues.push(value);
-                        cValue = this._sValues.length - 1;
-                        this._sKeys[sKey] = cValue;
+                        this.#sValues.push(value);
+                        cValue = this.#sValues.length - 1;
+                        this.#sKeys[sKey] = cValue;
                     }
                 }
 

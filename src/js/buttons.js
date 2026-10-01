@@ -1,23 +1,22 @@
 import $ from '@fr0st/query';
-import Workbook from './workbook/workbook.js';
 import { saveBlob } from './helpers.js';
+import Workbook from './workbook/workbook.js';
 
 /**
  * Generate a CSV file from the table.
  * @param {object} options The button options.
+ * @param {object} data The headings and displayed rows.
+ * @param {string[]} data.headings The exported headings.
+ * @param {Array<Array<*>>} data.rows The displayed row values.
  */
-export function csv(options) {
+export function csv(options, { headings, rows: results }) {
     if (!options.title) {
         options.title = $.getText('title');
     }
 
-    if (!options.columns) {
-        options.columns = this._getVisibleColumns();
-    }
-
     const rows = [
-        this._getHeadings(options.columns),
-        ...this._getResultRows(options.columns),
+        headings,
+        ...results,
     ];
 
     // build csv data
@@ -51,20 +50,19 @@ export function csv(options) {
 /**
  * Generate an excel file from the table.
  * @param {object} options The button options.
+ * @param {object} data The headings and displayed rows.
+ * @param {string[]} data.headings The exported headings.
+ * @param {Array<Array<*>>} data.rows The displayed row values.
  */
-export function excel(options) {
+export function excel(options, { headings, rows: results }) {
     if (!options.title) {
         options.title = $.getText('title');
     }
 
-    if (!options.columns) {
-        options.columns = this._getVisibleColumns();
-    }
-
     const workbook = new Workbook();
     workbook.addSheet({
-        header: this._getHeadings(options.columns),
-        rows: this._getResultRows(options.columns),
+        header: headings,
+        rows: results,
     });
 
     const blob = workbook.create();
@@ -75,14 +73,12 @@ export function excel(options) {
 /**
  * Print the table.
  * @param {object} options The button options.
+ * @param {HTMLTableElement} table The table to print.
+ * @param {string} classes The table classes.
  */
-export function print(options) {
+export function print(options, table, classes) {
     if (!options.title) {
         options.title = $.getText('title');
-    }
-
-    if (!options.columns) {
-        options.columns = this._getVisibleColumns();
     }
 
     const win = window.open('', '');
@@ -102,11 +98,9 @@ export function print(options) {
     }
 
     const container = $.create('div');
-    const table = this._buildTable(options.columns);
-    const classes = $.getAttribute(this._node, 'class');
     $.addClass(table, classes);
     $.append(container, table);
-    const tableHtml = $.getHTML(container);
+    const tableHtml = $.getHtml(container);
     win.document.body.innerHTML = `<h1>${options.title}</h1>${tableHtml}`;
 
     setTimeout((_) => {

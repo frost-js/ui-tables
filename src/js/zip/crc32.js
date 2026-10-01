@@ -2,7 +2,7 @@ let table = null;
 
 /**
  * Generate the CRC32 table.
- * @return {Uint32Array} The CRC32 table.
+ * @returns {Uint32Array} The CRC32 table.
  */
 const generateTable = () => {
     if (!table) {
@@ -31,7 +31,7 @@ export default class CRC32 {
      * @param {Uint8Array} data The data to hash.
      * @param {number} [pos] The data position.
      * @param {number} [length] The data length.
-     * @return {number} The CRC32 hash.
+     * @returns {number} The CRC32 hash.
      */
     static calc(data, pos = 0, length = null) {
         return this.update(data, 0, pos, length);
@@ -43,7 +43,7 @@ export default class CRC32 {
      * @param {number} crc The CRC32 hash.
      * @param {number} [pos] The data position.
      * @param {number} [length] The data length.
-     * @return {number} The CRC32 hash.
+     * @returns {number} The CRC32 hash.
      */
     static update(data, crc, pos = 0, length = null) {
         if (length === null) {

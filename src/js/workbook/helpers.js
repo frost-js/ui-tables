@@ -1,7 +1,7 @@
 /**
  * Convert a column number to name.
  * @param {number} num The number.
- * @return {string} The column name.
+ * @returns {string} The column name.
  */
 export function colName(num) {
     const code = 65 + ((num - 1) % 26);
@@ -19,7 +19,7 @@ export function colName(num) {
 /**
  * Escape a string for Excel.
  * @param {string} string The input string.
- * @return {string} The escaped string.
+ * @returns {string} The escaped string.
  */
 export function escape(string) {
     string = string.replace('&', '&amp;');
@@ -38,7 +38,7 @@ export function escape(string) {
  * @param {number} [hours] The hours.
  * @param {number} [minutes] The minutes.
  * @param {number} [seconds] The seconds.
- * @return {number} The Excel timestamp.
+ * @returns {number} The Excel timestamp.
  */
 export function formatDate(year, month, day, hours = 0, minutes = 0, seconds = 0) {
     const time = ((hours * 3600) + (minutes * 60) + seconds) / 86400;

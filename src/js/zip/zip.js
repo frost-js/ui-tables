@@ -6,7 +6,7 @@ const encoder = new TextEncoder;
 /**
  * Encode a string in binary.
  * @param {string} string The string.
- * @return {Uint8Array} The encoded string.
+ * @returns {Uint8Array} The encoded string.
  */
 const encode = (string) => {
     return encoder.encode(string);
@@ -15,7 +15,7 @@ const encode = (string) => {
 /**
  * Get the byte length of a string.
  * @param {string} string The string.
- * @return {number} The byte length.
+ * @returns {number} The byte length.
  */
 const length = (string) => {
     return encode(string).length;
@@ -24,7 +24,7 @@ const length = (string) => {
 /**
  * Convert a number to an Int16Array.
  * @param {number} number The number.
- * @return {Int16Array} The Int16Array.
+ * @returns {Int16Array} The Int16Array.
  */
 const signed16 = (number) => {
     return new Int16Array([number]);
@@ -33,7 +33,7 @@ const signed16 = (number) => {
 /**
  * Convert a number to an Int32Array.
  * @param {number} number The number.
- * @return {Int32Array} The Int32Array.
+ * @returns {Int32Array} The Int32Array.
  */
 const signed32 = (number) => {
     return new Int32Array([number]);
@@ -45,16 +45,22 @@ const signed32 = (number) => {
  * @class
  */
 export default class Zip {
+    #dir;
+    #entries;
+    #files;
+    #offset;
+    #type;
+
     /**
      * New Zip constructor.
      * @param {string} [type=octet/stream] The file type.
      */
     constructor(type = 'octet/stream') {
-        this._type = type;
-        this._dir = [];
-        this._files = [];
-        this._offset = 0;
-        this._entries = 0;
+        this.#type = type;
+        this.#dir = [];
+        this.#files = [];
+        this.#offset = 0;
+        this.#entries = 0;
     }
 
     /**
@@ -117,11 +123,11 @@ export default class Zip {
             signed16(0), // disk number start
             signed16(0), // internal file attributes
             signed32(32), // internal file attributes
-            signed32(this._offset), // offset of local header
+            signed32(this.#offset), // offset of local header
             encode(filename),
         ];
 
-        this._dir.push(...dir);
+        this.#dir.push(...dir);
 
         const file = [
             encode('\x50\x4b\x03\x04'), // zip signature
@@ -139,33 +145,33 @@ export default class Zip {
             data,
         ];
 
-        this._files.push(...file);
+        this.#files.push(...file);
 
-        this._offset += file.reduce((acc, file) => acc + file.byteLength, 0);
-        this._entries++;
+        this.#offset += file.reduce((acc, file) => acc + file.byteLength, 0);
+        this.#entries++;
     }
 
     /**
      * Create the zip file.
-     * @return {Blob} The zip file.
+     * @returns {Blob} The zip file.
      */
     zip() {
-        const dirLength = this._dir.reduce((acc, file) => acc + file.byteLength, 0);
+        const dirLength = this.#dir.reduce((acc, file) => acc + file.byteLength, 0);
 
         return new Blob(
             [
-                ...this._files,
-                ...this._dir,
+                ...this.#files,
+                ...this.#dir,
                 encode('\x50\x4b\x05\x06'), // end of central directory
                 signed16(0), // number of this disk
                 signed16(0), // number of the disk with the start of the central directory
-                signed16(this._entries), // total entries on this disk
-                signed16(this._entries), // total entries
+                signed16(this.#entries), // total entries on this disk
+                signed16(this.#entries), // total entries
                 signed32(dirLength), // size of central dir
-                signed32(this._offset), // offset to start of central dir
+                signed32(this.#offset), // offset to start of central dir
                 signed16(0), // file comment length
             ],
-            { type: this._type },
+            { type: this.#type },
         );
     }
 }

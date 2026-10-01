@@ -2,7 +2,7 @@ let reverseTable = null;
 
 /**
  * Generate the reverse table.
- * @return {Uint8Array} The reverse table.
+ * @returns {Uint8Array} The reverse table.
  */
 const buildReverseTable = () => {
     if (reverseTable === null) {
@@ -28,7 +28,7 @@ const buildReverseTable = () => {
 /**
  * Reverse the bit order.
  * @param {number} n The number to reverse.
- * @return {number} The reversed number.
+ * @returns {number} The reversed number.
  */
 const rev = (n) => {
     return buildReverseTable()[n];
@@ -37,7 +37,7 @@ const rev = (n) => {
 /**
  * Reverse the bit order (32-bit).
  * @param {number} n The number to reverse.
- * @return {number} The reversed number.
+ * @returns {number} The reversed number.
  */
 const rev32 = (n) => {
     const reverseTable = buildReverseTable();
@@ -54,35 +54,39 @@ const rev32 = (n) => {
  * @class
  */
 export default class BitStream {
+    #bitIndex;
+    #buffer;
+    #index;
+
     /**
      * New BitStream constructor.
      * @param {Uint8Array} buffer The buffer to write to.
      * @param {number} [index] The index to start writing at.
      */
     constructor(buffer, index = 0) {
-        this._buffer = buffer;
-        this._index = index;
-        this._bitIndex = 0;
+        this.#buffer = buffer;
+        this.#index = index;
+        this.#bitIndex = 0;
 
-        if (this._buffer.length <= this._index) {
-            this._expandBuffer();
+        if (this.#buffer.length <= this.#index) {
+            this.#expandBuffer();
         }
     }
 
     /**
      * Finish writing and return the buffer.
-     * @return {Uint8Array} The buffer.
+     * @returns {Uint8Array} The buffer.
      */
     finish() {
-        let index = this._index;
+        let index = this.#index;
 
-        if (this._bitIndex > 0) {
-            this._buffer[index] <<= 8 - this._bitIndex;
-            this._buffer[index] = rev(this._buffer[index]);
+        if (this.#bitIndex > 0) {
+            this.#buffer[index] <<= 8 - this.#bitIndex;
+            this.#buffer[index] = rev(this.#buffer[index]);
             index++;
         }
 
-        return this._buffer.subarray(0, index);
+        return this.#buffer.subarray(0, index);
     }
 
     /**
@@ -98,38 +102,38 @@ export default class BitStream {
                 rev(number) >> (8 - n);
         }
 
-        let current = this._buffer[this._index];
+        let current = this.#buffer[this.#index];
 
-        if (n + this._bitIndex < 8) {
+        if (n + this.#bitIndex < 8) {
             current = (current << n) | number;
-            this._bitIndex += n;
+            this.#bitIndex += n;
         } else {
             for (let i = 0; i < n; i++) {
                 current = (current << 1) | ((number >> n - i - 1) & 1);
 
-                if (++this._bitIndex === 8) {
-                    this._bitIndex = 0;
-                    this._buffer[this._index++] = rev(current);
+                if (++this.#bitIndex === 8) {
+                    this.#bitIndex = 0;
+                    this.#buffer[this.#index++] = rev(current);
                     current = 0;
 
-                    if (this._index === this._buffer.length) {
-                        this._expandBuffer();
+                    if (this.#index === this.#buffer.length) {
+                        this.#expandBuffer();
                     }
                 }
             }
         }
 
-        this._buffer[this._index] = current;
+        this.#buffer[this.#index] = current;
     }
 
     /**
      * Expand the buffer size.
      */
-    _expandBuffer() {
-        const oldBuffer = this._buffer;
+    #expandBuffer() {
+        const oldBuffer = this.#buffer;
         const oldLength = oldBuffer.length;
 
-        this._buffer = new Uint8Array(oldLength << 1);
-        this._buffer.set(oldBuffer);
+        this.#buffer = new Uint8Array(oldLength << 1);
+        this.#buffer.set(oldBuffer);
     }
 }
