@@ -6,27 +6,37 @@ import { setupClock } from '../setup/browser.js';
 const collectCoverage = process.env.FROST_UI_TABLES_COVERAGE === 'true';
 
 const test = base.extend({
+    expectedBrowserErrors: [[], { option: true }],
     mockClock: [false, { option: true }],
     uiPage: [
-        async ({ page, mockClock }, use, testInfo) => {
+        async ({ page, mockClock, expectedBrowserErrors }, use, testInfo) => {
             const errors = [];
             page.on('pageerror', (error) => errors.push(error.message));
 
             if (collectCoverage) {
-                await page.coverage.startJSCoverage({ resetOnNavigation: false });
+                await page.coverage.startJSCoverage({
+                    resetOnNavigation: false,
+                });
             }
 
             if (mockClock) {
                 await setupClock(page);
             }
 
-            await page.goto('/', { waitUntil: 'domcontentloaded' });
+            await page.goto('/', {
+                waitUntil: 'domcontentloaded',
+            });
+
             await page.evaluate((_) => {
-                if (!window.fQuery || !window.UI?.Table ||
-                    typeof window.fQuery.QuerySet.prototype.table !== 'function') {
+                if (
+                    !window.fQuery ||
+                    !window.UI?.Table ||
+                    typeof window.fQuery.QuerySet.prototype.table !== 'function'
+                ) {
                     throw new Error('Failed to initialize Tables on the test page.');
                 }
 
+                // Keep the stylesheet in the head for component layout and transitions.
                 document.body.replaceChildren();
             });
 
@@ -45,12 +55,12 @@ const test = base.extend({
 
             await use();
 
-            expect(errors, 'uncaught browser errors').toHaveLength(0);
-
             if (collectCoverage) {
                 const coverage = await page.coverage.stopJSCoverage();
                 await addCoverageReport(coverage, testInfo);
             }
+
+            expect(errors, 'Uncaught browser errors').toEqual(expectedBrowserErrors);
         },
         { auto: true },
     ],
