@@ -4,11 +4,11 @@
 [![codecov](https://codecov.io/gh/elusivecodes/FrostUI-Tables/branch/main/graph/badge.svg)](https://codecov.io/gh/elusivecodes/FrostUI-Tables)
 [![npm version](https://img.shields.io/npm/v/%40fr0st%2Fui-tables?style=flat-square)](https://www.npmjs.com/package/@fr0st/ui-tables)
 [![npm downloads](https://img.shields.io/npm/dm/%40fr0st%2Fui-tables?style=flat-square)](https://www.npmjs.com/package/@fr0st/ui-tables)
-[![CSS gzip size](https://img.badgesize.io/elusivecodes/FrostUI-Tables/main/dist/frost-ui-tables.min.css?compression=gzip&label=CSS%20gzip%20size&style=flat-square)](./dist/frost-ui-tables.min.css)
-[![JS gzip size](https://img.badgesize.io/elusivecodes/FrostUI-Tables/main/dist/frost-ui-tables.min.js?compression=gzip&label=JS%20gzip%20size&style=flat-square)](./dist/frost-ui-tables.min.js)
+[![JS gzip size](https://img.badgesize.io/elusivecodes/FrostUI-Tables/main/dist/frost-ui-tables.min.js?compression=gzip&label=JS%20gzip%20size&style=flat-square)](https://github.com/elusivecodes/FrostUI-Tables/blob/main/dist/frost-ui-tables.min.js)
+[![CSS gzip size](https://img.badgesize.io/elusivecodes/FrostUI-Tables/main/dist/frost-ui-tables.min.css?compression=gzip&label=CSS%20gzip%20size&style=flat-square)](https://github.com/elusivecodes/FrostUI-Tables/blob/main/dist/frost-ui-tables.min.css)
 [![license](https://img.shields.io/github/license/elusivecodes/FrostUI-Tables?style=flat-square)](./LICENSE)
 
-Sortable, searchable tables for Frost UI, with pagination, remote data, and CSV, Excel, and print exports. Try the [interactive demo](./demo/index.html).
+Sortable, searchable tables for Frost UI, with pagination, remote data, and CSV, Excel, and print exports.
 
 ## Highlights
 
@@ -18,66 +18,87 @@ Sortable, searchable tables for Frost UI, with pagination, remote data, and CSV,
 - Row/cell/header/footer callbacks and custom layouts/buttons
 - CSV, XLSX, and print exports of the displayed results
 - Keyboard sorting, accessible controls, filled/outline inputs, and RTL support
-- UI 4 theme tokens, configurable Sass, ESM/UMD bundles, and source maps
-- Native `Table` class, fQuery plugin, private internals, and JSDoc IntelliSense
+- Native `Table` class and `table` fQuery plugin
+- Existing-instance reuse with frozen resolved options
+- Prebuilt ESM and UMD bundles with source maps
+- Expanded and minified component CSS with source maps
+- JSDoc-powered IntelliSense
+
+Explore [the demo](./demo/index.html) for interactive examples.
 
 ## Installation
 
 ### Browser projects / bundlers
 
-Install Tables with its UI 4 and query 5 peers:
-
 ```bash
-npm i @fr0st/ui-tables@^3 @fr0st/ui@^4 @fr0st/query@^5
+npm i @fr0st/ui-tables
 ```
+
+Frost UI Tables's package entry point is ESM-only and requires a browser DOM. Import the default `Table` export and the stylesheets in browser projects and bundlers.
 
 ```js
 import '@fr0st/ui/dist/frost-ui.min.css';
 import '@fr0st/ui-tables/dist/frost-ui-tables.min.css';
 import Table from '@fr0st/ui-tables';
-
-const table = Table.init(document.querySelector('#scores'), { length: 10 });
 ```
 
-The package root resolves to compiled ESM. `dist/*` and `src/*` are exported too. UI and query stay external so Tables shares the application's component and query instances. A browser DOM is required; load Tables on the client in server-rendered applications.
+`@fr0st/ui` and `@fr0st/query` are peer dependencies so the component shares the application's instances.
 
 ### Browser (ESM)
 
-Include the table from [Usage](#usage) before initializing. Direct browser imports need an import map for core, query, and UI:
+The ESM bundle imports `@fr0st/ui` and `@fr0st/query`. fQuery also imports `@fr0st/core`, so map all three dependencies when loading the bundle directly in a browser:
 
 ```html
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fr0st/ui@4/dist/frost-ui.min.css">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fr0st/ui-tables@3/dist/frost-ui-tables.min.css">
+<link
+    rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/@fr0st/ui@latest/dist/frost-ui.min.css">
+<link
+    rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/@fr0st/ui-tables@latest/dist/frost-ui-tables.min.css">
 <script type="importmap">
 {
     "imports": {
-        "@fr0st/core": "https://cdn.jsdelivr.net/npm/@fr0st/core@4/dist/frost-core.esm.min.js",
-        "@fr0st/query": "https://cdn.jsdelivr.net/npm/@fr0st/query@5/dist/fquery.esm.min.js",
-        "@fr0st/ui": "https://cdn.jsdelivr.net/npm/@fr0st/ui@4/dist/frost-ui.esm.min.js"
+        "@fr0st/core": "https://cdn.jsdelivr.net/npm/@fr0st/core@latest/dist/frost-core.esm.min.js",
+        "@fr0st/query": "https://cdn.jsdelivr.net/npm/@fr0st/query@latest/dist/fquery.esm.min.js",
+        "@fr0st/ui": "https://cdn.jsdelivr.net/npm/@fr0st/ui@latest/dist/frost-ui.esm.min.js"
     }
 }
 </script>
 <script type="module">
-    import Table from 'https://cdn.jsdelivr.net/npm/@fr0st/ui-tables@3/dist/frost-ui-tables.esm.min.js';
-    Table.init(document.querySelector('#scores'));
+    import Table from 'https://cdn.jsdelivr.net/npm/@fr0st/ui-tables@latest/dist/frost-ui-tables.esm.min.js';
 </script>
 ```
 
 ### Browser (UMD)
 
-Load UI's all-in-one bundle before Tables. It supplies both `UI` and `fQuery`; do not also load a separate query script.
+Load the bundles from your own copy or a CDN:
 
 ```html
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fr0st/ui@4/dist/frost-ui.min.css">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fr0st/ui-tables@3/dist/frost-ui-tables.min.css">
-<script src="https://cdn.jsdelivr.net/npm/@fr0st/ui@4/dist/frost-ui-bundle.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@fr0st/ui-tables@3/dist/frost-ui-tables.min.js"></script>
+<link
+    rel="stylesheet"
+    href="/path/to/dist/frost-ui.min.css">
+<link
+    rel="stylesheet"
+    href="/path/to/dist/frost-ui-tables.min.css">
+<script src="/path/to/dist/frost-ui-bundle.min.js"></script>
+<script src="/path/to/dist/frost-ui-tables.min.js"></script>
+<!-- or -->
+<link
+    rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/@fr0st/ui@latest/dist/frost-ui.min.css">
+<link
+    rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/@fr0st/ui-tables@latest/dist/frost-ui-tables.min.css">
+<script src="https://cdn.jsdelivr.net/npm/@fr0st/ui@latest/dist/frost-ui-bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@fr0st/ui-tables@latest/dist/frost-ui-tables.min.js"></script>
 <script>
-    const table = UI.Table.init(document.querySelector('#scores'));
+    const { Table } = globalThis.UI;
 </script>
 ```
 
-UMD adds `Table` to the existing `UI` global. With UI's non-bundled script, load core, query, UI, then Tables. UMD is a browser script; this ESM package does not advertise a CommonJS `require()` entry. The `@3` CDN URLs require the 3.0 release; this checkout's demo uses local Tables bundles.
+The UMD bundle adds `Table` to the existing `globalThis.UI` object. Load Frost UI's all-in-one bundle first; it supplies the `UI` and `fQuery` globals.
+
+The package root resolves to the prebuilt ESM bundle. Published files under `dist/` and `src/` are also available through matching package subpaths.
 
 ## Usage
 
@@ -102,39 +123,47 @@ const table = Table.init(document.querySelector('#scores'), {
 });
 ```
 
-`Table.init()` reuses an existing instance. Dispose it before changing initialization options. Original classes and the caption are preserved; disposal restores the original children and their listeners, not the edited data currently displayed.
+Original classes and the caption are preserved; disposal restores the original children and their listeners, not the edited data currently displayed.
 
 ## Options
 
-Options resolve from `Table.defaults`, then `data-ui-*` attributes, then explicit options. `instance.options` is frozen at the top level. Use methods to update active instances. Set `Table.defaults` and `Table.classes` before initialization for application-wide defaults and matching custom structural/state classes.
+Options are resolved in this order:
+
+1. Component defaults
+2. The element's `data-ui-*` attributes
+3. Options passed to `Table.init()`
+
+Resolved `instance.options` are shallow-frozen.
+
+Use methods to update active instances. Set `Table.defaults` and `Table.classes` before initialization for application-wide defaults and matching custom structural/state classes.
 
 | Option | Type | Default | Description |
 | --- | --- | --- | --- |
-| `data` | `array` | Not set | Local rows; otherwise read `<tbody>` cell HTML. |
-| `getResults` | `function` | Not set | Remote loader; takes precedence over local data. |
-| `columns` | `array \| null` | `null` | Column definitions, one per heading; see below. |
-| `order` | `array` | `[[0, 'asc']]` | Priority-ordered column/direction pairs; `[]` preserves input order. |
-| `ordering` | `boolean` | `true` | Enable sorting. |
-| `searching` | `boolean` | `true` | Enable local/remote searching. |
-| `paging` | `boolean` | `true` | Enable pagination; `false` displays all loaded rows. |
-| `length` | `number` | `10` | Positive integer page length. |
-| `lengths` | `number[]` | `[10, 25, 50, 100]` | Available positive page lengths. |
-| `lengthChange` | `boolean` | `true` | Render the length control when paging is enabled. |
-| `info` | `boolean` | `true` | Render the result-count status. |
-| `debounce` | `number` | `250` | Local input-search / remote-request delay in milliseconds. |
-| `inputStyle` | `'filled' \| 'outline'` | `'filled'` | Search and length control style. |
 | `buttons` | `array` | `[]` | Export/custom button configurations. |
-| `layout` | `object` | See below | Top/bottom control layouts. |
-| `lang` | `object` | See below | Interface and accessibility labels. |
-| `icons` | `object` | See below | Trusted HTML for pagination icons. |
-| `sanitize` | `function` | `(html) => $.sanitize(html)` | Sanitize heading and cell HTML, including formatted values. |
-| `preDrawCallback` | `function \| null` | `null` | Before drawing; return `false` to retain current DOM. |
-| `headerCallback` | `function \| null` | `null` | Customize the heading row. |
-| `infoCallback` | `function \| null` | `null` | Return the result-count text. |
-| `rowCallback` | `function \| null` | `null` | Customize each row before insertion. |
+| `columns` | `array \| null` | `null` | Column definitions, one per heading; see below. |
 | `createdRow` | `function \| null` | `null` | Customize each inserted row. |
+| `data` | `array` | Not set | Local rows; otherwise read `<tbody>` cell HTML. |
+| `debounce` | `number` | `250` | Local input-search / remote-request delay in milliseconds. |
 | `drawCallback` | `function \| null` | `null` | After inserting the displayed rows. |
 | `footerCallback` | `function \| null` | `null` | Customize the cloned original footer. |
+| `getResults` | `function` | Not set | Remote loader; takes precedence over local data. |
+| `headerCallback` | `function \| null` | `null` | Customize the heading row. |
+| `icons` | `object` | See below | Trusted HTML for pagination icons. |
+| `info` | `boolean` | `true` | Render the result-count status. |
+| `infoCallback` | `function \| null` | `null` | Return the result-count text. |
+| `inputStyle` | `'filled' \| 'outline'` | `'filled'` | Search and length control style. |
+| `lang` | `object` | See below | Interface and accessibility labels. |
+| `layout` | `object` | See below | Top/bottom control layouts. |
+| `length` | `number` | `10` | Positive integer page length. |
+| `lengthChange` | `boolean` | `true` | Render the length control when paging is enabled. |
+| `lengths` | `number[]` | `[10, 25, 50, 100]` | Available positive page lengths. |
+| `order` | `array` | `[[0, 'asc']]` | Priority-ordered column/direction pairs; `[]` preserves input order. |
+| `ordering` | `boolean` | `true` | Enable sorting. |
+| `paging` | `boolean` | `true` | Enable pagination; `false` displays all loaded rows. |
+| `preDrawCallback` | `function \| null` | `null` | Before drawing; return `false` to retain current DOM. |
+| `rowCallback` | `function \| null` | `null` | Customize each row before insertion. |
+| `sanitize` | `function` | `(html) => $.sanitize(html)` | Sanitize heading and cell HTML, including formatted values. |
+| `searching` | `boolean` | `true` | Enable local/remote searching. |
 
 `order`, `lengths`, and `buttons` replace their default arrays, including when empty. Nested object options merge with defaults. Default labels and icon keys:
 
@@ -286,7 +315,7 @@ Built-in exports include **current displayed rows**, raw values, and visible col
 
 ## Data attributes
 
-Serializable options accept kebab-case `data-ui-*` attributes; arrays and objects accept JSON:
+Use kebab-case `data-ui-*` attributes for serializable options. Arrays and objects use JSON. Supply callbacks and DOM nodes through JavaScript.
 
 ```html
 <table id="scores" data-ui-toggle="table" data-ui-length="5"
@@ -298,25 +327,28 @@ Serializable options accept kebab-case `data-ui-*` attributes; arrays and object
 
 Other examples include `data-ui-paging="false"`, `data-ui-ordering="false"`, `data-ui-info="false"`, `data-ui-length-change="false"`, `data-ui-debounce="300"`, and JSON `data-ui-columns`, `data-ui-layout`, `data-ui-lang` or `data-ui-buttons`. Supply functions through JavaScript.
 
-`data-ui-toggle="table"` is an initialization selector, not automatic initialization:
-
 ```js
+import $ from '@fr0st/query';
+import '@fr0st/ui-tables';
+
 $('[data-ui-toggle="table"]').table();
 ```
+
+Data attributes configure options; they do not initialize Tables by themselves. Initialize the component through the class or fQuery plugin. Changing an option's data attribute after initialization does not reconfigure the existing instance.
 
 ## Methods
 
 | Method | Returns | Description |
 | --- | --- | --- |
-| `Table.init(node, options?)` | `Table` | Initialize a table or return its existing instance. |
+| `Table.init(node, options?)` | `Table` | Return the existing instance for an element or create one. |
 | `addRow(row)` | `void` | Append a copied row and refresh local results/counts. |
 | `clear()` | `void` | Clear loaded rows/counts, search, paging and pending work. |
-| `dispose()` | `void` | Restore original DOM/attributes and cancel work; safe to repeat. |
-| `getColumn(key, { modified = true }?)` | `array` | Values for the displayed rows or loaded dataset. |
-| `getRow(index, { modified = true }?)` | `array \| object` | Shallow copy of a row. |
+| `dispose()` | `void` | Restore the original DOM and attributes, cancel owned work, and remove registered state. |
+| `getColumn(key, { modified = true }?)` | `array` | Return column values for the displayed rows or loaded dataset. |
+| `getRow(index, { modified = true }?)` | `array \| object` | Return a shallow copy of a row. |
 | `getValue(index, key, { modified = true }?)` | `any` | Read an array key or object dot path. |
 | `hideColumn(index)` | `void` | Hide a data column and redraw. |
-| `info()` | `object` | `{ start, end, total, filtered }`; zero-based start, exclusive end. |
+| `info()` | `object` | Return `{ start, end, total, filtered }` with a zero-based start and exclusive end. |
 | `length(length)` | `void` | Change page length; also synchronize the select. |
 | `loading({ show = true }?)` | `void` | Set loading indicator and `aria-busy`; emit processing/processed. |
 | `order(pairs)` | `void` | Set sorting, for example `[[0, 'asc'], [1, 'desc']]`. |
@@ -330,17 +362,23 @@ $('[data-ui-toggle="table"]').table();
 | `setValue(index, key, value, { modified = true }?)` | `void` | Update one array key or object dot path. |
 | `showColumn(index)` | `void` | Reveal a data column and redraw. |
 
-`instance.node` is the original table; `instance.options` is its resolved configuration. Both become `null` after disposal. Apart from repeat disposal, use a newly initialized instance after disposal.
-
 Row indexes are zero-based. `modified: true` addresses the displayed page after filtering/sorting; `false` addresses the loaded dataset. Column visibility, sort and export indexes always address the original column definitions. Value keys address row data, not visible column positions. Each mutation may reorder or remove rows from the displayed page, so obtain fresh indexes before the next edit.
 
 Invalid row/column indexes and nonpositive/noninteger page lengths throw `RangeError`. Invalid order structures/directions throw `TypeError`; invalid sort column indexes throw `RangeError`. `page()` requires a safe integer. `length()`/`page()` do nothing when paging is disabled; `order()`/`search()` do nothing when their feature is disabled. Local `reload()` uses the loaded dataset, not a fresh parse of edited table markup.
+
+## Lifecycle
+
+Calling `Table.init()` again for the same element returns its existing instance. Dispose the current instance before reinitializing with different options.
+
+An instance exposes its original element as `instance.node` and its shallow-frozen resolved configuration as `instance.options`. Both become `null` after disposal.
+
+`dispose()` releases resources owned by the component and removes its registered instance. Repeated disposal is safe and does not affect a new instance initialized on the same element. Use a new instance before calling other methods after disposal.
 
 ## Events
 
 Events originate on the original table:
 
-| Event | Timing |
+| Event | Description |
 | --- | --- |
 | `init.ui.table` | Registered and rendered controls, before the initial data load. |
 | `length.ui.table` | After setting page length, before loading results. |
@@ -355,6 +393,7 @@ Events originate on the original table:
 
 ```js
 import $ from '@fr0st/query';
+
 $.addEvent('#scores', 'draw.ui.table', (event) => {
     console.log(Table.init(event.currentTarget).info());
 });
@@ -367,11 +406,12 @@ Attach listeners before initialization to observe `init` and the first draw. Suc
 
 ## fQuery API
 
-Importing Tables registers `.table()` on `fQuery.QuerySet`:
+Importing Tables registers `table` on `fQuery.QuerySet`:
 
 ```js
 import $ from '@fr0st/query';
 import '@fr0st/ui-tables';
+
 const table = $('#scores').table({ length: 5 });
 $('#scores').table('search', 'Alice');
 const score = $('#scores').table('getValue', 0, 1);
@@ -379,7 +419,9 @@ $('#scores').table('setValue', 0, 1, 40);
 $('#scores').table('dispose');
 ```
 
-An options object initializes every matched table. A method name invokes that public method with the following arguments. The first instance or method result is returned; mutators return `void` rather than a chainable QuerySet. Calling the plugin on an uninitialized table initializes it first.
+Pass an options object to initialize every matched element, or pass a public method name followed by its arguments. The first component or method result is returned.
+
+Calling the plugin on an uninitialized table initializes it first. Mutators return `void` rather than a chainable QuerySet.
 
 ## Accessibility
 
@@ -390,27 +432,43 @@ An options object initializes every matched table. A method name invokes that pu
 - The result-count region uses `role="status"`; its ID is added to existing `aria-describedby` references. Busy state is exposed with `aria-busy`.
 - Disposing restores original descriptions and busy state along with the original DOM nodes.
 
-## Styling and customization
-
-Load UI CSS first, then Tables CSS. UI supplies table/control styling and system/light/dark themes. Set `data-ui-theme="light"` or `"dark"` on the document or an ancestor to override the system theme. Set `dir="rtl"` on the document or a containing element so both the table and generated controls inherit direction. Sort arrows use logical positioning.
+## Customization
 
 Tables consumes `--ui-primary`, `--ui-secondary-color`, `--ui-border-color-translucent` and `--ui-border-width`. Its `.btn-table` class supplies UI 4 button state/focus tokens. Configure `inputStyle`, column `class`, or `Table.classes` for markup styling.
 
-For a custom Sass build:
+`$table-sort-right` retains its existing name but controls the logical inline end. See Installation for a custom Sass build.
+
+### Custom Sass builds
+
+Install Sass and create an application stylesheet to customize the component:
+
+```bash
+npm i -D sass
+```
+
+`src/styles.scss`
 
 ```scss
-@use '@fr0st/ui-tables/src/scss/tables' with (
+@use "@fr0st/ui-tables/src/scss/tables" with (
     $table-sort-size: .4rem,
     $table-sort-right: .75rem,
     $btn-table-color: var(--ui-primary)
 );
 ```
 
+Compile the entry point with npm package resolution enabled:
+
 ```bash
 npx sass --load-path=node_modules src/styles.scss dist/styles.css
 ```
 
-The module forwards [all component variables](./src/scss/_vars.scss), each configurable with `!default`. `$table-sort-right` retains its existing name but now means the logical inline end. Include UI CSS separately.
+The `tables` module forwards the [component variables](./src/scss/_vars.scss), all of which have `!default` values. Include Frost UI CSS separately. Build tools that already resolve Sass modules from npm packages do not need the explicit load path.
+
+## Themes and RTL
+
+Frost UI follows the user's preferred color scheme by default. Set `data-ui-theme="light"` or `data-ui-theme="dark"` on the document or an ancestor to select a theme explicitly.
+
+Load UI CSS first, then Tables CSS. UI supplies table and control styling. Set `dir="rtl"` on the document or a containing element so both the table and generated controls inherit direction. Sort arrows use logical positioning.
 
 ## Migrating from 2.x
 
@@ -426,22 +484,21 @@ The former light/dark demo pages are consolidated into [one showcase](./demo/ind
 
 ## Development
 
-Use Node `^20.19.0 || ^22.13.0 || >=24`:
+Install dependencies with `npm ci`, then install Playwright browsers with `npx playwright install --with-deps`.
 
 ```bash
-npm ci
-npx playwright install --with-deps
-npm run lint
 npm test
-npm run test:coverage
-npm run lint:sass:unused
+npm run lint
+npm run build
 ```
 
-`npm test` rebuilds JS/CSS and runs Chromium, Firefox and WebKit. `test:browser`, `test:coverage`, `test:headed` and `test:ui` use existing bundles; rebuild after source changes. Coverage HTML and LCOV are written to `coverage/`, including workbook/ZIP sources. Keep `dist/` and the lockfile committed. The npm release-age policy applies when resolving dependencies.
+`npm test` rebuilds the bundles, then runs the Playwright suite in Chromium, Firefox, and WebKit. `npm run test:browser` runs the suite against the existing bundles, so rebuild after changing source files.
 
-Serve the repository root (for example `python3 -m http.server 8000`) and open `/demo/`. The demo loads UI 4 from jsDelivr and this checkout's Tables build. Its remote data is simulated locally. Automated demo tests use installed UI assets and require no CDN access.
+After building, `npm run test:coverage` runs Chromium tests and writes coverage reports to `coverage/`.
 
-CI follows UI's Node 20/22/24 Chromium matrix plus Node 24 Firefox/WebKit. It lints, builds, tests, checks tracked bundles, validates package contents, and uploads Chromium LCOV through Codecov OIDC. See [release setup](./.github/RELEASE.md) for Codecov activation and npm trusted publishing. Publishing is triggered by a GitHub release; creating these workflow files does not publish a version.
+`npm run test:headed` and `npm run test:ui` also use the existing bundles and open headed browsers or the Playwright UI.
+
+To view the demo, open `demo/index.html` in your browser after building.
 
 ## License
 
