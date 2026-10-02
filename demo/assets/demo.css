@@ -1,9 +1,15 @@
-section[id] {
+section[id],
+.demo-anchor {
     scroll-margin-top: 6rem;
 }
 
 .demo-event-log {
-    height: 16rem;
+    height: 18rem;
+    overflow-y: auto;
+}
+
+.demo-event-log > :last-child {
+    margin-block-end: 0;
 }
 
 .demo-request-log {

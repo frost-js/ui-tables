@@ -1,229 +1,258 @@
 const $ = globalThis.fQuery;
 const { Table } = globalThis.UI;
+const themeKey = 'frostui-tables-demo-theme';
 
-const themeControl = document.querySelector('#demo-theme');
 const setTheme = (theme) => {
     if (theme === 'system') {
-        document.documentElement.removeAttribute('data-ui-theme');
+        $(document.documentElement).removeAttribute('data-ui-theme');
     } else {
-        document.documentElement.dataset.uiTheme = theme;
+        $(document.documentElement).setAttribute('data-ui-theme', theme);
     }
-    themeControl.value = theme;
+
+    $('[data-demo-theme]').setValue(theme);
 };
-try {
-    const theme = localStorage.getItem('frostui-tables-demo-theme');
-    setTheme(['light', 'dark'].includes(theme) ? theme : 'system');
-} catch {
-    setTheme('system');
-}
-themeControl.addEventListener('change', () => {
-    setTheme(themeControl.value);
-    try {
-        localStorage.setItem('frostui-tables-demo-theme', themeControl.value);
-    } catch {
-        // Theme selection still works when browser storage is unavailable.
-    }
-});
 
-const names = ['Alice', 'Bob', 'Café team', 'Dana', 'Ellis', 'Fran', 'Gray', 'Harper', 'Indigo', 'Jules', 'Kai', 'Luca'];
-const teams = ['Design', 'Engineering', 'Support'];
-const rows = names.map((name, index) => [name, teams[index % teams.length], 80 + index]);
-const node = (id) => document.getElementById(id);
-const init = (id, options = {}) => Table.init(node(id), {
-    length: 5, lengths: [5, 10, 25], ...options,
-});
-
-// The plugin and class share instances and public methods.
-$('#basic-table').table({ length: 5, lengths: [5, 10, 25] });
-init('array-table', { data: rows, order: [[1, 'asc'], [2, 'desc']] });
-init('object-table', {
-    data: rows.map(([name, team, score]) => ({ person: { name, team }, score })),
-    columns: [{ data: 'person.name' }, { data: 'person.team' }, { data: 'score', class: 'text-end' }],
-    inputStyle: 'outline',
-});
-const empty = init('empty-table');
-node('add-empty').addEventListener('click', () => empty.addRow(['New teammate', 'Design', 0]));
-
-let controls;
-const initializeControls = () => {
-    controls?.dispose();
-    controls = init('control-table', {
-        data: rows,
-        searching: node('allow-search').checked,
-        ordering: node('allow-order').checked,
-        paging: node('allow-page').checked,
-        inputStyle: node('input-style').value,
+const logEvent = (message, className = 'text-body-secondary') => {
+    const log = $.findOne('#event-log');
+    const entry = $.create('div', {
+        class: ['small', 'font-monospace', 'py-2', 'border-bottom', className],
+        text: message,
     });
-};
-for (const id of ['allow-search', 'allow-order', 'allow-page', 'input-style']) {
-    node(id).addEventListener('change', initializeControls);
-}
-initializeControls();
 
-init('callback-table', {
-    data: rows,
-    columns: [{}, {}, {
-        class: 'text-end',
-        format: (value) => `<strong>${Number(value)}</strong>`,
-        createdCell(cell, value) {
-            if (value >= 90) cell.classList.add('text-success', 'fw-bold');
+    $.append(log, entry);
+
+    while ($.children(log).length > 50) {
+        $.remove($.child(log)[0]);
+    }
+
+    $.setScrollY(log, $.height(log, { boxSize: $.SCROLL_BOX }));
+};
+
+$.ready(() => {
+    let storedTheme;
+
+    try {
+        storedTheme = localStorage.getItem(themeKey);
+    } catch {
+        // The demo remains usable when browser storage is unavailable.
+    }
+
+    const requestedTheme = new URLSearchParams(location.search).get('theme');
+    const initialTheme = requestedTheme || storedTheme;
+    setTheme(['light', 'dark'].includes(initialTheme) ? initialTheme : 'system');
+
+    $('[data-demo-theme]').addEvent('change', (event) => {
+        const theme = $.getValue(event.currentTarget);
+        setTheme(theme);
+
+        try {
+            if (theme === 'system') {
+                localStorage.removeItem(themeKey);
+            } else {
+                localStorage.setItem(themeKey, theme);
+            }
+        } catch {
+            // Theme selection still applies for the current page.
+        }
+    });
+
+    $('#clear-log').addEvent('click', () => {
+        $('#event-log').empty();
+    });
+
+    const names = ['Alice', 'Bob', 'Café team', 'Dana', 'Ellis', 'Fran', 'Gray', 'Harper', 'Indigo', 'Jules', 'Kai', 'Luca'];
+    const teams = ['Design', 'Engineering', 'Support'];
+    const rows = names.map((name, index) => [name, teams[index % teams.length], 80 + index]);
+    const node = (id) => $.findOneById(id);
+    const init = (id, options = {}) => Table.init(node(id), {
+        length: 5, lengths: [5, 10, 25], ...options,
+    });
+
+    // The plugin and class share instances and public methods.
+    $('#basic-table').table({ length: 5, lengths: [5, 10, 25] });
+    init('array-table', { data: rows, order: [[1, 'asc'], [2, 'desc']] });
+    init('object-table', {
+        data: rows.map(([name, team, score]) => ({ person: { name, team }, score })),
+        columns: [{ data: 'person.name' }, { data: 'person.team' }, { data: 'score', class: 'text-end' }],
+        inputStyle: 'outline',
+    });
+    const empty = init('empty-table');
+    $.addEvent(node('add-empty'), 'click', () => empty.addRow(['New teammate', 'Design', 0]));
+
+    let controls;
+    const initializeControls = () => {
+        controls?.dispose();
+        controls = init('control-table', {
+            data: rows,
+            searching: $.getProperty(node('allow-search'), 'checked'),
+            ordering: $.getProperty(node('allow-order'), 'checked'),
+            paging: $.getProperty(node('allow-page'), 'checked'),
+            inputStyle: $.getValue(node('input-style')),
+        });
+    };
+    for (const id of ['allow-search', 'allow-order', 'allow-page', 'input-style']) {
+        $.addEvent(node(id), 'change', initializeControls);
+    }
+    initializeControls();
+
+    init('callback-table', {
+        data: rows,
+        columns: [{}, {}, {
+            class: 'text-end',
+            format: (value) => `<strong>${Number(value)}</strong>`,
+            createdCell(cell, value) {
+                if (value >= 90) $.addClass(cell, 'text-success', 'fw-bold');
+            },
+        }],
+        rowCallback(row, data) {
+            $[data[2] >= 90 ? 'addClass' : 'removeClass'](row, 'table-active');
         },
-    }],
-    rowCallback(row, data) {
-        row.classList.toggle('table-active', data[2] >= 90);
-    },
-    footerCallback(footer) {
-        footer.querySelector('td:last-child').textContent = this.getColumn(2).reduce((sum, value) => sum + Number(value), 0);
-    },
-    drawCallback() {
-        node('callback-summary').textContent = `${this.info().filtered} matching rows. Scores of 90 or more are highlighted.`;
-    },
-});
+        footerCallback(footer) {
+            $.setText($.findOne('td:last-child', footer), this.getColumn(2).reduce((sum, value) => sum + Number(value), 0));
+        },
+        drawCallback() {
+            $.setText(node('callback-summary'), `${this.info().filtered} matching rows. Scores of 90 or more are highlighted.`);
+        },
+    });
 
-Table.layout.demoSummary = function(container) {
-    container.classList.add('d-flex', 'align-items-center', 'fw-bold');
-    container.textContent = 'Team leaderboard';
-};
-init('layout-table', { data: rows, layout: { top: 'demoSummary,search', bottom: 'length,info|pagination' } });
-node('toggle-direction').addEventListener('click', (event) => {
-    const rtl = node('direction-host').dir !== 'rtl';
-    node('direction-host').dir = rtl ? 'rtl' : 'ltr';
-    event.currentTarget.setAttribute('aria-pressed', String(rtl));
-});
+    Table.layout.demoSummary = function(container) {
+        $.addClass(container, 'd-flex', 'align-items-center', 'fw-bold');
+        $.setText(container, 'Team leaderboard');
+    };
+    init('layout-table', { data: rows, layout: { top: 'demoSummary,search', bottom: 'length,info|pagination' } });
+    $.addEvent(node('toggle-direction'), 'click', (event) => {
+        const rtl = $.getProperty(node('direction-host'), 'dir') !== 'rtl';
+        $.setProperty(node('direction-host'), 'dir', rtl ? 'rtl' : 'ltr');
+        $.setAttribute(event.currentTarget, 'aria-pressed', String(rtl));
+    });
 
-const exportsTable = init('export-table', {
-    data: rows,
-    buttons: [
-        { type: 'csv', title: 'Team scores' },
-        { type: 'excel', title: 'Team scores' },
-        { type: 'print', title: 'Team scores' },
-        { text: 'Show 25 rows', callback() {
-            this.length(25);
-        } },
-    ],
-});
-node('toggle-team').addEventListener('click', (event) => {
-    const hidden = event.currentTarget.getAttribute('aria-pressed') !== 'true';
-    exportsTable[hidden ? 'hideColumn' : 'showColumn'](1);
-    event.currentTarget.setAttribute('aria-pressed', String(hidden));
-    event.currentTarget.textContent = hidden ? 'Show Team column' : 'Hide Team column';
-});
+    const exportsTable = init('export-table', {
+        data: rows,
+        buttons: [
+            { type: 'csv', title: 'Team scores' },
+            { type: 'excel', title: 'Team scores' },
+            { type: 'print', title: 'Team scores' },
+            { text: 'Show 25 rows', callback() {
+                this.length(25);
+            } },
+        ],
+    });
+    $.addEvent(node('toggle-team'), 'click', (event) => {
+        const hidden = $.getAttribute(event.currentTarget, 'aria-pressed') !== 'true';
+        exportsTable[hidden ? 'hideColumn' : 'showColumn'](1);
+        $.setAttribute(event.currentTarget, 'aria-pressed', String(hidden));
+        $.setText(event.currentTarget, hidden ? 'Show Team column' : 'Hide Team column');
+    });
 
-let requestId = 0;
-let failNext = false;
-const remoteRows = Array.from({ length: 35 }, (_, index) => [
-    `${names[index % names.length]} ${index + 1}`, teams[index % teams.length], 65 + index,
-]);
-const logRequest = (message) => {
-    const item = document.createElement('li');
-    item.textContent = message;
-    node('request-log').prepend(item);
-    if (node('request-log').children.length > 30) node('request-log').lastElementChild.remove();
-};
-/**
- * Simulates a service that filters, sorts and pages a complete dataset.
- * @param {object} request The table request.
- * @returns {Promise<object>} A cancellable delayed response.
- */
-const getResults = (request) => {
-    const id = ++requestId;
-    const shouldFail = failNext;
-    failNext = false;
-    logRequest(`#${id}: search "${request.term || ''}", offset ${request.offset || 0}`);
-    let timer;
-    let rejectPending;
-    const pending = new Promise((resolve, reject) => {
-        rejectPending = reject;
-        timer = setTimeout(() => {
-            if (shouldFail || request.term?.toLowerCase() === 'error') {
-                logRequest(`#${id}: failed`);
-                reject(new Error('Simulated request failure. Press Retry to try again.'));
+    let requestId = 0;
+    let failNext = false;
+    const remoteRows = Array.from({ length: 35 }, (_, index) => [
+        `${names[index % names.length]} ${index + 1}`, teams[index % teams.length], 65 + index,
+    ]);
+    const logRequest = (message) => {
+        const item = $.create('li');
+        $.setText(item, message);
+        $.prepend(node('request-log'), item);
+        if ($.children(node('request-log')).length > 30) $.remove($.children(node('request-log')).at(-1));
+    };
+    /**
+     * Simulates a service that filters, sorts and pages a complete dataset.
+     * @param {object} request The table request.
+     * @returns {Promise<object>} A cancellable delayed response.
+     */
+    const getResults = (request) => {
+        const id = ++requestId;
+        const shouldFail = failNext;
+        failNext = false;
+        logRequest(`#${id}: search "${request.term || ''}", offset ${request.offset || 0}`);
+        let timer;
+        let rejectPending;
+        const pending = new Promise((resolve, reject) => {
+            rejectPending = reject;
+            timer = setTimeout(() => {
+                if (shouldFail || request.term?.toLowerCase() === 'error') {
+                    logRequest(`#${id}: failed`);
+                    reject(new Error('Simulated request failure. Press Retry to try again.'));
+                    return;
+                }
+                const term = (request.term || '').toLowerCase();
+                const results = remoteRows.filter((row) => row.some((value) => String(value).toLowerCase().includes(term)));
+                results.sort((a, b) => {
+                    for (const { column, dir } of Object.values(request.order || {})) {
+                        const diff = column === 2 ? a[column] - b[column] : String(a[column]).localeCompare(String(b[column]));
+                        if (diff) return dir === 'desc' ? -diff : diff;
+                    }
+                    return 0;
+                });
+                logRequest(`#${id}: completed, ${results.length} matches`);
+                resolve({ results: results.slice(request.offset || 0, (request.offset || 0) + (request.limit || results.length)), total: remoteRows.length, filtered: results.length });
+            }, 600);
+        });
+        pending.cancel = () => {
+            clearTimeout(timer);
+            logRequest(`#${id}: cancelled`);
+            rejectPending(new DOMException('Request cancelled', 'AbortError'));
+        };
+        return pending;
+    };
+    $.addEvent('#remote-table', 'processing.ui.table', () => {
+        $.setText(node('remote-message'), 'Loading results…');
+    });
+    $.addEvent('#remote-table', 'draw.ui.table', () => {
+        $.setText(node('remote-message'), 'Results ready.');
+    });
+    $.addEvent('#remote-table', 'error.ui.table', (event) => {
+        $.setText(node('remote-message'), event.detail.error.message);
+    });
+    const remote = init('remote-table', { getResults, debounce: 100 });
+    $.addEvent(node('fail-request'), 'click', () => {
+        failNext = true; remote.reload();
+    });
+    $.addEvent(node('retry-request'), 'click', () => {
+        remote.search('');
+    });
+    $.addEvent(node('replace-request'), 'click', () => {
+        remote.search('Alice');
+        setTimeout(() => remote.search('Bob'), 200);
+    });
+
+    const methods = {
+        init: [], addRow: [['Morgan', 'Support', 97]], clear: [], dispose: [],
+        getColumn: [2], getRow: [0], getValue: [0, 2], hideColumn: [1], info: [],
+        length: [10], loading: [{ show: true }], order: [[[2, 'desc']]], page: [2],
+        refresh: [], reload: [{ reset: true }], removeRow: [0], search: ['Alice'],
+        setColumn: [2, [10, 20, 30, 40, 50]], setRow: [0, ['Morgan', 'Support', 97]],
+        setValue: [0, 2, 99], showColumn: [1],
+    };
+    for (const method of Object.keys(methods)) {
+        const option = $.create('option');
+        $.setValue(option, method);
+        $.setText(option, `${method}()`);
+        $.append(node('method'), option);
+    }
+    const eventNames = ['init', 'length', 'order', 'page', 'search', 'processing', 'processed', 'preDraw', 'draw', 'error'];
+    $.addEvent('#method-table', eventNames.map((name) => `${name}.ui.table`).join(' '), (event) => {
+        logEvent(`${event.type}.ui.table`);
+    });
+    let methodTable = init('method-table');
+    $.addEvent(node('method'), 'change', () => {
+        $.setValue(node('method-args'), JSON.stringify(methods[$.getValue(node('method'))]));
+    });
+    $.addEvent(node('run-method'), 'click', () => {
+        try {
+            const method = $.getValue(node('method'));
+            const args = JSON.parse($.getValue(node('method-args')));
+            if (!Array.isArray(args)) throw new TypeError('Arguments must be a JSON array.');
+            if (method === 'init') {
+                methodTable = init('method-table', args[0]);
+                $.setText(node('method-output'), 'Initialized.');
                 return;
             }
-            const term = (request.term || '').toLowerCase();
-            const results = remoteRows.filter((row) => row.some((value) => String(value).toLowerCase().includes(term)));
-            results.sort((a, b) => {
-                for (const { column, dir } of Object.values(request.order || {})) {
-                    const diff = column === 2 ? a[column] - b[column] : String(a[column]).localeCompare(String(b[column]));
-                    if (diff) return dir === 'desc' ? -diff : diff;
-                }
-                return 0;
-            });
-            logRequest(`#${id}: completed, ${results.length} matches`);
-            resolve({ results: results.slice(request.offset || 0, (request.offset || 0) + (request.limit || results.length)), total: remoteRows.length, filtered: results.length });
-        }, 600);
-    });
-    pending.cancel = () => {
-        clearTimeout(timer);
-        logRequest(`#${id}: cancelled`);
-        rejectPending(new DOMException('Request cancelled', 'AbortError'));
-    };
-    return pending;
-};
-$.addEvent('#remote-table', 'processing.ui.table', () => {
-    node('remote-message').textContent = 'Loading results…';
-});
-$.addEvent('#remote-table', 'draw.ui.table', () => {
-    node('remote-message').textContent = 'Results ready.';
-});
-$.addEvent('#remote-table', 'error.ui.table', (event) => {
-    node('remote-message').textContent = event.detail.error.message;
-});
-const remote = init('remote-table', { getResults, debounce: 100 });
-node('fail-request').addEventListener('click', () => {
-    failNext = true; remote.reload();
-});
-node('retry-request').addEventListener('click', () => {
-    remote.search('');
-});
-node('replace-request').addEventListener('click', () => {
-    remote.search('Alice');
-    setTimeout(() => remote.search('Bob'), 200);
-});
-
-const methods = {
-    init: [], addRow: [['Morgan', 'Support', 97]], clear: [], dispose: [],
-    getColumn: [2], getRow: [0], getValue: [0, 2], hideColumn: [1], info: [],
-    length: [10], loading: [{ show: true }], order: [[[2, 'desc']]], page: [2],
-    refresh: [], reload: [{ reset: true }], removeRow: [0], search: ['Alice'],
-    setColumn: [2, [10, 20, 30, 40, 50]], setRow: [0, ['Morgan', 'Support', 97]],
-    setValue: [0, 2, 99], showColumn: [1],
-};
-for (const method of Object.keys(methods)) {
-    const option = document.createElement('option');
-    option.value = method;
-    option.textContent = `${method}()`;
-    node('method').append(option);
-}
-const eventNames = ['init', 'length', 'order', 'page', 'search', 'processing', 'processed', 'preDraw', 'draw', 'error'];
-$.addEvent('#method-table', eventNames.map((name) => `${name}.ui.table`).join(' '), (event) => {
-    const entry = document.createElement('div');
-    entry.className = 'py-1 border-bottom';
-    entry.textContent = `${event.type}.ui.table`;
-    const log = node('event-log');
-    log.append(entry);
-    if (log.children.length > 50) log.firstElementChild.remove();
-    log.scrollTop = log.scrollHeight;
-});
-let methodTable = init('method-table');
-node('method').addEventListener('change', () => {
-    node('method-args').value = JSON.stringify(methods[node('method').value]);
-});
-node('run-method').addEventListener('click', () => {
-    try {
-        const method = node('method').value;
-        const args = JSON.parse(node('method-args').value);
-        if (!Array.isArray(args)) throw new TypeError('Arguments must be a JSON array.');
-        if (method === 'init') {
-            methodTable = init('method-table', args[0]);
-            node('method-output').textContent = 'Initialized.';
-            return;
+            if (!methodTable.node) throw new Error('Choose init() to initialize the table again.');
+            const result = methodTable[method](...args);
+            $.setText(node('method-output'), result === undefined ? `${method}() completed.` : JSON.stringify(result, null, 2));
+        } catch (error) {
+            $.setText(node('method-output'), error.message);
         }
-        if (!methodTable.node) throw new Error('Choose init() to initialize the table again.');
-        const result = methodTable[method](...args);
-        node('method-output').textContent = result === undefined ? `${method}() completed.` : JSON.stringify(result, null, 2);
-    } catch (error) {
-        node('method-output').textContent = error.message;
-    }
+    });
 });
-node('clear-log').addEventListener('click', () => node('event-log').replaceChildren());

@@ -1,235 +1,127 @@
 <!DOCTYPE html>
 <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Frost UI Tables Demo</title>
-        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fr0st/ui@4/dist/frost-ui.min.css">
-        <link rel="stylesheet" href="../dist/frost-ui-tables.css">
-        <link rel="stylesheet" href="assets/demo.css">
-        <script src="https://cdn.jsdelivr.net/npm/@fr0st/ui@4/dist/frost-ui-bundle.min.js">
-        </script>
-        <script src="../dist/frost-ui-tables.js">
-        </script>
-        <script src="assets/demo.js" defer>
-        </script>
-    </head>
-    <body>
-        <header class="navbar bg-glass sticky-top border-bottom">
-            <div class="container d-flex align-items-center justify-content-between gap-3">
-                <a class="navbar-brand d-flex align-items-center gap-2 fw-bold" href="#top">
-                    <span class="badge bg-primary bg-gradient shadow-glow fs-5" aria-hidden="true">F</span>
-                    <span>Tables</span>
-                </a>
-                <div class="d-flex align-items-center gap-2">
-                    <label class="small fw-bold mb-0" for="demo-theme">Theme</label>
-                    <select class="input-outline input-sm w-auto rounded-pill" id="demo-theme">
-                        <option value="system">System</option>
-                        <option value="light">Light</option>
-                        <option value="dark">Dark</option>
-                    </select>
-                </div>
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Frost UI Tables Demo</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fr0st/ui@4/dist/frost-ui.min.css">
+    <link rel="stylesheet" href="../dist/frost-ui-tables.css">
+    <link rel="stylesheet" href="assets/demo.css">
+    <script src="https://cdn.jsdelivr.net/npm/@fr0st/ui@4/dist/frost-ui-bundle.min.js" defer></script>
+    <script src="../dist/frost-ui-tables.js" defer></script>
+    <script src="assets/demo.js" defer></script>
+</head>
+
+<body>
+    <header class="navbar bg-glass sticky-top border-bottom">
+        <div class="container d-flex align-items-center justify-content-between gap-3">
+            <a class="navbar-brand d-flex align-items-center gap-2 fw-bold" href="#top">
+                <span class="badge bg-primary bg-gradient shadow-glow fs-5" aria-hidden="true">F</span>
+                <span>Tables</span>
+            </a>
+            <div class="d-flex align-items-center gap-2">
+                <label class="small fw-bold mb-0" for="demo-theme">Theme</label>
+                <select class="input-outline input-sm w-auto rounded-pill" id="demo-theme" data-demo-theme>
+                    <option value="system">System</option>
+                    <option value="light">Light</option>
+                    <option value="dark">Dark</option>
+                </select>
             </div>
-        </header>
-        <main class="container py-4 py-lg-5" id="top">
-            <section class="card border-0 overflow-hidden shadow-lg mb-5 bg-ambient">
-                <div class="p-4 p-md-5">
-                    <span class="badge bg-primary-subtle text-primary-subtle mb-3">Tables v3 · Frost UI v4</span>
-                    <h1 class="display-2 mb-4">Find the rows<br>
-                        <span class="text-gradient">that matter.</span>
-                    </h1>
-                    <p class="lead text-body-secondary mb-4">Search, sort, edit and export. Explore local data, asynchronous results and the table API.</p>
-                    <nav class="d-flex flex-wrap gap-2" aria-label="Demo sections">
-                        <a class="btn btn-primary ripple" href="#basic">Start here</a>
-                        <a class="btn btn-secondary ripple" href="#data">Local data</a>
-                        <a class="btn btn-outline-primary ripple" href="#callbacks">Formatting</a>
-                        <a class="btn btn-outline-primary ripple" href="#exports">Exports</a>
-                        <a class="btn btn-outline-primary ripple" href="#remote">Remote data</a>
-                        <a class="btn btn-outline-primary ripple" href="#methods-events">API &amp; events</a>
-                    </nav>
-                </div>
-            </section>
-            <section class="mb-5" id="basic" aria-labelledby="basic-title">
-                <header class="border-bottom pb-3 mb-4">
-                    <h2 class="h3 mb-1" id="basic-title">Start with a table</h2>
-                    <p class="text-body-secondary mb-0">Sort a heading with click, Enter or Space. Shift adds a second sort key. Search and page through the results.</p>
-                </header>
-                <div class="card card-body p-3 p-md-4">
-                    <table id="basic-table">
-                        <caption>Team scores</caption>
-                        <thead>
-                            <tr>
-                                <th>Name</th>
-                                <th>Team</th>
-                                <th>Score</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td>Alice</td>
-                                <td>Design</td>
-                                <td>93</td>
-                            </tr>
-                            <tr>
-                                <td>Bob</td>
-                                <td>Engineering</td>
-                                <td>87</td>
-                            </tr>
-                            <tr>
-                                <td>Café team</td>
-                                <td>Support</td>
-                                <td>81</td>
-                            </tr>
-                            <tr>
-                                <td>Dana</td>
-                                <td>Design</td>
-                                <td>95</td>
-                            </tr>
-                            <tr>
-                                <td>Ellis</td>
-                                <td>Engineering</td>
-                                <td>89</td>
-                            </tr>
-                            <tr>
-                                <td>Fran</td>
-                                <td>Support</td>
-                                <td>84</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </section>
-            <section class="mb-5" id="data" aria-labelledby="data-title">
-                <header class="border-bottom pb-3 mb-4">
-                    <h2 class="h3 mb-1" id="data-title">Arrays and nested objects</h2>
-                    <p class="text-body-secondary mb-0">Provide rows directly, map object paths to columns, and choose an initial multi-column order.</p>
-                </header>
-                <div class="card card-body p-3 p-md-4">
-                    <div class="row g-4">
-                        <div class="col-lg-6">
-                            <table id="array-table">
-                                <caption>Array data</caption>
-                                <thead>
-                                    <tr>
-                                        <th>Name</th>
-                                        <th>Team</th>
-                                        <th>Score</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                </tbody>
-                            </table>
-                        </div>
-                        <div class="col-lg-6">
-                            <table id="object-table">
-                                <caption>Nested object data</caption>
-                                <thead>
-                                    <tr>
-                                        <th>Name</th>
-                                        <th>Team</th>
-                                        <th>Score</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                </tbody>
-                            </table>
-                        </div>
+        </div>
+    </header>
+    <main class="container py-4 py-lg-5" id="top">
+        <section class="card border-0 overflow-hidden shadow-lg mb-5 bg-ambient">
+            <div class="p-4 p-md-5">
+                <span class="badge bg-primary-subtle text-primary-subtle mb-3">Frost UI component</span>
+                <h1 class="display-2 mb-4">Find the rows<br>
+                    <span class="text-gradient">that matter.</span>
+                </h1>
+                <p class="lead text-body-secondary mb-4">Search, sort, edit and export. Explore local data, asynchronous results and the table API.</p>
+                <nav class="d-flex flex-wrap gap-2" aria-label="Demo sections">
+                    <a class="btn btn-primary ripple" href="#basic">Start here</a>
+                    <a class="btn btn-secondary ripple" href="#data">Local data</a>
+                    <a class="btn btn-outline-primary ripple" href="#callbacks">Formatting</a>
+                    <a class="btn btn-outline-primary ripple" href="#exports">Exports</a>
+                    <a class="btn btn-outline-primary ripple" href="#remote">Remote data</a>
+                    <a class="btn btn-outline-primary ripple" href="#methods-events">API &amp; events</a>
+                </nav>
+            </div>
+        </section>
+        <section class="mb-5" id="basic" aria-labelledby="basic-title">
+            <header class="border-bottom pb-3 mb-4">
+                <h2 class="h3 mb-1" id="basic-title">Start with a table</h2>
+                <p class="text-body-secondary mb-0">Sort a heading with click, Enter or Space. Shift adds a second sort key. Search and page through the results.</p>
+            </header>
+            <div class="card card-body p-3 p-md-4">
+                <table id="basic-table">
+                    <caption>Team scores</caption>
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Team</th>
+                            <th>Score</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Alice</td>
+                            <td>Design</td>
+                            <td>93</td>
+                        </tr>
+                        <tr>
+                            <td>Bob</td>
+                            <td>Engineering</td>
+                            <td>87</td>
+                        </tr>
+                        <tr>
+                            <td>Café team</td>
+                            <td>Support</td>
+                            <td>81</td>
+                        </tr>
+                        <tr>
+                            <td>Dana</td>
+                            <td>Design</td>
+                            <td>95</td>
+                        </tr>
+                        <tr>
+                            <td>Ellis</td>
+                            <td>Engineering</td>
+                            <td>89</td>
+                        </tr>
+                        <tr>
+                            <td>Fran</td>
+                            <td>Support</td>
+                            <td>84</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+        <section class="mb-5" id="data" aria-labelledby="data-title">
+            <header class="border-bottom pb-3 mb-4">
+                <h2 class="h3 mb-1" id="data-title">Arrays and nested objects</h2>
+                <p class="text-body-secondary mb-0">Provide rows directly, map object paths to columns, and choose an initial multi-column order.</p>
+            </header>
+            <div class="card card-body p-3 p-md-4">
+                <div class="row g-4">
+                    <div class="col-lg-6">
+                        <table id="array-table">
+                            <caption>Array data</caption>
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Team</th>
+                                    <th>Score</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                            </tbody>
+                        </table>
                     </div>
-                </div>
-            </section>
-            <section class="mb-5" id="empty" aria-labelledby="empty-title">
-                <header class="border-bottom pb-3 mb-4">
-                    <h2 class="h3 mb-1" id="empty-title">An empty starting point</h2>
-                    <p class="text-body-secondary mb-0">Empty results keep clear counts and disabled page controls. Add a row to begin.</p>
-                </header>
-                <div class="card card-body p-3 p-md-4">
-                    <button class="btn btn-primary mb-3 align-self-start" id="add-empty" type="button">Add the first row</button>
-                    <table id="empty-table">
-                        <caption>New team</caption>
-                        <thead>
-                            <tr>
-                                <th>Name</th>
-                                <th>Team</th>
-                                <th>Score</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                        </tbody>
-                    </table>
-                </div>
-            </section>
-            <section class="mb-5" id="controls" aria-labelledby="controls-title">
-                <header class="border-bottom pb-3 mb-4">
-                    <h2 class="h3 mb-1" id="controls-title">Choose your controls</h2>
-                    <p class="text-body-secondary mb-0">Toggle searching, sorting or pagination and compare filled and outline controls.</p>
-                </header>
-                <div class="card card-body p-3 p-md-4">
-                    <div class="d-flex flex-wrap align-items-center gap-3 mb-3">
-                        <label>
-                            <input type="checkbox" id="allow-search" checked> Searching</label>
-                        <label>
-                            <input type="checkbox" id="allow-order" checked> Sorting</label>
-                        <label>
-                            <input type="checkbox" id="allow-page" checked> Pagination</label>
-                        <label for="input-style">Control style</label>
-                        <select id="input-style" class="input-outline input-sm w-auto">
-                            <option value="filled">Filled</option>
-                            <option value="outline">Outline</option>
-                        </select>
-                    </div>
-                    <table id="control-table">
-                        <caption>Configurable controls</caption>
-                        <thead>
-                            <tr>
-                                <th>Name</th>
-                                <th>Team</th>
-                                <th>Score</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                        </tbody>
-                    </table>
-                </div>
-            </section>
-            <section class="mb-5" id="callbacks" aria-labelledby="callbacks-title">
-                <header class="border-bottom pb-3 mb-4">
-                    <h2 class="h3 mb-1" id="callbacks-title">Format cells and summarize rows</h2>
-                    <p class="text-body-secondary mb-0">Bold score values, mark high scores, and calculate a footer total using the displayed rows.</p>
-                </header>
-                <div class="card card-body p-3 p-md-4">
-                    <table id="callback-table">
-                        <caption>Formatted team scores</caption>
-                        <thead>
-                            <tr>
-                                <th>Name</th>
-                                <th>Team</th>
-                                <th>Score</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                        </tbody>
-                        <tfoot>
-                            <tr>
-                                <td colspan="2">Displayed score total</td>
-                                <td id="score-total" class="text-end">
-                                </td>
-                            </tr>
-                        </tfoot>
-                    </table>
-                    <p id="callback-summary" class="form-text mb-0">
-                    </p>
-                </div>
-            </section>
-            <section class="mb-5" id="layout" aria-labelledby="layout-title">
-                <header class="border-bottom pb-3 mb-4">
-                    <h2 class="h3 mb-1" id="layout-title">Custom layout and RTL</h2>
-                    <p class="text-body-secondary mb-0">A custom layout label sits beside search. Change direction to move controls and sort arrows together.</p>
-                </header>
-                <div class="card card-body p-3 p-md-4">
-                    <button id="toggle-direction" class="btn btn-outline-primary mb-3 align-self-start" type="button" aria-pressed="false">Right-to-left layout</button>
-                    <div id="direction-host">
-                        <table id="layout-table">
-                            <caption>Custom layout</caption>
+                    <div class="col-lg-6">
+                        <table id="object-table">
+                            <caption>Nested object data</caption>
                             <thead>
                                 <tr>
                                     <th>Name</th>
@@ -242,16 +134,101 @@
                         </table>
                     </div>
                 </div>
-            </section>
-            <section class="mb-5" id="exports" aria-labelledby="exports-title">
-                <header class="border-bottom pb-3 mb-4">
-                    <h2 class="h3 mb-1" id="exports-title">Take the displayed results with you</h2>
-                    <p class="text-body-secondary mb-0">CSV, Excel and print export the current page. Toggle the Team column or use a custom button to show more rows.</p>
-                </header>
-                <div class="card card-body p-3 p-md-4">
-                    <button id="toggle-team" class="btn btn-outline-primary mb-3 align-self-start" type="button" aria-pressed="false">Hide Team column</button>
-                    <table id="export-table">
-                        <caption>Exportable scores</caption>
+            </div>
+        </section>
+        <section class="mb-5" id="empty" aria-labelledby="empty-title">
+            <header class="border-bottom pb-3 mb-4">
+                <h2 class="h3 mb-1" id="empty-title">An empty starting point</h2>
+                <p class="text-body-secondary mb-0">Empty results keep clear counts and disabled page controls. Add a row to begin.</p>
+            </header>
+            <div class="card card-body p-3 p-md-4">
+                <button class="btn btn-primary mb-3 align-self-start" id="add-empty" type="button">Add the first row</button>
+                <table id="empty-table">
+                    <caption>New team</caption>
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Team</th>
+                            <th>Score</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+        <section class="mb-5" id="controls" aria-labelledby="controls-title">
+            <header class="border-bottom pb-3 mb-4">
+                <h2 class="h3 mb-1" id="controls-title">Choose your controls</h2>
+                <p class="text-body-secondary mb-0">Toggle searching, sorting or pagination and compare filled and outline controls.</p>
+            </header>
+            <div class="card card-body p-3 p-md-4">
+                <div class="d-flex flex-wrap align-items-center gap-3 mb-3">
+                    <label>
+                        <input type="checkbox" id="allow-search" checked> Searching</label>
+                    <label>
+                        <input type="checkbox" id="allow-order" checked> Sorting</label>
+                    <label>
+                        <input type="checkbox" id="allow-page" checked> Pagination</label>
+                    <label for="input-style">Control style</label>
+                    <select id="input-style" class="input-outline input-sm w-auto">
+                        <option value="filled">Filled</option>
+                        <option value="outline">Outline</option>
+                    </select>
+                </div>
+                <table id="control-table">
+                    <caption>Configurable controls</caption>
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Team</th>
+                            <th>Score</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+        <section class="mb-5" id="callbacks" aria-labelledby="callbacks-title">
+            <header class="border-bottom pb-3 mb-4">
+                <h2 class="h3 mb-1" id="callbacks-title">Format cells and summarize rows</h2>
+                <p class="text-body-secondary mb-0">Bold score values, mark high scores, and calculate a footer total using the displayed rows.</p>
+            </header>
+            <div class="card card-body p-3 p-md-4">
+                <table id="callback-table">
+                    <caption>Formatted team scores</caption>
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Team</th>
+                            <th>Score</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <td colspan="2">Displayed score total</td>
+                            <td id="score-total" class="text-end">
+                            </td>
+                        </tr>
+                    </tfoot>
+                </table>
+                <p id="callback-summary" class="form-text mb-0">
+                </p>
+            </div>
+        </section>
+        <section class="mb-5" id="layout" aria-labelledby="layout-title">
+            <header class="border-bottom pb-3 mb-4">
+                <h2 class="h3 mb-1" id="layout-title">Custom layout and RTL</h2>
+                <p class="text-body-secondary mb-0">A custom layout label sits beside search. Change direction to move controls and sort arrows together.</p>
+            </header>
+            <div class="card card-body p-3 p-md-4">
+                <button id="toggle-direction" class="btn btn-outline-primary mb-3 align-self-start" type="button" aria-pressed="false">Right-to-left layout</button>
+                <div id="direction-host">
+                    <table id="layout-table">
+                        <caption>Custom layout</caption>
                         <thead>
                             <tr>
                                 <th>Name</th>
@@ -263,111 +240,139 @@
                         </tbody>
                     </table>
                 </div>
-            </section>
-            <section class="mb-5" id="remote" aria-labelledby="remote-title">
-                <header class="border-bottom pb-3 mb-4">
-                    <h2 class="h3 mb-1" id="remote-title">Remote results, locally simulated</h2>
-                    <p class="text-body-secondary mb-0">This example waits 600 ms before responding. Search, sort and page as you would with a server. Try a failed request and retry, or replace a pending search.</p>
-                </header>
-                <div class="card card-body p-3 p-md-4">
-                    <div class="d-flex flex-wrap gap-2 mb-3">
-                        <button id="fail-request" class="btn btn-outline-primary" type="button">Fail next request</button>
-                        <button id="retry-request" class="btn btn-primary" type="button">Retry</button>
-                        <button id="replace-request" class="btn btn-outline-primary" type="button">Replace pending search</button>
-                    </div>
-                    <p id="remote-message" class="form-text" aria-live="polite">Waiting for results…</p>
-                    <table id="remote-table">
-                        <caption>Remote team scores</caption>
-                        <thead>
-                            <tr>
-                                <th>Name</th>
-                                <th>Team</th>
-                                <th>Score</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                        </tbody>
-                    </table>
-                    <details>
-                        <summary>Request log</summary>
-                        <ol id="request-log" class="demo-request-log overflow-auto small font-monospace mb-0 mt-2" aria-label="Request log">
-                        </ol>
-                    </details>
+            </div>
+        </section>
+        <section class="mb-5" id="exports" aria-labelledby="exports-title">
+            <header class="border-bottom pb-3 mb-4">
+                <h2 class="h3 mb-1" id="exports-title">Take the displayed results with you</h2>
+                <p class="text-body-secondary mb-0">CSV, Excel and print export the current page. Toggle the Team column or use a custom button to show more rows.</p>
+            </header>
+            <div class="card card-body p-3 p-md-4">
+                <button id="toggle-team" class="btn btn-outline-primary mb-3 align-self-start" type="button" aria-pressed="false">Hide Team column</button>
+                <table id="export-table">
+                    <caption>Exportable scores</caption>
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Team</th>
+                            <th>Score</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+        <section class="mb-5" id="remote" aria-labelledby="remote-title">
+            <header class="border-bottom pb-3 mb-4">
+                <h2 class="h3 mb-1" id="remote-title">Remote results, locally simulated</h2>
+                <p class="text-body-secondary mb-0">This example waits 600 ms before responding. Search, sort and page as you would with a server. Try a failed request and retry, or replace a pending search.</p>
+            </header>
+            <div class="card card-body p-3 p-md-4">
+                <div class="d-flex flex-wrap gap-2 mb-3">
+                    <button id="fail-request" class="btn btn-outline-primary" type="button">Fail next request</button>
+                    <button id="retry-request" class="btn btn-primary" type="button">Retry</button>
+                    <button id="replace-request" class="btn btn-outline-primary" type="button">Replace pending search</button>
                 </div>
-            </section>
-            <section class="mb-5" id="methods-events" aria-labelledby="methods-events-title">
-                <header class="border-bottom pb-3 mb-4">
-                    <h2 class="h3 mb-1" id="methods-events-title">Explore the API and events</h2>
-                    <p class="text-body-secondary mb-0">Choose a method, edit its JSON argument list, and run it. Disposing restores the original markup; initialize again to continue.</p>
-                </header>
-                <div class="card card-body p-3 p-md-4">
-                    <div class="row g-3 mb-3">
-                        <div class="col-md-4">
-                            <label for="method">Method</label>
-                            <select class="input-outline" id="method">
-                            </select>
-                        </div>
-                        <div class="col-md-6">
-                            <label for="method-args">Arguments (JSON array)</label>
-                            <input class="input-outline font-monospace" id="method-args" value="[]">
-                        </div>
-                        <div class="col-md-2 d-flex align-items-end">
-                            <button class="btn btn-primary w-100" id="run-method" type="button">Run method</button>
-                        </div>
+                <p id="remote-message" class="form-text" aria-live="polite">Waiting for results…</p>
+                <table id="remote-table">
+                    <caption>Remote team scores</caption>
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Team</th>
+                            <th>Score</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    </tbody>
+                </table>
+                <details>
+                    <summary>Request log</summary>
+                    <ol id="request-log" class="demo-request-log overflow-auto small font-monospace mb-0 mt-2" aria-label="Request log">
+                    </ol>
+                </details>
+            </div>
+        </section>
+        <section class="mb-5" id="methods-events" aria-labelledby="methods-events-title">
+            <header class="border-bottom pb-3 mb-4">
+                <h2 class="h3 mb-1" id="methods-events-title">Explore the API and events</h2>
+                <p class="text-body-secondary mb-0">Choose a method, edit its JSON argument list, and run it. Disposing restores the original markup; initialize again to continue.</p>
+            </header>
+            <div class="card card-body p-3 p-md-4">
+                <div class="row g-3 mb-3">
+                    <div class="col-md-4">
+                        <label for="method">Method</label>
+                        <select class="input-outline" id="method">
+                        </select>
                     </div>
-                    <pre id="method-output" class="bg-body-tertiary p-3 rounded" aria-live="polite">Ready.</pre>
-                    <table id="method-table">
-                        <caption>API playground</caption>
-                        <thead>
-                            <tr>
-                                <th>Name</th>
-                                <th>Team</th>
-                                <th>Score</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td>Alice</td>
-                                <td>Design</td>
-                                <td>93</td>
-                            </tr>
-                            <tr>
-                                <td>Bob</td>
-                                <td>Engineering</td>
-                                <td>87</td>
-                            </tr>
-                            <tr>
-                                <td>Café team</td>
-                                <td>Support</td>
-                                <td>81</td>
-                            </tr>
-                            <tr>
-                                <td>Dana</td>
-                                <td>Design</td>
-                                <td>95</td>
-                            </tr>
-                            <tr>
-                                <td>Ellis</td>
-                                <td>Engineering</td>
-                                <td>89</td>
-                            </tr>
-                            <tr>
-                                <td>Fran</td>
-                                <td>Support</td>
-                                <td>84</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                    <div class="d-flex justify-content-between align-items-center mt-3 mb-2">
-                        <h3 class="h5 mb-0">Event log</h3>
-                        <button id="clear-log" class="btn btn-outline-primary btn-sm" type="button">Clear log</button>
+                    <div class="col-md-6">
+                        <label for="method-args">Arguments (JSON array)</label>
+                        <input class="input-outline font-monospace" id="method-args" value="[]">
                     </div>
-                    <div id="event-log" class="demo-event-log border rounded p-3 overflow-auto font-monospace small" role="log" aria-label="Table events">
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button class="btn btn-primary w-100" id="run-method" type="button">Run method</button>
                     </div>
                 </div>
-            </section>
-        </main>
-        <footer class="container border-top py-4 text-body-secondary small">
-            <a href="../README.md">Documentation</a> · <a href="https://github.com/elusivecodes/FrostUI-Tables">Source on GitHub</a> · MIT License</footer>
-    </body>
+                <pre id="method-output" class="bg-body-tertiary p-3 rounded" aria-live="polite">Ready.</pre>
+                <table id="method-table">
+                    <caption>API playground</caption>
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Team</th>
+                            <th>Score</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Alice</td>
+                            <td>Design</td>
+                            <td>93</td>
+                        </tr>
+                        <tr>
+                            <td>Bob</td>
+                            <td>Engineering</td>
+                            <td>87</td>
+                        </tr>
+                        <tr>
+                            <td>Café team</td>
+                            <td>Support</td>
+                            <td>81</td>
+                        </tr>
+                        <tr>
+                            <td>Dana</td>
+                            <td>Design</td>
+                            <td>95</td>
+                        </tr>
+                        <tr>
+                            <td>Ellis</td>
+                            <td>Engineering</td>
+                            <td>89</td>
+                        </tr>
+                        <tr>
+                            <td>Fran</td>
+                            <td>Support</td>
+                            <td>84</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div class="d-flex justify-content-between align-items-center mt-3 mb-2">
+                    <h3 class="h5 mb-0">Event log</h3>
+                    <button id="clear-log" class="btn btn-outline-secondary btn-sm ripple" type="button">Clear log</button>
+                </div>
+                <div id="event-log" class="demo-event-log border rounded p-3" role="log" aria-label="Tables events" aria-live="polite" aria-relevant="additions">
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="border-top bg-glass">
+        <div class="container py-4 d-flex flex-wrap justify-content-between gap-2">
+            <span class="text-body-secondary">Frost UI Tables</span>
+            <a href="https://github.com/elusivecodes/FrostUI-Tables">View the repository</a>
+        </div>
+    </footer>
+</body>
+
 </html>
