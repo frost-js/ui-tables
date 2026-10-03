@@ -1470,7 +1470,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 				content = value ? 1 : 0;
 			} else if (typeof value === "number" && Number.isFinite(value) || /^[-+]?(?:0|[1-9]\d{0,14})(?:\.\d+)?$/.test(text)) content = Number(value);
 			else if (/^[-+]?\d+(?:\.\d+)?%$/.test(text)) {
-				content = parseFloat(text) / 100;
+				content = Number.parseFloat(text) / 100;
 				style ??= text.includes(".") ? 3 : 2;
 			} else {
 				const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})(?: (\d{2}):(\d{2}):(\d{2}))?$/);
