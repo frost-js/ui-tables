@@ -35,23 +35,23 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 
 //#region src/js/helpers.js
 /**
-	* Build a data array from a DOM element.
+	* Builds a data array from a DOM element.
 	* @param {HTMLElement} element The element to parse.
 	* @returns {Array} The parsed data.
 	*/
-	function getDataFromDOM(element) {
+	function getDomData(element) {
 		const tbody = _fr0st_query.default.findOne("tbody", element);
 		return _fr0st_query.default.children(tbody, "tr").map((row) => _fr0st_query.default.children(row, "td").map((cell) => _fr0st_query.default.getHtml(cell)));
 	}
 	/**
-	* Build a heading array from a DOM element.
+	* Builds a heading array from a DOM element.
 	* @param {HTMLElement} element The element to parse.
 	* @returns {Array} The parsed data.
 	*/
-	function getHeadingsFromDOM(element) {
+	function getDomHeadings(element) {
 		const thead = element.tHead;
 		if (!thead) return [];
-		if (thead.rows.length > 1 || [...thead.querySelectorAll("th")].some((cell) => cell.colSpan !== 1 || cell.rowSpan !== 1)) throw new RangeError("Table supports one heading row without spanning cells.");
+		if (thead.rows.length > 1 || _fr0st_query.default.find("th", thead).some((cell) => cell.colSpan !== 1 || cell.rowSpan !== 1)) throw new RangeError("Table supports one heading row without spanning cells.");
 		const row = thead.rows[0];
 		return _fr0st_query.default.children(row, "th").map((cell) => ({
 			text: _fr0st_query.default.getHtml(cell),
@@ -59,7 +59,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		}));
 	}
 	/**
-	* Download a blob.
+	* Downloads a blob.
 	* @param {Blob} blob The blob to save.
 	* @param {string} filename The filename.
 	*/
@@ -103,7 +103,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 	*/
 	var CRC32 = class {
 		/**
-		* Get the CRC32 hash value.
+		* Gets the CRC32 hash value.
 		* @param {Uint8Array} data The data to hash.
 		* @param {number} [pos] The data position.
 		* @param {number} [length] The data length.
@@ -113,7 +113,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			return this.update(data, 0, pos, length);
 		}
 		/**
-		* Update the CRC32 hash value.
+		* Updates the CRC32 hash value.
 		* @param {Uint8Array} data The data to hash.
 		* @param {number} crc The CRC32 hash.
 		* @param {number} [pos] The data position.
@@ -190,7 +190,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		#buffer;
 		#index;
 		/**
-		* New BitStream constructor.
+		* Creates a BitStream.
 		* @param {Uint8Array} buffer The buffer to write to.
 		* @param {number} [index] The index to start writing at.
 		*/
@@ -214,7 +214,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			return this.#buffer.subarray(0, index);
 		}
 		/**
-		* Write bits to the buffer.
+		* Writes bits to the buffer.
 		* @param {number} number The number to write.
 		* @param {number} n The number of bits to write.
 		* @param {number} [reverse] Whether to write in reverse order.
@@ -250,7 +250,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 //#endregion
 //#region src/js/zip/heap.js
 /**
-	* Get index of parent node.
+	* Gets index of parent node.
 	* @param {number} index The index.
 	* @returns {number} The parent index.
 	*/
@@ -258,7 +258,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		return ((index - 2) / 4 | 0) * 2;
 	};
 	/**
-	* Get index of child node.
+	* Gets index of child node.
 	* @param {number} index The index.
 	* @returns {number} The child index.
 	*/
@@ -274,7 +274,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		#buffer;
 		#length;
 		/**
-		* New Heap constructor.
+		* Creates a Heap.
 		* @param {number} [length] The size of the heap.
 		*/
 		constructor(length) {
@@ -289,7 +289,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			return this.#length;
 		}
 		/**
-		* Pop the top value off the heap.
+		* Pops the top value off the heap.
 		* @returns {object} The top value from the heap.
 		*/
 		pop() {
@@ -319,7 +319,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			};
 		}
 		/**
-		* Push a value onto the heap.
+		* Pushes a value onto the heap.
 		* @param {number} index The index.
 		* @param {number} value The value to push.
 		*/
@@ -514,7 +514,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		return lengthCodeTable;
 	};
 	/**
-	* Get the distance code.
+	* Gets the distance code.
 	* @param {number} dist The distance.
 	* @returns {Array} The distance code.
 	*/
@@ -673,7 +673,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		}
 	};
 	/**
-	* Get the length code.
+	* Gets the length code.
 	* @param {number} length The length.
 	* @returns {number} The length code.
 	*/
@@ -689,7 +689,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		#backwardDistance;
 		#length;
 		/**
-		* New Lz77Match constructor.
+		* Creates a Lz77Match.
 		* @param {number} length The length of the match.
 		* @param {number} backwardDistance The distanch to match position.
 		*/
@@ -705,7 +705,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			return this.#length;
 		}
 		/**
-		* Get the LZ77 coded array.
+		* Gets the LZ77 coded array.
 		* @returns {Array} The LZ77 Array.
 		*/
 		toLz77Array() {
@@ -726,7 +726,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 //#endregion
 //#region src/js/zip/raw-deflate.js
 /**
-	* Get the Huffman codes from the code lengths.
+	* Gets the Huffman codes from the code lengths.
 	* @param {Uint8Array} lengths The code lengths.
 	* @returns {Uint16Array} The Huffman codes.
 	*/
@@ -753,7 +753,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		return codes;
 	};
 	/**
-	* Get the lengths of a Huffman code.
+	* Gets the lengths of a Huffman code.
 	* @param {Uint32Array} freqs The frequency counts.
 	* @param {number} limit The code length limit.
 	* @returns {Uint8Array} The code lengths.
@@ -777,7 +777,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		return length;
 	};
 	/**
-	* Calculate the tree symbols.
+	* Calculates the tree symbols.
 	* @param {number} hLit The HLIT.
 	* @param {Uint8Array} litLenLengths The literal lengths and length codes.
 	* @param {number} hDist The HDIST.
@@ -838,7 +838,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		};
 	};
 	/**
-	* Find the optimal Huffman code.
+	* Finds the optimal Huffman code.
 	* @param {Uint32Array} freqs The value frequencies.
 	* @param {number} symbols The number of symbols.
 	* @param {number} limit The code length limit.
@@ -924,7 +924,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		#output;
 		#outputIndex;
 		/**
-		* Compress the data.
+		* Compresses the data.
 		* @param {Uint8Array} data The input data.
 		* @param {object} options The options to create the RawDeflate with.
 		* @returns {Uint8Array} The compressed data.
@@ -933,7 +933,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			return new this(data, options).compress();
 		}
 		/**
-		* New RawDeflate constructor.
+		* Creates a RawDeflate.
 		* @param {Uint8Array} input The input data.
 		* @param {object} options The options to create the RawDeflate with.
 		*/
@@ -952,7 +952,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			this.#output = /* @__PURE__ */ new Uint8Array(32768);
 		}
 		/**
-		* Compress the data.
+		* Compresses the data.
 		* @returns {Uint8Array} The compressed data.
 		*/
 		compress() {
@@ -1035,7 +1035,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			return this.#output;
 		}
 		/**
-		* Calculate the LZ77 array.
+		* Calculates the LZ77 array.
 		* @returns {Uint16Array} The LZ77 array.
 		*/
 		#lz77() {
@@ -1103,7 +1103,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			return lz77buf.subarray(0, pos);
 		}
 		/**
-		* Find the longest match from the list of matches.
+		* Finds the longest match from the list of matches.
 		* @param {number} position The array position.
 		* @param {Array} matchList The list of matches.
 		* @returns {Lz77Match} The Lz77Match.
@@ -1142,7 +1142,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		return encoder.encode(string);
 	};
 	/**
-	* Get the byte length of a string.
+	* Gets the byte length of a string.
 	* @param {string} string The string.
 	* @returns {number} The byte length.
 	*/
@@ -1181,7 +1181,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		#offset;
 		#type;
 		/**
-		* New Zip constructor.
+		* Creates a Zip.
 		* @param {string} [type=octet/stream] The file type.
 		*/
 		constructor(type = "octet/stream") {
@@ -1192,7 +1192,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			this.#entries = 0;
 		}
 		/**
-		* Add a file to the Zip.
+		* Adds a file to the Zip.
 		* @param {string} filename The filename.
 		* @param {string} data The data.
 		*/
@@ -1254,7 +1254,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			this.#entries++;
 		}
 		/**
-		* Create the zip file.
+		* Creates the zip file.
 		* @returns {Blob} The zip file.
 		*/
 		zip() {
@@ -1370,7 +1370,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		#stringCount = 0;
 		#sValues;
 		/**
-		* New Workbook constructor.
+		* Creates a Workbook.
 		*/
 		constructor() {
 			this.#current = 0;
@@ -1379,7 +1379,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			this.#sValues = [];
 		}
 		/**
-		* Add a sheet to the Workbook.
+		* Adds a sheet to the Workbook.
 		* @param {object} data The sheet data.
 		* @param {string} [name] The name of the sheet.
 		*/
@@ -1399,7 +1399,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			});
 		}
 		/**
-		* Create an xlsx file.
+		* Creates an xlsx file.
 		* @returns {Blob} The xlsx file.
 		*/
 		create() {
@@ -1505,7 +1505,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			return `<c r="${reference}"${type ? ` t="${type}"` : ""}${style !== null ? ` s="${style}"` : ""}>` + (type === "inlineStr" ? `<is><t xml:space="preserve">${content}</t></is>` : `<v>${content}</v>`) + "</c>";
 		}
 		/**
-		* Convert a sheet object to an XML string.
+		* Converts a sheet object to an XML string.
 		* @param {object} sheet The sheet.
 		* @param {string} template The XML template.
 		* @returns {string} The XML string.
@@ -1852,7 +1852,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		#total;
 		#totalPages;
 		/**
-		* New Table constructor.
+		* Creates a Table.
 		* @param {HTMLTableElement} node The input table.
 		* @param {TableOptions} [options] The component options.
 		*/
@@ -1871,7 +1871,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			if (configured.columns !== null && !Array.isArray(configured.columns)) throw new TypeError("Columns must be an array.");
 			if (typeof configured.sanitize !== "function") throw new TypeError("sanitize must be a function.");
 			if (configured.lengths.some((length) => !Number.isSafeInteger(Number(length)) || Number(length) <= 0)) throw new RangeError("Page lengths must be positive integers.");
-			const headings = getHeadingsFromDOM(node);
+			const headings = getDomHeadings(node);
 			if (configured.columns && headings.length && configured.columns.length !== headings.length) throw new RangeError("Column definitions must match the heading count.");
 			if (configured.paging && (!Number.isSafeInteger(Number(configured.length)) || Number(configured.length) <= 0)) throw new RangeError("Page length must be a positive integer.");
 			super(node, options);
@@ -1893,7 +1893,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			this.#limit = this.options.paging ? Number(this.options.length) : Infinity;
 			try {
 				if (!this.options.getResults) {
-					this.#data = this.options.data ?? getDataFromDOM(node);
+					this.#data = this.options.data ?? getDomData(node);
 					this.#validateRows(this.#data);
 					this.#data = this.#data.slice();
 				}
@@ -1940,7 +1940,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			}
 		}
 		/**
-		* Add a row to the data array.
+		* Adds a row to the data array.
 		* @param {Array|object} row The row to add.
 		*/
 		addRow(row) {
@@ -1950,7 +1950,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			this.#mutated(1);
 		}
 		/**
-		* Clear all rows from the data array.
+		* Clears all rows from the data array.
 		*/
 		clear() {
 			if (!this.node) return;
@@ -1969,9 +1969,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			this.loading({ show: false });
 			if (this.node) this.#renderResults();
 		}
-		/**
-		* Dispose the Table.
-		*/
+		/** @inheritdoc */
 		dispose() {
 			if (!this.node) return;
 			const node = this.node;
@@ -1982,13 +1980,13 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			const pending = this.#pending;
 			this.#pending = null;
 			super.dispose();
-			if (this.#id) node.removeAttribute("id");
+			if (this.#id) _fr0st_query.default.removeAttribute(node, "id");
 			for (const [attribute, value] of [
 				["class", this.#originalClass],
 				["aria-describedby", this.#originalDescription],
 				["aria-busy", this.#originalBusy]
-			]) if (value === null || value === void 0) node.removeAttribute(attribute);
-			else node.setAttribute(attribute, value);
+			]) if (value === null || value === void 0) _fr0st_query.default.removeAttribute(node, attribute);
+			else _fr0st_query.default.setAttribute(node, { [attribute]: value });
 			if (this.#container) {
 				this.#container.before(node);
 				_fr0st_query.default.remove(this.#container);
@@ -2017,7 +2015,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			} catch {}
 		}
 		/**
-		* Get values for a single column.
+		* Gets values for a single column.
 		* @param {string} key The key to retrieve.
 		* @param {object} [options] Options for getting the column.
 		* @param {boolean} [options.modified=true] Whether to use modified indexes.
@@ -2027,7 +2025,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			return modified ? this.#rowIndexes.map((rowIndex) => _fr0st_query.default._getDot(this.#data[rowIndex], `${key}`)) : this.#data.map((row) => _fr0st_query.default._getDot(row, `${key}`));
 		}
 		/**
-		* Get values for a single row.
+		* Gets values for a single row.
 		* @param {number} index The row index to retrieve.
 		* @param {object} [options] Options for getting the row index.
 		* @param {boolean} [options.modified=true] Whether to use modified indexes.
@@ -2038,7 +2036,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			return _fr0st_query.default._isPlainObject(this.#data[rowIndex]) ? { ...this.#data[rowIndex] } : [...this.#data[rowIndex]];
 		}
 		/**
-		* Get a single value from a row.
+		* Gets a single value from a row.
 		* @param {number} index The row index to retrieve.
 		* @param {string} key The key to retrieve.
 		* @param {object} [options] Options for getting the row index.
@@ -2050,7 +2048,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			return _fr0st_query.default._getDot(this.#data[rowIndex], `${key}`);
 		}
 		/**
-		* Toggle a column as hidden.
+		* Toggles a column as hidden.
 		* @param {number} index The column index.
 		*/
 		hideColumn(index) {
@@ -2059,7 +2057,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			this.#renderResults();
 		}
 		/**
-		* Get the Table information.
+		* Gets the Table information.
 		* @returns {object} The Table information.
 		*/
 		info() {
@@ -2071,7 +2069,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			};
 		}
 		/**
-		* Set the Table length.
+		* Sets the Table length.
 		* @param {number} length The length.
 		*/
 		length(length) {
@@ -2085,13 +2083,13 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			if (this.node) this.#getData();
 		}
 		/**
-		* Trigger the loading indicator.
+		* Triggers the loading indicator.
 		* @param {object} [options] Options for the loading indicator.
 		* @param {boolean} [options.show=true] Whether to show the loading indicator.
 		*/
 		loading({ show = true } = {}) {
 			if (!this.node) return;
-			this.node.setAttribute("aria-busy", String(show));
+			_fr0st_query.default.setAttribute(this.node, { "aria-busy": String(show) });
 			if (show) {
 				_fr0st_query.default.show(this.#loader);
 				_fr0st_query.default.triggerEvent(this.node, "processing.ui.table");
@@ -2101,7 +2099,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			}
 		}
 		/**
-		* Set the Table order data.
+		* Sets the Table order data.
 		* @param {Array} order The order data.
 		*/
 		order(order) {
@@ -2111,7 +2109,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			if (this.node) this.#getData();
 		}
 		/**
-		* Set the Table page.
+		* Sets the Table page.
 		* @param {number} page The one-based page number.
 		*/
 		page(page) {
@@ -2124,13 +2122,13 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			if (this.node) this.#getData();
 		}
 		/**
-		* Redraw the Table.
+		* Redraws the Table.
 		*/
 		refresh() {
 			this.#renderResults();
 		}
 		/**
-		* Reload the Table data.
+		* Reloads the Table data.
 		* @param {object} [options] Options for reloading the data
 		* @param {boolean} [options.reset=false] Whether to reset the offset.
 		*/
@@ -2140,7 +2138,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			this.#getData();
 		}
 		/**
-		* Remove a row from the data array.
+		* Removes a row from the data array.
 		* @param {number} index The row index to remove.
 		* @param {object} [options] Options for getting the row index.
 		* @param {boolean} [options.modified=true] Whether to use modified indexes.
@@ -2151,7 +2149,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			this.#mutated(-1);
 		}
 		/**
-		* Search the Table for a term.
+		* Searches the Table for a term.
 		* @param {string} term The term to search for.
 		*/
 		search(term) {
@@ -2164,7 +2162,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			if (this.node) this.#getData();
 		}
 		/**
-		* Set values for a single column.
+		* Sets values for a single column.
 		* @param {string} key The key to set.
 		* @param {Array} column The column values.
 		* @param {object} [options] Options for getting the row index.
@@ -2177,7 +2175,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			this.#mutated();
 		}
 		/**
-		* Set values for a single row.
+		* Sets values for a single row.
 		* @param {number} index The row index to set.
 		* @param {Array|object} row The row values.
 		* @param {object} [options] Options for getting the row index.
@@ -2190,7 +2188,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			this.#mutated();
 		}
 		/**
-		* Set a single value for a row.
+		* Sets a single value for a row.
 		* @param {number} index The row index to set.
 		* @param {string} key The key to set.
 		* @param {*} value The value to set.
@@ -2203,7 +2201,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			this.#mutated();
 		}
 		/**
-		* Toggle a column as visible.
+		* Toggles a column as visible.
 		* @param {number} index The column index.
 		*/
 		showColumn(index) {
@@ -2212,7 +2210,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			this.#renderResults();
 		}
 		/**
-		* Render a table for specific columns.
+		* Renders a table for specific columns.
 		* @param {Array} columns The columns to render.
 		* @returns {HTMLElement} The table element.
 		*/
@@ -2254,10 +2252,10 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			return version;
 		}
 		/**
-		* Attach events for the Table.
+		* Attaches events for the Table.
 		*/
 		#events() {
-			if (this.#lengthSelect) _fr0st_query.default.addEvent(this.#lengthSelect, "change.ui.table", (_) => {
+			if (this.#lengthSelect) _fr0st_query.default.addEvent(this.#lengthSelect, "change.ui.table", () => {
 				const length = _fr0st_query.default.getValue(this.#lengthSelect);
 				this.length(length);
 			});
@@ -2268,45 +2266,45 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 				_fr0st_query.default.addEvent(this.#searchInput, "input.ui.table", this.#searchHandler);
 			}
 			if (this.options.ordering) {
-				const handleSort = (e) => {
-					const index = Number(_fr0st_query.default.getDataset(e.currentTarget, "uiIndex"));
+				const handleSort = (event) => {
+					const index = Number(_fr0st_query.default.getDataset(event.currentTarget, "uiIndex"));
 					if (!this.#columns[index].orderable) return;
-					e.preventDefault();
+					event.preventDefault();
 					const defaultDir = this.#columns[index].dir;
 					let currentDir = null;
 					for (const [col, dir] of this.#order) {
-						if (col != index) continue;
+						if (col !== index) continue;
 						currentDir = dir;
 						break;
 					}
 					let nextDir = defaultDir;
 					if (currentDir === defaultDir) nextDir = defaultDir === "asc" ? "desc" : "asc";
 					let order;
-					if (e.shiftKey) {
+					if (event.shiftKey) {
 						if (!currentDir) order = [...this.#order, [index, nextDir]];
 						else if (currentDir === defaultDir) order = this.#order.map(([col, dir]) => {
-							if (col == index) dir = nextDir;
+							if (col === index) dir = nextDir;
 							return [col, dir];
 						});
 						else order = this.#order.filter(([col]) => {
-							return col != index;
+							return col !== index;
 						});
 					} else order = [[index, nextDir]];
 					this.order(order);
 				};
 				_fr0st_query.default.addEventDelegate(this.#theadRow, "click.ui.table", "th", handleSort);
-				_fr0st_query.default.addEventDelegate(this.#theadRow, "keydown.ui.table", "th", (e) => {
-					switch (e.code) {
+				_fr0st_query.default.addEventDelegate(this.#theadRow, "keydown.ui.table", "th", (event) => {
+					switch (event.code) {
 						case "Enter":
 						case "NumpadEnter":
-						case "Space": handleSort(e);
+						case "Space": handleSort(event);
 					}
 				});
 			}
-			if (this.#pagination) _fr0st_query.default.addEventDelegate(this.#pagination, "click.ui.table", "[data-ui-page]", (e) => {
-				e.preventDefault();
-				if (e.currentTarget.disabled) return;
-				let page = _fr0st_query.default.getDataset(e.currentTarget, "uiPage");
+			if (this.#pagination) _fr0st_query.default.addEventDelegate(this.#pagination, "click.ui.table", "[data-ui-page]", (event) => {
+				event.preventDefault();
+				if (event.currentTarget.disabled) return;
+				let page = _fr0st_query.default.getDataset(event.currentTarget, "uiPage");
 				switch (page) {
 					case "first":
 						page = 1;
@@ -2380,7 +2378,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			if (active()) this.#renderResults();
 		}
 		/**
-		* Initialize preloaded get data.
+		* Initializes preloaded get data.
 		*/
 		#getDataInit() {
 			this.#getData = () => {
@@ -2405,7 +2403,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			};
 		}
 		/**
-		* Get headings for specific columns.
+		* Gets headings for specific columns.
 		* @param {Array} columns The columns to get.
 		* @returns {Array} The headings.
 		*/
@@ -2413,12 +2411,12 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			return columns.map((index) => {
 				this.#validateColumn(index);
 				const container = document.createElement("div");
-				container.innerHTML = _fr0st_query.default.sanitize(String(this.#headings[index].text));
-				return container.textContent;
+				_fr0st_query.default.setHtml(container, _fr0st_query.default.sanitize(String(this.#headings[index].text)));
+				return _fr0st_query.default.getText(container);
 			});
 		}
 		/**
-		* Get an index (optionally modified).
+		* Gets an index (optionally modified).
 		* @param {number} index The index to get.
 		* @param {object} [options] Options for getting the row index.
 		* @param {boolean} [options.modified=true] Whether to use modified indexes.
@@ -2430,7 +2428,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			return modified ? this.#rowIndexes[index] : index;
 		}
 		/**
-		* Get real column ordering data.
+		* Gets real column ordering data.
 		* @returns {Array} The column ordering data.
 		*/
 		#getOrder() {
@@ -2442,7 +2440,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			});
 		}
 		/**
-		* Get results for specific columns.
+		* Gets results for specific columns.
 		* @param {Array} columns The columns to get.
 		* @returns {Array} The results.
 		*/
@@ -2451,7 +2449,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			return this.#results.map((row) => columns.map((index) => _fr0st_query.default._getDot(row, String(this.#columns[index].data))));
 		}
 		/**
-		* Initialize get data from callback.
+		* Initializes get data from callback.
 		*/
 		#getResultsInit() {
 			this.#loadResults = _fr0st_query.default._debounce((version) => this.#fetchResults(version), this.options.debounce);
@@ -2464,7 +2462,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			};
 		}
 		/**
-		* Get the visible columns.
+		* Gets the visible columns.
 		* @returns {Array} The visible columns.
 		*/
 		#getVisibleColumns() {
@@ -2511,7 +2509,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			});
 		}
 		/**
-		* Refresh the results.
+		* Refreshes the results.
 		*/
 		#refreshResults() {
 			this.#page = this.options.paging ? 1 + this.#offset / this.#limit : 1;
@@ -2520,7 +2518,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			this.#results = this.#rowIndexes.map((index) => this.#data[index]);
 		}
 		/**
-		* Render the Table.
+		* Renders the Table.
 		*/
 		#render() {
 			this.#original = document.createDocumentFragment();
@@ -2566,7 +2564,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			if (this.#infoContainer) _fr0st_query.default.setAttribute(this.node, { "aria-describedby": [this.#originalDescription, this.#infoContainer.id].filter(Boolean).join(" ") });
 		}
 		/**
-		* Render the table buttons.
+		* Renders the table buttons.
 		* @param {HTMLElement} container The container to render in.
 		*/
 		#renderButtons(container) {
@@ -2580,8 +2578,8 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 						"aria-controls": _fr0st_query.default.getAttribute(this.node, "id")
 					}
 				});
-				_fr0st_query.default.addEvent(btn, "click.ui.table", (e) => {
-					e.preventDefault();
+				_fr0st_query.default.addEvent(btn, "click.ui.table", (event) => {
+					event.preventDefault();
 					if (button.callback) button.callback.bind(this)();
 					else if (Object.hasOwn(this.constructor.buttons, button.type)) this.constructor.buttons[button.type].bind(this)(button);
 				});
@@ -2590,7 +2588,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			_fr0st_query.default.append(container, btnGroup);
 		}
 		/**
-		* Render the table headings.
+		* Renders the table headings.
 		*/
 		#renderHeadings() {
 			const version = this.#drawVersion;
@@ -2630,7 +2628,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 				if (!this.options.ordering || !this.#columns[index].orderable) continue;
 				let dir;
 				for (const order of this.#order) {
-					if (order[0] != index) continue;
+					if (order[0] !== index) continue;
 					dir = order[1];
 					break;
 				}
@@ -2655,7 +2653,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			}
 		}
 		/**
-		* Render the table info.
+		* Renders the table info.
 		*/
 		#renderInfo() {
 			const version = this.#drawVersion;
@@ -2676,7 +2674,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			_fr0st_query.default.append(this.#infoContainer, text);
 		}
 		/**
-		* Render the table info container in a container.
+		* Renders the table info container in a container.
 		* @param {HTMLElement} container The container to render in.
 		*/
 		#renderInfoContainer(container) {
@@ -2693,7 +2691,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			_fr0st_query.default.append(container, this.#infoContainer);
 		}
 		/**
-		* Render a layout row in a container.
+		* Renders a layout row in a container.
 		* @param {Array} columns The columns to render.
 		* @param {string} rowClass The row class.
 		*/
@@ -2713,7 +2711,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			_fr0st_query.default.append(this.#container, row);
 		}
 		/**
-		* Render the length select in a container.
+		* Renders the length select in a container.
 		* @param {HTMLElement} container The container to render in.
 		*/
 		#renderLengthSelect(container) {
@@ -2747,7 +2745,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			_fr0st_query.default.append(container, lengthContainer);
 		}
 		/**
-		* Render a pagination item.
+		* Renders a pagination item.
 		* @param {object} options Options for rendering the pagnination item.
 		* @returns {HTMLElement} The pagnination item.
 		*/
@@ -2768,12 +2766,12 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			return container;
 		}
 		/**
-		* Render the pagination.
+		* Renders the pagination.
 		*/
 		#renderPagination() {
 			const setDisabled = (container, disabled) => {
 				const link = _fr0st_query.default.findOne(":scope > [data-ui-page]", container);
-				link.disabled = disabled;
+				_fr0st_query.default.setProperty(link, { disabled });
 				if (disabled) {
 					_fr0st_query.default.addClass(container, this.constructor.classes.pageDisabled);
 					_fr0st_query.default.setAttribute(link, {
@@ -2822,10 +2820,10 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 				});
 				_fr0st_query.default.append(this.#pagination, lastPage);
 			}
-			setDisabled(firstPage, this.#page == 1);
-			setDisabled(prevPage, this.#page == 1);
-			setDisabled(nextPage, this.#page == this.#totalPages);
-			setDisabled(lastPage, this.#page == this.#totalPages);
+			setDisabled(firstPage, this.#page === 1);
+			setDisabled(prevPage, this.#page === 1);
+			setDisabled(nextPage, this.#page === this.#totalPages);
+			setDisabled(lastPage, this.#page === this.#totalPages);
 			let startPage = Math.max(this.#page - 5, 1);
 			let endPage = Math.min(this.#page + 5, this.#totalPages);
 			while (endPage - startPage > 4) if (this.#page - startPage > endPage - this.#page) startPage++;
@@ -2846,18 +2844,18 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 					_fr0st_query.default.insertAfter(pageItem, lastLink);
 				}
 				const pageButton = _fr0st_query.default.findOne("button", pageItem);
-				if (current == this.#page) {
-					pageButton.setAttribute("aria-current", "page");
+				if (current === this.#page) {
+					_fr0st_query.default.setAttribute(pageButton, { "aria-current": "page" });
 					_fr0st_query.default.addClass(pageItem, this.constructor.classes.pageActive);
 				} else {
-					pageButton.removeAttribute("aria-current");
+					_fr0st_query.default.removeAttribute(pageButton, "aria-current");
 					_fr0st_query.default.removeClass(pageItem, this.constructor.classes.pageActive);
 				}
 				lastLink = pageItem;
 			}
 		}
 		/**
-		* Render the pagination container in a container.
+		* Renders the pagination container in a container.
 		* @param {HTMLElement} container The container to render in.
 		*/
 		#renderPaginationContainer(container) {
@@ -2868,7 +2866,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			_fr0st_query.default.append(paginationContainer, this.#pagination);
 		}
 		/**
-		* Render the table results.
+		* Renders the table results.
 		*/
 		#renderResults() {
 			if (!this.node) return;
@@ -2911,7 +2909,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			if (active()) _fr0st_query.default.triggerEvent(this.node, "draw.ui.table");
 		}
 		/**
-		* Render a result row.
+		* Renders a result row.
 		* @param {Array|object} data The row data.
 		* @param {number} rowIndex The row index.
 		* @returns {HTMLElement} The table row.
@@ -2937,7 +2935,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			return row;
 		}
 		/**
-		* Render the search in a container.
+		* Renders the search in a container.
 		* @param {HTMLElement} container The container to render in.
 		*/
 		#renderSearch(container) {
@@ -2965,7 +2963,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		*/
 		#syncLength() {
 			if (!this.#lengthSelect) return;
-			if (![...this.#lengthSelect.options].some((option) => Number(option.value) === this.#limit)) _fr0st_query.default.append(this.#lengthSelect, _fr0st_query.default.create("option", {
+			if (![...this.#lengthSelect.options].some((option) => Number(_fr0st_query.default.getValue(option)) === this.#limit)) _fr0st_query.default.append(this.#lengthSelect, _fr0st_query.default.create("option", {
 				value: this.#limit,
 				text: this.#limit
 			}));

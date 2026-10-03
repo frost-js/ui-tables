@@ -85,7 +85,7 @@ const generateLengthTable = () => {
 };
 
 /**
- * Get the distance code.
+ * Gets the distance code.
  * @param {number} dist The distance.
  * @returns {Array} The distance code.
  */
@@ -155,7 +155,7 @@ const getDistanceCode = (dist) => {
 };
 
 /**
- * Get the length code.
+ * Gets the length code.
  * @param {number} length The length.
  * @returns {number} The length code.
  */
@@ -173,7 +173,7 @@ export default class Lz77Match {
     #length;
 
     /**
-     * New Lz77Match constructor.
+     * Creates a Lz77Match.
      * @param {number} length The length of the match.
      * @param {number} backwardDistance The distanch to match position.
      */
@@ -191,7 +191,7 @@ export default class Lz77Match {
     }
 
     /**
-     * Get the LZ77 coded array.
+     * Gets the LZ77 coded array.
      * @returns {Array} The LZ77 Array.
      */
     toLz77Array() {

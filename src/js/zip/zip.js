@@ -1,7 +1,7 @@
 import CRC32 from './crc32.js';
 import RawDeflate from './raw-deflate.js';
 
-const encoder = new TextEncoder;
+const encoder = new TextEncoder();
 
 /**
  * Encode a string in binary.
@@ -13,7 +13,7 @@ const encode = (string) => {
 };
 
 /**
- * Get the byte length of a string.
+ * Gets the byte length of a string.
  * @param {string} string The string.
  * @returns {number} The byte length.
  */
@@ -56,7 +56,7 @@ export default class Zip {
     #type;
 
     /**
-     * New Zip constructor.
+     * Creates a Zip.
      * @param {string} [type=octet/stream] The file type.
      */
     constructor(type = 'octet/stream') {
@@ -68,7 +68,7 @@ export default class Zip {
     }
 
     /**
-     * Add a file to the Zip.
+     * Adds a file to the Zip.
      * @param {string} filename The filename.
      * @param {string} data The data.
      */
@@ -91,7 +91,7 @@ export default class Zip {
             cMethod = 8;
         }
 
-        const now = new Date;
+        const now = new Date();
 
         const year = Math.min(2107, Math.max(1980, now.getFullYear()));
         const modTime = (now.getHours() << 11) | (now.getMinutes() << 5) | Math.floor(now.getSeconds() / 2);
@@ -143,7 +143,7 @@ export default class Zip {
     }
 
     /**
-     * Create the zip file.
+     * Creates the zip file.
      * @returns {Blob} The zip file.
      */
     zip() {

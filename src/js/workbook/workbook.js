@@ -1,4 +1,4 @@
-import Zip from './../zip/zip.js';
+import Zip from '../zip/zip.js';
 import { colName, escape, formatDate } from './helpers.js';
 import { templates } from './templates.js';
 
@@ -15,7 +15,7 @@ export default class Workbook {
     #sValues;
 
     /**
-     * New Workbook constructor.
+     * Creates a Workbook.
      */
     constructor() {
         this.#current = 0;
@@ -25,7 +25,7 @@ export default class Workbook {
     }
 
     /**
-     * Add a sheet to the Workbook.
+     * Adds a sheet to the Workbook.
      * @param {object} data The sheet data.
      * @param {string} [name] The name of the sheet.
      */
@@ -50,7 +50,7 @@ export default class Workbook {
     }
 
     /**
-     * Create an xlsx file.
+     * Creates an xlsx file.
      * @returns {Blob} The xlsx file.
      */
     create() {
@@ -98,7 +98,7 @@ export default class Workbook {
                     break;
                 }
                 case 'docProps/core.xml': {
-                    const date = (new Date).toISOString().substring(0, 19) + 'Z';
+                    const date = (new Date()).toISOString().substring(0, 19) + 'Z';
                     template = template.replaceAll('{date}', date);
 
                     zip.addFile(filename, template);
@@ -151,7 +151,10 @@ export default class Workbook {
         if (typeof value === 'boolean') {
             type = 'b';
             content = value ? 1 : 0;
-        } else if ((typeof value === 'number' && Number.isFinite(value)) || /^[-+]?(?:0|[1-9]\d{0,14})(?:\.\d+)?$/.test(text)) {
+        } else if (
+            (typeof value === 'number' && Number.isFinite(value)) ||
+            /^[-+]?(?:0|[1-9]\d{0,14})(?:\.\d+)?$/.test(text)
+        ) {
             content = Number(value);
         } else if (/^[-+]?\d+(?:\.\d+)?%$/.test(text)) {
             content = parseFloat(text) / 100;
@@ -193,7 +196,7 @@ export default class Workbook {
     }
 
     /**
-     * Convert a sheet object to an XML string.
+     * Converts a sheet object to an XML string.
      * @param {object} sheet The sheet.
      * @param {string} template The XML template.
      * @returns {string} The XML string.

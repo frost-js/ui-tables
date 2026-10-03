@@ -3,7 +3,7 @@ import Heap from './heap.js';
 import Lz77Match from './lz77-match.js';
 
 /**
- * Get the Huffman codes from the code lengths.
+ * Gets the Huffman codes from the code lengths.
  * @param {Uint8Array} lengths The code lengths.
  * @returns {Uint16Array} The Huffman codes.
  */
@@ -38,7 +38,7 @@ const getCodesFromLengths = (lengths) => {
 };
 
 /**
- * Get the lengths of a Huffman code.
+ * Gets the lengths of a Huffman code.
  * @param {Uint32Array} freqs The frequency counts.
  * @param {number} limit The code length limit.
  * @returns {Uint8Array} The code lengths.
@@ -76,7 +76,7 @@ const getLengths = (freqs, limit) => {
 };
 
 /**
- * Calculate the tree symbols.
+ * Calculates the tree symbols.
  * @param {number} hLit The HLIT.
  * @param {Uint8Array} litLenLengths The literal lengths and length codes.
  * @param {number} hDist The HDIST.
@@ -169,7 +169,7 @@ const getTreeSymbols = (hLit, litLenLengths, hDist, distLengths) => {
 };
 
 /**
- * Find the optimal Huffman code.
+ * Finds the optimal Huffman code.
  * @param {Uint32Array} freqs The value frequencies.
  * @param {number} symbols The number of symbols.
  * @param {number} limit The code length limit.
@@ -286,7 +286,7 @@ export default class RawDeflate {
     #outputIndex;
 
     /**
-     * Compress the data.
+     * Compresses the data.
      * @param {Uint8Array} data The input data.
      * @param {object} options The options to create the RawDeflate with.
      * @returns {Uint8Array} The compressed data.
@@ -296,7 +296,7 @@ export default class RawDeflate {
     }
 
     /**
-     * New RawDeflate constructor.
+     * Creates a RawDeflate.
      * @param {Uint8Array} input The input data.
      * @param {object} options The options to create the RawDeflate with.
      */
@@ -317,7 +317,7 @@ export default class RawDeflate {
     }
 
     /**
-     * Compress the data.
+     * Compresses the data.
      * @returns {Uint8Array} The compressed data.
      */
     compress() {
@@ -417,7 +417,7 @@ export default class RawDeflate {
     }
 
     /**
-     * Calculate the LZ77 array.
+     * Calculates the LZ77 array.
      * @returns {Uint16Array} The LZ77 array.
      */
     #lz77() {
@@ -522,7 +522,7 @@ export default class RawDeflate {
     }
 
     /**
-     * Find the longest match from the list of matches.
+     * Finds the longest match from the list of matches.
      * @param {number} position The array position.
      * @param {Array} matchList The list of matches.
      * @returns {Lz77Match} The Lz77Match.

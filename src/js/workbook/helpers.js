@@ -14,7 +14,7 @@ export function colName(num) {
         num = Math.floor(num / 26);
     }
     return result;
-};
+}
 
 /**
  * Escapes XML text and attributes, removing characters forbidden by XML 1.0.
@@ -28,7 +28,7 @@ export function escape(string) {
     }).join('')
         .replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
         .replaceAll('"', '&quot;').replaceAll('\'', '&apos;');
-};
+}
 
 /**
  * Converts date parts to the Excel 1900 date system, including its leap-day convention.
@@ -42,8 +42,15 @@ export function escape(string) {
  */
 export function formatDate(year, month, day, hours = 0, minutes = 0, seconds = 0) {
     [year, month, day, hours, minutes, seconds] = [year, month, day, hours, minutes, seconds].map(Number);
-    if (![year, month, day, hours, minutes, seconds].every(Number.isInteger) ||
-        hours < 0 || hours > 23 || minutes < 0 || minutes > 59 || seconds < 0 || seconds > 59) {
+    if (
+        ![year, month, day, hours, minutes, seconds].every(Number.isInteger) ||
+        hours < 0 ||
+        hours > 23 ||
+        minutes < 0 ||
+        minutes > 59 ||
+        seconds < 0 ||
+        seconds > 59
+    ) {
         throw new RangeError('Invalid date or time.');
     }
     const fraction = (hours * 3600 + minutes * 60 + seconds) / 86400;
@@ -54,9 +61,15 @@ export function formatDate(year, month, day, hours = 0, minutes = 0, seconds = 0
         return 60 + fraction;
     }
     const date = new Date(Date.UTC(year, month - 1, day));
-    if (year < 1900 || year > 9999 || date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
+    if (
+        year < 1900 ||
+        year > 9999 ||
+        date.getUTCFullYear() !== year ||
+        date.getUTCMonth() !== month - 1 ||
+        date.getUTCDate() !== day
+    ) {
         throw new RangeError('Invalid date.');
     }
     const days = (date.getTime() - Date.UTC(1899, 11, 31)) / 86400000;
     return days + (days >= 60 ? 1 : 0) + fraction;
-};
+}

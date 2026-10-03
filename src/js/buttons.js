@@ -21,7 +21,7 @@ export function csv(options, { headings, rows }) {
         return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
     }).join(','));
     saveBlob(new Blob([lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' }), `${title}.csv`);
-};
+}
 
 /**
  * Downloads the displayed rows as an Excel workbook.
@@ -34,7 +34,7 @@ export function excel(options, { headings, rows }) {
     const workbook = new Workbook();
     workbook.addSheet({ header: headings, rows });
     saveBlob(workbook.create(), `${options.title || document.title}.xlsx`);
-};
+}
 
 /**
  * Opens a text-only print view and waits for its styles and fonts.
@@ -80,4 +80,4 @@ export async function print(options, table, classes) {
             win.close();
         }
     }
-};
+}

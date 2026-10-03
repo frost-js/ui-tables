@@ -27,7 +27,7 @@ const generateTable = () => {
  */
 export default class CRC32 {
     /**
-     * Get the CRC32 hash value.
+     * Gets the CRC32 hash value.
      * @param {Uint8Array} data The data to hash.
      * @param {number} [pos] The data position.
      * @param {number} [length] The data length.
@@ -38,7 +38,7 @@ export default class CRC32 {
     }
 
     /**
-     * Update the CRC32 hash value.
+     * Updates the CRC32 hash value.
      * @param {Uint8Array} data The data to hash.
      * @param {number} crc The CRC32 hash.
      * @param {number} [pos] The data position.

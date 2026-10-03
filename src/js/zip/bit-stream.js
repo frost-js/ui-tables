@@ -59,7 +59,7 @@ export default class BitStream {
     #index;
 
     /**
-     * New BitStream constructor.
+     * Creates a BitStream.
      * @param {Uint8Array} buffer The buffer to write to.
      * @param {number} [index] The index to start writing at.
      */
@@ -90,7 +90,7 @@ export default class BitStream {
     }
 
     /**
-     * Write bits to the buffer.
+     * Writes bits to the buffer.
      * @param {number} number The number to write.
      * @param {number} n The number of bits to write.
      * @param {number} [reverse] Whether to write in reverse order.

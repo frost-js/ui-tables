@@ -3,23 +3,23 @@ import $ from "@fr0st/query";
 
 //#region src/js/helpers.js
 /**
-* Build a data array from a DOM element.
+* Builds a data array from a DOM element.
 * @param {HTMLElement} element The element to parse.
 * @returns {Array} The parsed data.
 */
-function getDataFromDOM(element) {
+function getDomData(element) {
 	const tbody = $.findOne("tbody", element);
 	return $.children(tbody, "tr").map((row) => $.children(row, "td").map((cell) => $.getHtml(cell)));
 }
 /**
-* Build a heading array from a DOM element.
+* Builds a heading array from a DOM element.
 * @param {HTMLElement} element The element to parse.
 * @returns {Array} The parsed data.
 */
-function getHeadingsFromDOM(element) {
+function getDomHeadings(element) {
 	const thead = element.tHead;
 	if (!thead) return [];
-	if (thead.rows.length > 1 || [...thead.querySelectorAll("th")].some((cell) => cell.colSpan !== 1 || cell.rowSpan !== 1)) throw new RangeError("Table supports one heading row without spanning cells.");
+	if (thead.rows.length > 1 || $.find("th", thead).some((cell) => cell.colSpan !== 1 || cell.rowSpan !== 1)) throw new RangeError("Table supports one heading row without spanning cells.");
 	const row = thead.rows[0];
 	return $.children(row, "th").map((cell) => ({
 		text: $.getHtml(cell),
@@ -27,7 +27,7 @@ function getHeadingsFromDOM(element) {
 	}));
 }
 /**
-* Download a blob.
+* Downloads a blob.
 * @param {Blob} blob The blob to save.
 * @param {string} filename The filename.
 */
@@ -71,7 +71,7 @@ var generateTable = () => {
 */
 var CRC32 = class {
 	/**
-	* Get the CRC32 hash value.
+	* Gets the CRC32 hash value.
 	* @param {Uint8Array} data The data to hash.
 	* @param {number} [pos] The data position.
 	* @param {number} [length] The data length.
@@ -81,7 +81,7 @@ var CRC32 = class {
 		return this.update(data, 0, pos, length);
 	}
 	/**
-	* Update the CRC32 hash value.
+	* Updates the CRC32 hash value.
 	* @param {Uint8Array} data The data to hash.
 	* @param {number} crc The CRC32 hash.
 	* @param {number} [pos] The data position.
@@ -158,7 +158,7 @@ var BitStream = class {
 	#buffer;
 	#index;
 	/**
-	* New BitStream constructor.
+	* Creates a BitStream.
 	* @param {Uint8Array} buffer The buffer to write to.
 	* @param {number} [index] The index to start writing at.
 	*/
@@ -182,7 +182,7 @@ var BitStream = class {
 		return this.#buffer.subarray(0, index);
 	}
 	/**
-	* Write bits to the buffer.
+	* Writes bits to the buffer.
 	* @param {number} number The number to write.
 	* @param {number} n The number of bits to write.
 	* @param {number} [reverse] Whether to write in reverse order.
@@ -218,7 +218,7 @@ var BitStream = class {
 //#endregion
 //#region src/js/zip/heap.js
 /**
-* Get index of parent node.
+* Gets index of parent node.
 * @param {number} index The index.
 * @returns {number} The parent index.
 */
@@ -226,7 +226,7 @@ var getParent = (index) => {
 	return ((index - 2) / 4 | 0) * 2;
 };
 /**
-* Get index of child node.
+* Gets index of child node.
 * @param {number} index The index.
 * @returns {number} The child index.
 */
@@ -242,7 +242,7 @@ var Heap = class {
 	#buffer;
 	#length;
 	/**
-	* New Heap constructor.
+	* Creates a Heap.
 	* @param {number} [length] The size of the heap.
 	*/
 	constructor(length) {
@@ -257,7 +257,7 @@ var Heap = class {
 		return this.#length;
 	}
 	/**
-	* Pop the top value off the heap.
+	* Pops the top value off the heap.
 	* @returns {object} The top value from the heap.
 	*/
 	pop() {
@@ -287,7 +287,7 @@ var Heap = class {
 		};
 	}
 	/**
-	* Push a value onto the heap.
+	* Pushes a value onto the heap.
 	* @param {number} index The index.
 	* @param {number} value The value to push.
 	*/
@@ -482,7 +482,7 @@ var generateLengthTable = () => {
 	return lengthCodeTable;
 };
 /**
-* Get the distance code.
+* Gets the distance code.
 * @param {number} dist The distance.
 * @returns {Array} The distance code.
 */
@@ -641,7 +641,7 @@ var getDistanceCode = (dist) => {
 	}
 };
 /**
-* Get the length code.
+* Gets the length code.
 * @param {number} length The length.
 * @returns {number} The length code.
 */
@@ -657,7 +657,7 @@ var Lz77Match = class {
 	#backwardDistance;
 	#length;
 	/**
-	* New Lz77Match constructor.
+	* Creates a Lz77Match.
 	* @param {number} length The length of the match.
 	* @param {number} backwardDistance The distanch to match position.
 	*/
@@ -673,7 +673,7 @@ var Lz77Match = class {
 		return this.#length;
 	}
 	/**
-	* Get the LZ77 coded array.
+	* Gets the LZ77 coded array.
 	* @returns {Array} The LZ77 Array.
 	*/
 	toLz77Array() {
@@ -694,7 +694,7 @@ var Lz77Match = class {
 //#endregion
 //#region src/js/zip/raw-deflate.js
 /**
-* Get the Huffman codes from the code lengths.
+* Gets the Huffman codes from the code lengths.
 * @param {Uint8Array} lengths The code lengths.
 * @returns {Uint16Array} The Huffman codes.
 */
@@ -721,7 +721,7 @@ var getCodesFromLengths = (lengths) => {
 	return codes;
 };
 /**
-* Get the lengths of a Huffman code.
+* Gets the lengths of a Huffman code.
 * @param {Uint32Array} freqs The frequency counts.
 * @param {number} limit The code length limit.
 * @returns {Uint8Array} The code lengths.
@@ -745,7 +745,7 @@ var getLengths = (freqs, limit) => {
 	return length;
 };
 /**
-* Calculate the tree symbols.
+* Calculates the tree symbols.
 * @param {number} hLit The HLIT.
 * @param {Uint8Array} litLenLengths The literal lengths and length codes.
 * @param {number} hDist The HDIST.
@@ -806,7 +806,7 @@ var getTreeSymbols = (hLit, litLenLengths, hDist, distLengths) => {
 	};
 };
 /**
-* Find the optimal Huffman code.
+* Finds the optimal Huffman code.
 * @param {Uint32Array} freqs The value frequencies.
 * @param {number} symbols The number of symbols.
 * @param {number} limit The code length limit.
@@ -892,7 +892,7 @@ var RawDeflate = class {
 	#output;
 	#outputIndex;
 	/**
-	* Compress the data.
+	* Compresses the data.
 	* @param {Uint8Array} data The input data.
 	* @param {object} options The options to create the RawDeflate with.
 	* @returns {Uint8Array} The compressed data.
@@ -901,7 +901,7 @@ var RawDeflate = class {
 		return new this(data, options).compress();
 	}
 	/**
-	* New RawDeflate constructor.
+	* Creates a RawDeflate.
 	* @param {Uint8Array} input The input data.
 	* @param {object} options The options to create the RawDeflate with.
 	*/
@@ -920,7 +920,7 @@ var RawDeflate = class {
 		this.#output = /* @__PURE__ */ new Uint8Array(32768);
 	}
 	/**
-	* Compress the data.
+	* Compresses the data.
 	* @returns {Uint8Array} The compressed data.
 	*/
 	compress() {
@@ -1003,7 +1003,7 @@ var RawDeflate = class {
 		return this.#output;
 	}
 	/**
-	* Calculate the LZ77 array.
+	* Calculates the LZ77 array.
 	* @returns {Uint16Array} The LZ77 array.
 	*/
 	#lz77() {
@@ -1071,7 +1071,7 @@ var RawDeflate = class {
 		return lz77buf.subarray(0, pos);
 	}
 	/**
-	* Find the longest match from the list of matches.
+	* Finds the longest match from the list of matches.
 	* @param {number} position The array position.
 	* @param {Array} matchList The list of matches.
 	* @returns {Lz77Match} The Lz77Match.
@@ -1110,7 +1110,7 @@ var encode = (string) => {
 	return encoder.encode(string);
 };
 /**
-* Get the byte length of a string.
+* Gets the byte length of a string.
 * @param {string} string The string.
 * @returns {number} The byte length.
 */
@@ -1149,7 +1149,7 @@ var Zip = class {
 	#offset;
 	#type;
 	/**
-	* New Zip constructor.
+	* Creates a Zip.
 	* @param {string} [type=octet/stream] The file type.
 	*/
 	constructor(type = "octet/stream") {
@@ -1160,7 +1160,7 @@ var Zip = class {
 		this.#entries = 0;
 	}
 	/**
-	* Add a file to the Zip.
+	* Adds a file to the Zip.
 	* @param {string} filename The filename.
 	* @param {string} data The data.
 	*/
@@ -1222,7 +1222,7 @@ var Zip = class {
 		this.#entries++;
 	}
 	/**
-	* Create the zip file.
+	* Creates the zip file.
 	* @returns {Blob} The zip file.
 	*/
 	zip() {
@@ -1338,7 +1338,7 @@ var Workbook = class {
 	#stringCount = 0;
 	#sValues;
 	/**
-	* New Workbook constructor.
+	* Creates a Workbook.
 	*/
 	constructor() {
 		this.#current = 0;
@@ -1347,7 +1347,7 @@ var Workbook = class {
 		this.#sValues = [];
 	}
 	/**
-	* Add a sheet to the Workbook.
+	* Adds a sheet to the Workbook.
 	* @param {object} data The sheet data.
 	* @param {string} [name] The name of the sheet.
 	*/
@@ -1367,7 +1367,7 @@ var Workbook = class {
 		});
 	}
 	/**
-	* Create an xlsx file.
+	* Creates an xlsx file.
 	* @returns {Blob} The xlsx file.
 	*/
 	create() {
@@ -1473,7 +1473,7 @@ var Workbook = class {
 		return `<c r="${reference}"${type ? ` t="${type}"` : ""}${style !== null ? ` s="${style}"` : ""}>` + (type === "inlineStr" ? `<is><t xml:space="preserve">${content}</t></is>` : `<v>${content}</v>`) + "</c>";
 	}
 	/**
-	* Convert a sheet object to an XML string.
+	* Converts a sheet object to an XML string.
 	* @param {object} sheet The sheet.
 	* @param {string} template The XML template.
 	* @returns {string} The XML string.
@@ -1820,7 +1820,7 @@ var Table = class extends BaseComponent {
 	#total;
 	#totalPages;
 	/**
-	* New Table constructor.
+	* Creates a Table.
 	* @param {HTMLTableElement} node The input table.
 	* @param {TableOptions} [options] The component options.
 	*/
@@ -1839,7 +1839,7 @@ var Table = class extends BaseComponent {
 		if (configured.columns !== null && !Array.isArray(configured.columns)) throw new TypeError("Columns must be an array.");
 		if (typeof configured.sanitize !== "function") throw new TypeError("sanitize must be a function.");
 		if (configured.lengths.some((length) => !Number.isSafeInteger(Number(length)) || Number(length) <= 0)) throw new RangeError("Page lengths must be positive integers.");
-		const headings = getHeadingsFromDOM(node);
+		const headings = getDomHeadings(node);
 		if (configured.columns && headings.length && configured.columns.length !== headings.length) throw new RangeError("Column definitions must match the heading count.");
 		if (configured.paging && (!Number.isSafeInteger(Number(configured.length)) || Number(configured.length) <= 0)) throw new RangeError("Page length must be a positive integer.");
 		super(node, options);
@@ -1861,7 +1861,7 @@ var Table = class extends BaseComponent {
 		this.#limit = this.options.paging ? Number(this.options.length) : Infinity;
 		try {
 			if (!this.options.getResults) {
-				this.#data = this.options.data ?? getDataFromDOM(node);
+				this.#data = this.options.data ?? getDomData(node);
 				this.#validateRows(this.#data);
 				this.#data = this.#data.slice();
 			}
@@ -1908,7 +1908,7 @@ var Table = class extends BaseComponent {
 		}
 	}
 	/**
-	* Add a row to the data array.
+	* Adds a row to the data array.
 	* @param {Array|object} row The row to add.
 	*/
 	addRow(row) {
@@ -1918,7 +1918,7 @@ var Table = class extends BaseComponent {
 		this.#mutated(1);
 	}
 	/**
-	* Clear all rows from the data array.
+	* Clears all rows from the data array.
 	*/
 	clear() {
 		if (!this.node) return;
@@ -1937,9 +1937,7 @@ var Table = class extends BaseComponent {
 		this.loading({ show: false });
 		if (this.node) this.#renderResults();
 	}
-	/**
-	* Dispose the Table.
-	*/
+	/** @inheritdoc */
 	dispose() {
 		if (!this.node) return;
 		const node = this.node;
@@ -1950,13 +1948,13 @@ var Table = class extends BaseComponent {
 		const pending = this.#pending;
 		this.#pending = null;
 		super.dispose();
-		if (this.#id) node.removeAttribute("id");
+		if (this.#id) $.removeAttribute(node, "id");
 		for (const [attribute, value] of [
 			["class", this.#originalClass],
 			["aria-describedby", this.#originalDescription],
 			["aria-busy", this.#originalBusy]
-		]) if (value === null || value === void 0) node.removeAttribute(attribute);
-		else node.setAttribute(attribute, value);
+		]) if (value === null || value === void 0) $.removeAttribute(node, attribute);
+		else $.setAttribute(node, { [attribute]: value });
 		if (this.#container) {
 			this.#container.before(node);
 			$.remove(this.#container);
@@ -1985,7 +1983,7 @@ var Table = class extends BaseComponent {
 		} catch {}
 	}
 	/**
-	* Get values for a single column.
+	* Gets values for a single column.
 	* @param {string} key The key to retrieve.
 	* @param {object} [options] Options for getting the column.
 	* @param {boolean} [options.modified=true] Whether to use modified indexes.
@@ -1995,7 +1993,7 @@ var Table = class extends BaseComponent {
 		return modified ? this.#rowIndexes.map((rowIndex) => $._getDot(this.#data[rowIndex], `${key}`)) : this.#data.map((row) => $._getDot(row, `${key}`));
 	}
 	/**
-	* Get values for a single row.
+	* Gets values for a single row.
 	* @param {number} index The row index to retrieve.
 	* @param {object} [options] Options for getting the row index.
 	* @param {boolean} [options.modified=true] Whether to use modified indexes.
@@ -2006,7 +2004,7 @@ var Table = class extends BaseComponent {
 		return $._isPlainObject(this.#data[rowIndex]) ? { ...this.#data[rowIndex] } : [...this.#data[rowIndex]];
 	}
 	/**
-	* Get a single value from a row.
+	* Gets a single value from a row.
 	* @param {number} index The row index to retrieve.
 	* @param {string} key The key to retrieve.
 	* @param {object} [options] Options for getting the row index.
@@ -2018,7 +2016,7 @@ var Table = class extends BaseComponent {
 		return $._getDot(this.#data[rowIndex], `${key}`);
 	}
 	/**
-	* Toggle a column as hidden.
+	* Toggles a column as hidden.
 	* @param {number} index The column index.
 	*/
 	hideColumn(index) {
@@ -2027,7 +2025,7 @@ var Table = class extends BaseComponent {
 		this.#renderResults();
 	}
 	/**
-	* Get the Table information.
+	* Gets the Table information.
 	* @returns {object} The Table information.
 	*/
 	info() {
@@ -2039,7 +2037,7 @@ var Table = class extends BaseComponent {
 		};
 	}
 	/**
-	* Set the Table length.
+	* Sets the Table length.
 	* @param {number} length The length.
 	*/
 	length(length) {
@@ -2053,13 +2051,13 @@ var Table = class extends BaseComponent {
 		if (this.node) this.#getData();
 	}
 	/**
-	* Trigger the loading indicator.
+	* Triggers the loading indicator.
 	* @param {object} [options] Options for the loading indicator.
 	* @param {boolean} [options.show=true] Whether to show the loading indicator.
 	*/
 	loading({ show = true } = {}) {
 		if (!this.node) return;
-		this.node.setAttribute("aria-busy", String(show));
+		$.setAttribute(this.node, { "aria-busy": String(show) });
 		if (show) {
 			$.show(this.#loader);
 			$.triggerEvent(this.node, "processing.ui.table");
@@ -2069,7 +2067,7 @@ var Table = class extends BaseComponent {
 		}
 	}
 	/**
-	* Set the Table order data.
+	* Sets the Table order data.
 	* @param {Array} order The order data.
 	*/
 	order(order) {
@@ -2079,7 +2077,7 @@ var Table = class extends BaseComponent {
 		if (this.node) this.#getData();
 	}
 	/**
-	* Set the Table page.
+	* Sets the Table page.
 	* @param {number} page The one-based page number.
 	*/
 	page(page) {
@@ -2092,13 +2090,13 @@ var Table = class extends BaseComponent {
 		if (this.node) this.#getData();
 	}
 	/**
-	* Redraw the Table.
+	* Redraws the Table.
 	*/
 	refresh() {
 		this.#renderResults();
 	}
 	/**
-	* Reload the Table data.
+	* Reloads the Table data.
 	* @param {object} [options] Options for reloading the data
 	* @param {boolean} [options.reset=false] Whether to reset the offset.
 	*/
@@ -2108,7 +2106,7 @@ var Table = class extends BaseComponent {
 		this.#getData();
 	}
 	/**
-	* Remove a row from the data array.
+	* Removes a row from the data array.
 	* @param {number} index The row index to remove.
 	* @param {object} [options] Options for getting the row index.
 	* @param {boolean} [options.modified=true] Whether to use modified indexes.
@@ -2119,7 +2117,7 @@ var Table = class extends BaseComponent {
 		this.#mutated(-1);
 	}
 	/**
-	* Search the Table for a term.
+	* Searches the Table for a term.
 	* @param {string} term The term to search for.
 	*/
 	search(term) {
@@ -2132,7 +2130,7 @@ var Table = class extends BaseComponent {
 		if (this.node) this.#getData();
 	}
 	/**
-	* Set values for a single column.
+	* Sets values for a single column.
 	* @param {string} key The key to set.
 	* @param {Array} column The column values.
 	* @param {object} [options] Options for getting the row index.
@@ -2145,7 +2143,7 @@ var Table = class extends BaseComponent {
 		this.#mutated();
 	}
 	/**
-	* Set values for a single row.
+	* Sets values for a single row.
 	* @param {number} index The row index to set.
 	* @param {Array|object} row The row values.
 	* @param {object} [options] Options for getting the row index.
@@ -2158,7 +2156,7 @@ var Table = class extends BaseComponent {
 		this.#mutated();
 	}
 	/**
-	* Set a single value for a row.
+	* Sets a single value for a row.
 	* @param {number} index The row index to set.
 	* @param {string} key The key to set.
 	* @param {*} value The value to set.
@@ -2171,7 +2169,7 @@ var Table = class extends BaseComponent {
 		this.#mutated();
 	}
 	/**
-	* Toggle a column as visible.
+	* Toggles a column as visible.
 	* @param {number} index The column index.
 	*/
 	showColumn(index) {
@@ -2180,7 +2178,7 @@ var Table = class extends BaseComponent {
 		this.#renderResults();
 	}
 	/**
-	* Render a table for specific columns.
+	* Renders a table for specific columns.
 	* @param {Array} columns The columns to render.
 	* @returns {HTMLElement} The table element.
 	*/
@@ -2222,10 +2220,10 @@ var Table = class extends BaseComponent {
 		return version;
 	}
 	/**
-	* Attach events for the Table.
+	* Attaches events for the Table.
 	*/
 	#events() {
-		if (this.#lengthSelect) $.addEvent(this.#lengthSelect, "change.ui.table", (_) => {
+		if (this.#lengthSelect) $.addEvent(this.#lengthSelect, "change.ui.table", () => {
 			const length = $.getValue(this.#lengthSelect);
 			this.length(length);
 		});
@@ -2236,45 +2234,45 @@ var Table = class extends BaseComponent {
 			$.addEvent(this.#searchInput, "input.ui.table", this.#searchHandler);
 		}
 		if (this.options.ordering) {
-			const handleSort = (e) => {
-				const index = Number($.getDataset(e.currentTarget, "uiIndex"));
+			const handleSort = (event) => {
+				const index = Number($.getDataset(event.currentTarget, "uiIndex"));
 				if (!this.#columns[index].orderable) return;
-				e.preventDefault();
+				event.preventDefault();
 				const defaultDir = this.#columns[index].dir;
 				let currentDir = null;
 				for (const [col, dir] of this.#order) {
-					if (col != index) continue;
+					if (col !== index) continue;
 					currentDir = dir;
 					break;
 				}
 				let nextDir = defaultDir;
 				if (currentDir === defaultDir) nextDir = defaultDir === "asc" ? "desc" : "asc";
 				let order;
-				if (e.shiftKey) {
+				if (event.shiftKey) {
 					if (!currentDir) order = [...this.#order, [index, nextDir]];
 					else if (currentDir === defaultDir) order = this.#order.map(([col, dir]) => {
-						if (col == index) dir = nextDir;
+						if (col === index) dir = nextDir;
 						return [col, dir];
 					});
 					else order = this.#order.filter(([col]) => {
-						return col != index;
+						return col !== index;
 					});
 				} else order = [[index, nextDir]];
 				this.order(order);
 			};
 			$.addEventDelegate(this.#theadRow, "click.ui.table", "th", handleSort);
-			$.addEventDelegate(this.#theadRow, "keydown.ui.table", "th", (e) => {
-				switch (e.code) {
+			$.addEventDelegate(this.#theadRow, "keydown.ui.table", "th", (event) => {
+				switch (event.code) {
 					case "Enter":
 					case "NumpadEnter":
-					case "Space": handleSort(e);
+					case "Space": handleSort(event);
 				}
 			});
 		}
-		if (this.#pagination) $.addEventDelegate(this.#pagination, "click.ui.table", "[data-ui-page]", (e) => {
-			e.preventDefault();
-			if (e.currentTarget.disabled) return;
-			let page = $.getDataset(e.currentTarget, "uiPage");
+		if (this.#pagination) $.addEventDelegate(this.#pagination, "click.ui.table", "[data-ui-page]", (event) => {
+			event.preventDefault();
+			if (event.currentTarget.disabled) return;
+			let page = $.getDataset(event.currentTarget, "uiPage");
 			switch (page) {
 				case "first":
 					page = 1;
@@ -2348,7 +2346,7 @@ var Table = class extends BaseComponent {
 		if (active()) this.#renderResults();
 	}
 	/**
-	* Initialize preloaded get data.
+	* Initializes preloaded get data.
 	*/
 	#getDataInit() {
 		this.#getData = () => {
@@ -2373,7 +2371,7 @@ var Table = class extends BaseComponent {
 		};
 	}
 	/**
-	* Get headings for specific columns.
+	* Gets headings for specific columns.
 	* @param {Array} columns The columns to get.
 	* @returns {Array} The headings.
 	*/
@@ -2381,12 +2379,12 @@ var Table = class extends BaseComponent {
 		return columns.map((index) => {
 			this.#validateColumn(index);
 			const container = document.createElement("div");
-			container.innerHTML = $.sanitize(String(this.#headings[index].text));
-			return container.textContent;
+			$.setHtml(container, $.sanitize(String(this.#headings[index].text)));
+			return $.getText(container);
 		});
 	}
 	/**
-	* Get an index (optionally modified).
+	* Gets an index (optionally modified).
 	* @param {number} index The index to get.
 	* @param {object} [options] Options for getting the row index.
 	* @param {boolean} [options.modified=true] Whether to use modified indexes.
@@ -2398,7 +2396,7 @@ var Table = class extends BaseComponent {
 		return modified ? this.#rowIndexes[index] : index;
 	}
 	/**
-	* Get real column ordering data.
+	* Gets real column ordering data.
 	* @returns {Array} The column ordering data.
 	*/
 	#getOrder() {
@@ -2410,7 +2408,7 @@ var Table = class extends BaseComponent {
 		});
 	}
 	/**
-	* Get results for specific columns.
+	* Gets results for specific columns.
 	* @param {Array} columns The columns to get.
 	* @returns {Array} The results.
 	*/
@@ -2419,7 +2417,7 @@ var Table = class extends BaseComponent {
 		return this.#results.map((row) => columns.map((index) => $._getDot(row, String(this.#columns[index].data))));
 	}
 	/**
-	* Initialize get data from callback.
+	* Initializes get data from callback.
 	*/
 	#getResultsInit() {
 		this.#loadResults = $._debounce((version) => this.#fetchResults(version), this.options.debounce);
@@ -2432,7 +2430,7 @@ var Table = class extends BaseComponent {
 		};
 	}
 	/**
-	* Get the visible columns.
+	* Gets the visible columns.
 	* @returns {Array} The visible columns.
 	*/
 	#getVisibleColumns() {
@@ -2479,7 +2477,7 @@ var Table = class extends BaseComponent {
 		});
 	}
 	/**
-	* Refresh the results.
+	* Refreshes the results.
 	*/
 	#refreshResults() {
 		this.#page = this.options.paging ? 1 + this.#offset / this.#limit : 1;
@@ -2488,7 +2486,7 @@ var Table = class extends BaseComponent {
 		this.#results = this.#rowIndexes.map((index) => this.#data[index]);
 	}
 	/**
-	* Render the Table.
+	* Renders the Table.
 	*/
 	#render() {
 		this.#original = document.createDocumentFragment();
@@ -2534,7 +2532,7 @@ var Table = class extends BaseComponent {
 		if (this.#infoContainer) $.setAttribute(this.node, { "aria-describedby": [this.#originalDescription, this.#infoContainer.id].filter(Boolean).join(" ") });
 	}
 	/**
-	* Render the table buttons.
+	* Renders the table buttons.
 	* @param {HTMLElement} container The container to render in.
 	*/
 	#renderButtons(container) {
@@ -2548,8 +2546,8 @@ var Table = class extends BaseComponent {
 					"aria-controls": $.getAttribute(this.node, "id")
 				}
 			});
-			$.addEvent(btn, "click.ui.table", (e) => {
-				e.preventDefault();
+			$.addEvent(btn, "click.ui.table", (event) => {
+				event.preventDefault();
 				if (button.callback) button.callback.bind(this)();
 				else if (Object.hasOwn(this.constructor.buttons, button.type)) this.constructor.buttons[button.type].bind(this)(button);
 			});
@@ -2558,7 +2556,7 @@ var Table = class extends BaseComponent {
 		$.append(container, btnGroup);
 	}
 	/**
-	* Render the table headings.
+	* Renders the table headings.
 	*/
 	#renderHeadings() {
 		const version = this.#drawVersion;
@@ -2598,7 +2596,7 @@ var Table = class extends BaseComponent {
 			if (!this.options.ordering || !this.#columns[index].orderable) continue;
 			let dir;
 			for (const order of this.#order) {
-				if (order[0] != index) continue;
+				if (order[0] !== index) continue;
 				dir = order[1];
 				break;
 			}
@@ -2623,7 +2621,7 @@ var Table = class extends BaseComponent {
 		}
 	}
 	/**
-	* Render the table info.
+	* Renders the table info.
 	*/
 	#renderInfo() {
 		const version = this.#drawVersion;
@@ -2644,7 +2642,7 @@ var Table = class extends BaseComponent {
 		$.append(this.#infoContainer, text);
 	}
 	/**
-	* Render the table info container in a container.
+	* Renders the table info container in a container.
 	* @param {HTMLElement} container The container to render in.
 	*/
 	#renderInfoContainer(container) {
@@ -2661,7 +2659,7 @@ var Table = class extends BaseComponent {
 		$.append(container, this.#infoContainer);
 	}
 	/**
-	* Render a layout row in a container.
+	* Renders a layout row in a container.
 	* @param {Array} columns The columns to render.
 	* @param {string} rowClass The row class.
 	*/
@@ -2681,7 +2679,7 @@ var Table = class extends BaseComponent {
 		$.append(this.#container, row);
 	}
 	/**
-	* Render the length select in a container.
+	* Renders the length select in a container.
 	* @param {HTMLElement} container The container to render in.
 	*/
 	#renderLengthSelect(container) {
@@ -2715,7 +2713,7 @@ var Table = class extends BaseComponent {
 		$.append(container, lengthContainer);
 	}
 	/**
-	* Render a pagination item.
+	* Renders a pagination item.
 	* @param {object} options Options for rendering the pagnination item.
 	* @returns {HTMLElement} The pagnination item.
 	*/
@@ -2736,12 +2734,12 @@ var Table = class extends BaseComponent {
 		return container;
 	}
 	/**
-	* Render the pagination.
+	* Renders the pagination.
 	*/
 	#renderPagination() {
 		const setDisabled = (container, disabled) => {
 			const link = $.findOne(":scope > [data-ui-page]", container);
-			link.disabled = disabled;
+			$.setProperty(link, { disabled });
 			if (disabled) {
 				$.addClass(container, this.constructor.classes.pageDisabled);
 				$.setAttribute(link, {
@@ -2790,10 +2788,10 @@ var Table = class extends BaseComponent {
 			});
 			$.append(this.#pagination, lastPage);
 		}
-		setDisabled(firstPage, this.#page == 1);
-		setDisabled(prevPage, this.#page == 1);
-		setDisabled(nextPage, this.#page == this.#totalPages);
-		setDisabled(lastPage, this.#page == this.#totalPages);
+		setDisabled(firstPage, this.#page === 1);
+		setDisabled(prevPage, this.#page === 1);
+		setDisabled(nextPage, this.#page === this.#totalPages);
+		setDisabled(lastPage, this.#page === this.#totalPages);
 		let startPage = Math.max(this.#page - 5, 1);
 		let endPage = Math.min(this.#page + 5, this.#totalPages);
 		while (endPage - startPage > 4) if (this.#page - startPage > endPage - this.#page) startPage++;
@@ -2814,18 +2812,18 @@ var Table = class extends BaseComponent {
 				$.insertAfter(pageItem, lastLink);
 			}
 			const pageButton = $.findOne("button", pageItem);
-			if (current == this.#page) {
-				pageButton.setAttribute("aria-current", "page");
+			if (current === this.#page) {
+				$.setAttribute(pageButton, { "aria-current": "page" });
 				$.addClass(pageItem, this.constructor.classes.pageActive);
 			} else {
-				pageButton.removeAttribute("aria-current");
+				$.removeAttribute(pageButton, "aria-current");
 				$.removeClass(pageItem, this.constructor.classes.pageActive);
 			}
 			lastLink = pageItem;
 		}
 	}
 	/**
-	* Render the pagination container in a container.
+	* Renders the pagination container in a container.
 	* @param {HTMLElement} container The container to render in.
 	*/
 	#renderPaginationContainer(container) {
@@ -2836,7 +2834,7 @@ var Table = class extends BaseComponent {
 		$.append(paginationContainer, this.#pagination);
 	}
 	/**
-	* Render the table results.
+	* Renders the table results.
 	*/
 	#renderResults() {
 		if (!this.node) return;
@@ -2879,7 +2877,7 @@ var Table = class extends BaseComponent {
 		if (active()) $.triggerEvent(this.node, "draw.ui.table");
 	}
 	/**
-	* Render a result row.
+	* Renders a result row.
 	* @param {Array|object} data The row data.
 	* @param {number} rowIndex The row index.
 	* @returns {HTMLElement} The table row.
@@ -2905,7 +2903,7 @@ var Table = class extends BaseComponent {
 		return row;
 	}
 	/**
-	* Render the search in a container.
+	* Renders the search in a container.
 	* @param {HTMLElement} container The container to render in.
 	*/
 	#renderSearch(container) {
@@ -2933,7 +2931,7 @@ var Table = class extends BaseComponent {
 	*/
 	#syncLength() {
 		if (!this.#lengthSelect) return;
-		if (![...this.#lengthSelect.options].some((option) => Number(option.value) === this.#limit)) $.append(this.#lengthSelect, $.create("option", {
+		if (![...this.#lengthSelect.options].some((option) => Number($.getValue(option)) === this.#limit)) $.append(this.#lengthSelect, $.create("option", {
 			value: this.#limit,
 			text: this.#limit
 		}));

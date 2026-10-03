@@ -1,7 +1,7 @@
 import $ from '@fr0st/query';
 import { BaseComponent, generateId, getDataset } from '@fr0st/ui';
 import { csv, excel, print } from './buttons.js';
-import { getDataFromDOM, getHeadingsFromDOM } from './helpers.js';
+import { getDomData, getDomHeadings } from './helpers.js';
 
 /** @typedef {Array<*>|Record<string, *>} TableRow */
 /** @typedef {[number, 'asc'|'desc']} TableOrder */
@@ -237,7 +237,7 @@ export default class Table extends BaseComponent {
     #totalPages;
 
     /**
-     * New Table constructor.
+     * Creates a Table.
      * @param {HTMLTableElement} node The input table.
      * @param {TableOptions} [options] The component options.
      */
@@ -260,11 +260,14 @@ export default class Table extends BaseComponent {
         if (configured.lengths.some((length) => !Number.isSafeInteger(Number(length)) || Number(length) <= 0)) {
             throw new RangeError('Page lengths must be positive integers.');
         }
-        const headings = getHeadingsFromDOM(node);
+        const headings = getDomHeadings(node);
         if (configured.columns && headings.length && configured.columns.length !== headings.length) {
             throw new RangeError('Column definitions must match the heading count.');
         }
-        if (configured.paging && (!Number.isSafeInteger(Number(configured.length)) || Number(configured.length) <= 0)) {
+        if (
+            configured.paging &&
+            (!Number.isSafeInteger(Number(configured.length)) || Number(configured.length) <= 0)
+        ) {
             throw new RangeError('Page length must be a positive integer.');
         }
         super(node, options);
@@ -285,7 +288,7 @@ export default class Table extends BaseComponent {
         this.#limit = this.options.paging ? Number(this.options.length) : Infinity;
         try {
             if (!this.options.getResults) {
-                this.#data = this.options.data ?? getDataFromDOM(node);
+                this.#data = this.options.data ?? getDomData(node);
                 this.#validateRows(this.#data);
                 this.#data = this.#data.slice();
             }
@@ -335,7 +338,7 @@ export default class Table extends BaseComponent {
     }
 
     /**
-     * Add a row to the data array.
+     * Adds a row to the data array.
      * @param {Array|object} row The row to add.
      */
     addRow(row) {
@@ -348,7 +351,7 @@ export default class Table extends BaseComponent {
     }
 
     /**
-     * Clear all rows from the data array.
+     * Clears all rows from the data array.
      */
     clear() {
         if (!this.node) {
@@ -376,9 +379,7 @@ export default class Table extends BaseComponent {
         }
     }
 
-    /**
-     * Dispose the Table.
-     */
+    /** @inheritdoc */
     dispose() {
         if (!this.node) {
             return;
@@ -392,7 +393,7 @@ export default class Table extends BaseComponent {
         this.#pending = null;
         super.dispose();
         if (this.#id) {
-            node.removeAttribute('id');
+            $.removeAttribute(node, 'id');
         }
         for (const [attribute, value] of [
             ['class', this.#originalClass],
@@ -400,9 +401,9 @@ export default class Table extends BaseComponent {
             ['aria-busy', this.#originalBusy],
         ]) {
             if (value === null || value === undefined) {
-                node.removeAttribute(attribute);
+                $.removeAttribute(node, attribute);
             } else {
-                node.setAttribute(attribute, value);
+                $.setAttribute(node, { [attribute]: value });
             }
         }
         if (this.#container) {
@@ -439,7 +440,7 @@ export default class Table extends BaseComponent {
     }
 
     /**
-     * Get values for a single column.
+     * Gets values for a single column.
      * @param {string} key The key to retrieve.
      * @param {object} [options] Options for getting the column.
      * @param {boolean} [options.modified=true] Whether to use modified indexes.
@@ -452,7 +453,7 @@ export default class Table extends BaseComponent {
     }
 
     /**
-     * Get values for a single row.
+     * Gets values for a single row.
      * @param {number} index The row index to retrieve.
      * @param {object} [options] Options for getting the row index.
      * @param {boolean} [options.modified=true] Whether to use modified indexes.
@@ -467,7 +468,7 @@ export default class Table extends BaseComponent {
     }
 
     /**
-     * Get a single value from a row.
+     * Gets a single value from a row.
      * @param {number} index The row index to retrieve.
      * @param {string} key The key to retrieve.
      * @param {object} [options] Options for getting the row index.
@@ -481,7 +482,7 @@ export default class Table extends BaseComponent {
     }
 
     /**
-     * Toggle a column as hidden.
+     * Toggles a column as hidden.
      * @param {number} index The column index.
      */
     hideColumn(index) {
@@ -491,7 +492,7 @@ export default class Table extends BaseComponent {
     }
 
     /**
-     * Get the Table information.
+     * Gets the Table information.
      * @returns {object} The Table information.
      */
     info() {
@@ -504,7 +505,7 @@ export default class Table extends BaseComponent {
     }
 
     /**
-     * Set the Table length.
+     * Sets the Table length.
      * @param {number} length The length.
      */
     length(length) {
@@ -525,7 +526,7 @@ export default class Table extends BaseComponent {
     }
 
     /**
-     * Trigger the loading indicator.
+     * Triggers the loading indicator.
      * @param {object} [options] Options for the loading indicator.
      * @param {boolean} [options.show=true] Whether to show the loading indicator.
      */
@@ -533,7 +534,7 @@ export default class Table extends BaseComponent {
         if (!this.node) {
             return;
         }
-        this.node.setAttribute('aria-busy', String(show));
+        $.setAttribute(this.node, { 'aria-busy': String(show) });
         if (show) {
             $.show(this.#loader);
             $.triggerEvent(this.node, 'processing.ui.table');
@@ -544,7 +545,7 @@ export default class Table extends BaseComponent {
     }
 
     /**
-     * Set the Table order data.
+     * Sets the Table order data.
      * @param {Array} order The order data.
      */
     order(order) {
@@ -559,7 +560,7 @@ export default class Table extends BaseComponent {
     }
 
     /**
-     * Set the Table page.
+     * Sets the Table page.
      * @param {number} page The one-based page number.
      */
     page(page) {
@@ -579,14 +580,14 @@ export default class Table extends BaseComponent {
     }
 
     /**
-     * Redraw the Table.
+     * Redraws the Table.
      */
     refresh() {
         this.#renderResults();
     }
 
     /**
-     * Reload the Table data.
+     * Reloads the Table data.
      * @param {object} [options] Options for reloading the data
      * @param {boolean} [options.reset=false] Whether to reset the offset.
      */
@@ -602,7 +603,7 @@ export default class Table extends BaseComponent {
     }
 
     /**
-     * Remove a row from the data array.
+     * Removes a row from the data array.
      * @param {number} index The row index to remove.
      * @param {object} [options] Options for getting the row index.
      * @param {boolean} [options.modified=true] Whether to use modified indexes.
@@ -614,7 +615,7 @@ export default class Table extends BaseComponent {
     }
 
     /**
-     * Search the Table for a term.
+     * Searches the Table for a term.
      * @param {string} term The term to search for.
      */
     search(term) {
@@ -634,7 +635,7 @@ export default class Table extends BaseComponent {
     }
 
     /**
-     * Set values for a single column.
+     * Sets values for a single column.
      * @param {string} key The key to set.
      * @param {Array} column The column values.
      * @param {object} [options] Options for getting the row index.
@@ -652,7 +653,7 @@ export default class Table extends BaseComponent {
     }
 
     /**
-     * Set values for a single row.
+     * Sets values for a single row.
      * @param {number} index The row index to set.
      * @param {Array|object} row The row values.
      * @param {object} [options] Options for getting the row index.
@@ -666,7 +667,7 @@ export default class Table extends BaseComponent {
     }
 
     /**
-     * Set a single value for a row.
+     * Sets a single value for a row.
      * @param {number} index The row index to set.
      * @param {string} key The key to set.
      * @param {*} value The value to set.
@@ -680,7 +681,7 @@ export default class Table extends BaseComponent {
     }
 
     /**
-     * Toggle a column as visible.
+     * Toggles a column as visible.
      * @param {number} index The column index.
      */
     showColumn(index) {
@@ -690,7 +691,7 @@ export default class Table extends BaseComponent {
     }
 
     /**
-     * Render a table for specific columns.
+     * Renders a table for specific columns.
      * @param {Array} columns The columns to render.
      * @returns {HTMLElement} The table element.
      */
@@ -747,11 +748,11 @@ export default class Table extends BaseComponent {
     }
 
     /**
-     * Attach events for the Table.
+     * Attaches events for the Table.
      */
     #events() {
         if (this.#lengthSelect) {
-            $.addEvent(this.#lengthSelect, 'change.ui.table', (_) => {
+            $.addEvent(this.#lengthSelect, 'change.ui.table', () => {
                 const length = $.getValue(this.#lengthSelect);
                 this.length(length);
             });
@@ -767,20 +768,20 @@ export default class Table extends BaseComponent {
         }
 
         if (this.options.ordering) {
-            const handleSort = (e) => {
-                const index = Number($.getDataset(e.currentTarget, 'uiIndex'));
+            const handleSort = (event) => {
+                const index = Number($.getDataset(event.currentTarget, 'uiIndex'));
 
                 if (!this.#columns[index].orderable) {
                     return;
                 }
 
-                e.preventDefault();
+                event.preventDefault();
 
                 const defaultDir = this.#columns[index].dir;
                 let currentDir = null;
 
                 for (const [col, dir] of this.#order) {
-                    if (col != index) {
+                    if (col !== index) {
                         continue;
                     }
 
@@ -796,12 +797,12 @@ export default class Table extends BaseComponent {
                 }
 
                 let order;
-                if (e.shiftKey) {
+                if (event.shiftKey) {
                     if (!currentDir) {
                         order = [...this.#order, [index, nextDir]];
                     } else if (currentDir === defaultDir) {
                         order = this.#order.map(([col, dir]) => {
-                            if (col == index) {
+                            if (col === index) {
                                 dir = nextDir;
                             }
 
@@ -809,7 +810,7 @@ export default class Table extends BaseComponent {
                         });
                     } else {
                         order = this.#order.filter(([col]) => {
-                            return col != index;
+                            return col !== index;
                         });
                     }
                 } else {
@@ -821,25 +822,25 @@ export default class Table extends BaseComponent {
 
             $.addEventDelegate(this.#theadRow, 'click.ui.table', 'th', handleSort);
 
-            $.addEventDelegate(this.#theadRow, 'keydown.ui.table', 'th', (e) => {
-                switch (e.code) {
+            $.addEventDelegate(this.#theadRow, 'keydown.ui.table', 'th', (event) => {
+                switch (event.code) {
                     case 'Enter':
                     case 'NumpadEnter':
                     case 'Space':
-                        handleSort(e);
+                        handleSort(event);
                         break;
                 }
             });
         }
 
         if (this.#pagination) {
-            $.addEventDelegate(this.#pagination, 'click.ui.table', '[data-ui-page]', (e) => {
-                e.preventDefault();
-                if (e.currentTarget.disabled) {
+            $.addEventDelegate(this.#pagination, 'click.ui.table', '[data-ui-page]', (event) => {
+                event.preventDefault();
+                if (event.currentTarget.disabled) {
                     return;
                 }
 
-                let page = $.getDataset(e.currentTarget, 'uiPage');
+                let page = $.getDataset(event.currentTarget, 'uiPage');
 
                 switch (page) {
                     case 'first':
@@ -900,10 +901,15 @@ export default class Table extends BaseComponent {
                 return;
             }
             this.#validateRows(response?.results);
-            if (!Number.isSafeInteger(response.total) || !Number.isSafeInteger(response.filtered) ||
-                response.total < 0 || response.filtered < 0 || response.filtered > response.total ||
+            if (
+                !Number.isSafeInteger(response.total) ||
+                !Number.isSafeInteger(response.filtered) ||
+                response.total < 0 ||
+                response.filtered < 0 ||
+                response.filtered > response.total ||
                 response.results.length > response.filtered ||
-                (this.options.paging && response.results.length > this.#limit)) {
+                (this.options.paging && response.results.length > this.#limit)
+            ) {
                 throw new TypeError('Remote counts and rows must describe a valid result page.');
             }
         } catch (error) {
@@ -933,7 +939,7 @@ export default class Table extends BaseComponent {
     }
 
     /**
-     * Initialize preloaded get data.
+     * Initializes preloaded get data.
      */
     #getDataInit() {
         this.#getData = () => {
@@ -965,7 +971,7 @@ export default class Table extends BaseComponent {
     }
 
     /**
-     * Get headings for specific columns.
+     * Gets headings for specific columns.
      * @param {Array} columns The columns to get.
      * @returns {Array} The headings.
      */
@@ -973,13 +979,13 @@ export default class Table extends BaseComponent {
         return columns.map((index) => {
             this.#validateColumn(index);
             const container = document.createElement('div');
-            container.innerHTML = $.sanitize(String(this.#headings[index].text));
-            return container.textContent;
+            $.setHtml(container, $.sanitize(String(this.#headings[index].text)));
+            return $.getText(container);
         });
     }
 
     /**
-     * Get an index (optionally modified).
+     * Gets an index (optionally modified).
      * @param {number} index The index to get.
      * @param {object} [options] Options for getting the row index.
      * @param {boolean} [options.modified=true] Whether to use modified indexes.
@@ -994,7 +1000,7 @@ export default class Table extends BaseComponent {
     }
 
     /**
-     * Get real column ordering data.
+     * Gets real column ordering data.
      * @returns {Array} The column ordering data.
      */
     #getOrder() {
@@ -1008,7 +1014,7 @@ export default class Table extends BaseComponent {
     }
 
     /**
-     * Get results for specific columns.
+     * Gets results for specific columns.
      * @param {Array} columns The columns to get.
      * @returns {Array} The results.
      */
@@ -1020,7 +1026,7 @@ export default class Table extends BaseComponent {
     }
 
     /**
-     * Initialize get data from callback.
+     * Initializes get data from callback.
      */
     #getResultsInit() {
         this.#loadResults = $._debounce((version) => this.#fetchResults(version), this.options.debounce);
@@ -1038,7 +1044,7 @@ export default class Table extends BaseComponent {
     }
 
     /**
-     * Get the visible columns.
+     * Gets the visible columns.
      * @returns {Array} The visible columns.
      */
     #getVisibleColumns() {
@@ -1108,7 +1114,7 @@ export default class Table extends BaseComponent {
     }
 
     /**
-     * Refresh the results.
+     * Refreshes the results.
      */
     #refreshResults() {
         this.#page = this.options.paging ? 1 + this.#offset / this.#limit : 1;
@@ -1120,7 +1126,7 @@ export default class Table extends BaseComponent {
     }
 
     /**
-     * Render the Table.
+     * Renders the Table.
      */
     #render() {
         this.#original = document.createDocumentFragment();
@@ -1194,7 +1200,7 @@ export default class Table extends BaseComponent {
     }
 
     /**
-     * Render the table buttons.
+     * Renders the table buttons.
      * @param {HTMLElement} container The container to render in.
      */
     #renderButtons(container) {
@@ -1214,8 +1220,8 @@ export default class Table extends BaseComponent {
                 },
             });
 
-            $.addEvent(btn, 'click.ui.table', (e) => {
-                e.preventDefault();
+            $.addEvent(btn, 'click.ui.table', (event) => {
+                event.preventDefault();
 
                 if (button.callback) {
                     button.callback.bind(this)();
@@ -1231,7 +1237,7 @@ export default class Table extends BaseComponent {
     }
 
     /**
-     * Render the table headings.
+     * Renders the table headings.
      */
     #renderHeadings() {
         const version = this.#drawVersion;
@@ -1301,7 +1307,7 @@ export default class Table extends BaseComponent {
 
             let dir;
             for (const order of this.#order) {
-                if (order[0] != index) {
+                if (order[0] !== index) {
                     continue;
                 }
 
@@ -1340,7 +1346,7 @@ export default class Table extends BaseComponent {
     }
 
     /**
-     * Render the table info.
+     * Renders the table info.
      */
     #renderInfo() {
         const version = this.#drawVersion;
@@ -1377,7 +1383,7 @@ export default class Table extends BaseComponent {
     }
 
     /**
-     * Render the table info container in a container.
+     * Renders the table info container in a container.
      * @param {HTMLElement} container The container to render in.
      */
     #renderInfoContainer(container) {
@@ -1399,7 +1405,7 @@ export default class Table extends BaseComponent {
     }
 
     /**
-     * Render a layout row in a container.
+     * Renders a layout row in a container.
      * @param {Array} columns The columns to render.
      * @param {string} rowClass The row class.
      */
@@ -1437,7 +1443,7 @@ export default class Table extends BaseComponent {
     }
 
     /**
-     * Render the length select in a container.
+     * Renders the length select in a container.
      * @param {HTMLElement} container The container to render in.
      */
     #renderLengthSelect(container) {
@@ -1494,7 +1500,7 @@ export default class Table extends BaseComponent {
     }
 
     /**
-     * Render a pagination item.
+     * Renders a pagination item.
      * @param {object} options Options for rendering the pagnination item.
      * @returns {HTMLElement} The pagnination item.
      */
@@ -1524,12 +1530,12 @@ export default class Table extends BaseComponent {
     }
 
     /**
-     * Render the pagination.
+     * Renders the pagination.
      */
     #renderPagination() {
         const setDisabled = (container, disabled) => {
             const link = $.findOne(':scope > [data-ui-page]', container);
-            link.disabled = disabled;
+            $.setProperty(link, { disabled });
 
             if (disabled) {
                 $.addClass(container, this.constructor.classes.pageDisabled);
@@ -1586,10 +1592,10 @@ export default class Table extends BaseComponent {
             $.append(this.#pagination, lastPage);
         }
 
-        setDisabled(firstPage, this.#page == 1);
-        setDisabled(prevPage, this.#page == 1);
-        setDisabled(nextPage, this.#page == this.#totalPages);
-        setDisabled(lastPage, this.#page == this.#totalPages);
+        setDisabled(firstPage, this.#page === 1);
+        setDisabled(prevPage, this.#page === 1);
+        setDisabled(nextPage, this.#page === this.#totalPages);
+        setDisabled(lastPage, this.#page === this.#totalPages);
 
         let startPage = Math.max(this.#page - 5, 1);
         let endPage = Math.min(this.#page + 5, this.#totalPages);
@@ -1628,11 +1634,11 @@ export default class Table extends BaseComponent {
             }
 
             const pageButton = $.findOne('button', pageItem);
-            if (current == this.#page) {
-                pageButton.setAttribute('aria-current', 'page');
+            if (current === this.#page) {
+                $.setAttribute(pageButton, { 'aria-current': 'page' });
                 $.addClass(pageItem, this.constructor.classes.pageActive);
             } else {
-                pageButton.removeAttribute('aria-current');
+                $.removeAttribute(pageButton, 'aria-current');
                 $.removeClass(pageItem, this.constructor.classes.pageActive);
             }
 
@@ -1641,7 +1647,7 @@ export default class Table extends BaseComponent {
     }
 
     /**
-     * Render the pagination container in a container.
+     * Renders the pagination container in a container.
      * @param {HTMLElement} container The container to render in.
      */
     #renderPaginationContainer(container) {
@@ -1660,7 +1666,7 @@ export default class Table extends BaseComponent {
     }
 
     /**
-     * Render the table results.
+     * Renders the table results.
      */
     #renderResults() {
         if (!this.node) {
@@ -1734,7 +1740,7 @@ export default class Table extends BaseComponent {
     }
 
     /**
-     * Render a result row.
+     * Renders a result row.
      * @param {Array|object} data The row data.
      * @param {number} rowIndex The row index.
      * @returns {HTMLElement} The table row.
@@ -1766,7 +1772,7 @@ export default class Table extends BaseComponent {
     }
 
     /**
-     * Render the search in a container.
+     * Renders the search in a container.
      * @param {HTMLElement} container The container to render in.
      */
     #renderSearch(container) {
@@ -1810,7 +1816,7 @@ export default class Table extends BaseComponent {
         if (!this.#lengthSelect) {
             return;
         }
-        if (![...this.#lengthSelect.options].some((option) => Number(option.value) === this.#limit)) {
+        if (![...this.#lengthSelect.options].some((option) => Number($.getValue(option)) === this.#limit)) {
             $.append(this.#lengthSelect, $.create('option', { value: this.#limit, text: this.#limit }));
         }
         $.setValue(this.#lengthSelect, this.#limit);

@@ -1,5 +1,5 @@
 /**
- * Get index of parent node.
+ * Gets index of parent node.
  * @param {number} index The index.
  * @returns {number} The parent index.
  */
@@ -8,7 +8,7 @@ const getParent = (index) => {
 };
 
 /**
- * Get index of child node.
+ * Gets index of child node.
  * @param {number} index The index.
  * @returns {number} The child index.
  */
@@ -26,7 +26,7 @@ export default class Heap {
     #length;
 
     /**
-     * New Heap constructor.
+     * Creates a Heap.
      * @param {number} [length] The size of the heap.
      */
     constructor(length) {
@@ -43,7 +43,7 @@ export default class Heap {
     }
 
     /**
-     * Pop the top value off the heap.
+     * Pops the top value off the heap.
      * @returns {object} The top value from the heap.
      */
     pop() {
@@ -85,7 +85,7 @@ export default class Heap {
     }
 
     /**
-     * Push a value onto the heap.
+     * Pushes a value onto the heap.
      * @param {number} index The index.
      * @param {number} value The value to push.
      */
