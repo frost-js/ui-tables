@@ -3,10 +3,18 @@ import { expect, test } from '#test';
 test.describe('Table remote results', () => {
     test.use({ mockClock: true });
     test.beforeEach(async ({ page }) => {
-        await page.evaluate((_) => {
-            document.body.innerHTML = '<table id="table"><thead><tr><th>Name</th></tr></thead><tbody><tr><td>Original</td></tr></tbody></table>';
+        await page.evaluate(() => {
+            $.setHtml(document.body,
+                '<table id="table">' +
+                '<thead>' +
+                '<tr>' +
+                '<th>Name</th></tr></thead>' +
+                '<tbody>' +
+                '<tr>' +
+                '<td>Original</td></tr></tbody></table>',
+            );
             window.requests = [];
-            window.startRemote = (options = {}) => UI.Table.init(document.querySelector('#table'), {
+            window.startRemote = (options = {}) => UI.Table.init($.findOne('#table'), {
                 debounce: 20, length: 2,
                 getResults(request) {
                     const entry = { request };
@@ -14,10 +22,10 @@ test.describe('Table remote results', () => {
                         entry.resolve = resolve; entry.reject = reject;
                     });
                     pending.cancel = () => {
-                        document.body.dataset.cancelled = String(Number(document.body.dataset.cancelled || 0) + 1);
+                        $.setDataset(document.body, 'cancelled', ($.getDataset(document.body, 'cancelled') || 0) + 1);
                     };
                     window.requests.push(entry);
-                    document.body.dataset.requests = String(window.requests.length);
+                    $.setDataset(document.body, 'requests', window.requests.length);
                     return pending;
                 }, ...options,
             });
@@ -50,7 +58,7 @@ test.describe('Table remote results', () => {
             test(`rejects inconsistent remote counts (${JSON.stringify(response)})`, async ({ page }) => {
                 await page.evaluate((response) => {
                     $.addEvent('#table', 'error.ui.table', (event) => {
-                        document.body.dataset.error = event.detail.error.name;
+                        $.setDataset(document.body, 'error', event.detail.error.name);
                     });
                     window.startRemote({ getResults: () => response });
                 }, response);
@@ -64,7 +72,7 @@ test.describe('Table remote results', () => {
             test(`handles ${failure} and permits retry`, async ({ page }) => {
                 await page.evaluate((failure) => {
                     $.addEvent('#table', 'error.ui.table', (event) => {
-                        document.body.dataset.error = event.detail.error.name;
+                        $.setDataset(document.body, 'error', event.detail.error.name);
                     });
                     let first = true;
                     window.startRemote({ getResults() {
@@ -95,7 +103,7 @@ test.describe('Table remote results', () => {
         test('restores the table before a cancellation hook reinitializes it', async ({ page }) => {
             await page.evaluate(() => window.startRemote({ getResults() {
                 return { then() {}, cancel() {
-                    UI.Table.init(document.querySelector('#table'), { data: [['Reinitialized']] });
+                    UI.Table.init($.findOne('#table'), { data: [['Reinitialized']] });
                 } };
             } }));
             await page.clock.runFor(25);
@@ -108,7 +116,7 @@ test.describe('Table remote results', () => {
         test('keeps clear results when an invalidated request resolves late', async ({ page }) => {
             await page.evaluate(() => window.startRemote());
             await page.clock.runFor(25);
-            await page.evaluate((_) => {
+            await page.evaluate(() => {
                 $('#table').table('clear');
                 window.requests[0].resolve({ results: [['Late']], total: 1, filtered: 1 });
             });
@@ -116,7 +124,7 @@ test.describe('Table remote results', () => {
             await expect(page.getByRole('status')).toHaveText('Showing results 0 to 0 of 0');
         });
         test('ignores obsolete dispatch when cancellation triggers another reload', async ({ page }) => {
-            await page.evaluate((_) => {
+            await page.evaluate(() => {
                 let first = true;
                 const table = window.startRemote({ getResults() {
                     if (!first) {
@@ -140,7 +148,7 @@ test.describe('Table remote results', () => {
             await page.evaluate(() => $('#table').table('search', 'new'));
             await expect(page.locator('body')).toHaveAttribute('data-cancelled', '1');
             await page.clock.runFor(25);
-            await page.evaluate((_) => {
+            await page.evaluate(() => {
                 window.requests[1].resolve({ results: [['New']], total: 1, filtered: 1 });
                 window.requests[0].resolve({ results: [['Old']], total: 1, filtered: 1 });
             });
@@ -149,7 +157,7 @@ test.describe('Table remote results', () => {
             await page.clock.runFor(25);
             await page.evaluate(() => $('#table').table('reload'));
             await page.clock.runFor(25);
-            await page.evaluate((_) => {
+            await page.evaluate(() => {
                 window.requests[2].reject(new Error('stale failure'));
                 window.requests[3].resolve({ results: [['Newest']], total: 1, filtered: 1 });
             });
@@ -176,7 +184,7 @@ test.describe('Table remote results', () => {
         test('preserves cancellation on a custom thenable', async ({ page }) => {
             await page.evaluate(() => window.startRemote({ getResults() {
                 return { then() {}, cancel() {
-                    document.body.dataset.cancelled = 'thenable';
+                    $.setDataset(document.body, 'cancelled', 'thenable');
                 } };
             } }));
             await page.clock.runFor(25);
@@ -226,7 +234,7 @@ test.describe('Table remote results', () => {
 
     test.describe('debounce', () => {
         test('coalesces rapid searches and resets the offset', async ({ page }) => {
-            await page.evaluate((_) => {
+            await page.evaluate(() => {
                 const table = window.startRemote();
                 table.search('a');
                 table.search('ab');

@@ -1,4 +1,3 @@
-/** @import { Download } from '@playwright/test'; */
 import assert from 'node:assert/strict';
 import { Buffer } from 'node:buffer';
 import { inflateRawSync } from 'node:zlib';

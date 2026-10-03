@@ -2,9 +2,17 @@ import { expect, test } from '#test';
 
 test.describe('Table', () => {
     test.beforeEach(async ({ page }) => {
-        await page.evaluate((_) => {
-            document.body.innerHTML = '<table id="table"><caption>Scores</caption><thead><tr><th>Name</th><th>Score</th></tr></thead><tbody></tbody></table>';
-            window.createTable = (options = {}) => UI.Table.init(document.querySelector('#table'), {
+        await page.evaluate(() => {
+            $.setHtml(document.body,
+                '<table id="table">' +
+                '<caption>Scores</caption>' +
+                '<thead>' +
+                '<tr>' +
+                '<th>Name</th>' +
+                '<th>Score</th></tr></thead>' +
+                '<tbody></tbody></table>',
+            );
+            window.createTable = (options = {}) => UI.Table.init($.findOne('#table'), {
                 data: [['B', 2], ['A', 1], ['A', 3], ['C', 4]],
                 length: 2, lengths: [2, 4], debounce: 0, ...options,
             });
@@ -39,16 +47,16 @@ test.describe('Table', () => {
             });
         }
         test('rejects spanning headings and accepts columns without a heading row', async ({ page }) => {
-            expect(await page.evaluate((_) => {
-                document.querySelector('th').colSpan = 2;
+            expect(await page.evaluate(() => {
+                $.setProperty($.findOne('th'), 'colSpan', 2);
                 try {
                     window.createTable();
                 } catch (error) {
                     return error.name;
                 }
             })).toBe('RangeError');
-            await page.evaluate((_) => {
-                document.querySelector('thead').remove();
+            await page.evaluate(() => {
+                $.remove('thead');
                 window.createTable({ columns: [{ name: 'Person' }, { name: 'Points' }] });
             });
             await expect(page.locator('th')).toHaveText(['Person', 'Points']);
@@ -59,8 +67,8 @@ test.describe('Table', () => {
         test('cancels a pending local search and restores the original busy state', async ({ page }) => {
             await page.clock.install();
             await page.clock.pauseAt(new Date());
-            await page.evaluate((_) => {
-                document.querySelector('#table').setAttribute('aria-busy', 'true');
+            await page.evaluate(() => {
+                $.setAttribute($.findOne('#table'), 'aria-busy', 'true');
                 window.createTable({ debounce: 100 });
             });
             await page.getByRole('searchbox').fill('A');
@@ -74,7 +82,7 @@ test.describe('Table', () => {
 
     test.describe('#addRow', () => {
         test('reapplies the active search without counting nonmatches', async ({ page }) => {
-            await page.evaluate((_) => {
+            await page.evaluate(() => {
                 const table = window.createTable();
                 table.search('A');
                 table.addRow(['D', 5]);
@@ -88,7 +96,7 @@ test.describe('Table', () => {
 
     test.describe('#clear', () => {
         test('resets the search, counts, and pagination before adding fresh rows', async ({ page }) => {
-            await page.evaluate((_) => {
+            await page.evaluate(() => {
                 const table = window.createTable();
                 table.search('A');
                 table.clear();
@@ -112,14 +120,14 @@ test.describe('Table', () => {
 
     test.describe('#getRow', () => {
         test('returns a shallow copy and rejects an invalid row index', async ({ page }) => {
-            await page.evaluate((_) => {
+            await page.evaluate(() => {
                 const table = window.createTable();
                 const row = table.getRow(0);
                 row[0] = 'Changed';
                 table.refresh();
             });
             await expect(page.locator('tbody td:first-child')).toHaveText(['A', 'A']);
-            expect(await page.evaluate((_) => {
+            expect(await page.evaluate(() => {
                 try {
                     $('#table').table('getRow', 99);
                 } catch (error) {
@@ -131,7 +139,7 @@ test.describe('Table', () => {
 
     test.describe('#hideColumn', () => {
         test('updates empty-state colspan and restores headings in their original order', async ({ page }) => {
-            await page.evaluate((_) => {
+            await page.evaluate(() => {
                 const table = window.createTable({ data: [] });
                 table.hideColumn(0);
             });
@@ -155,7 +163,7 @@ test.describe('Table', () => {
 
     test.describe('#length', () => {
         test('synchronizes custom lengths with the select and clamps the current page', async ({ page }) => {
-            await page.evaluate((_) => {
+            await page.evaluate(() => {
                 const table = window.createTable();
                 table.page(2);
                 table.length(3);
@@ -223,7 +231,7 @@ test.describe('Table', () => {
 
     test.describe('#removeRow', () => {
         test('reindexes results and clamps an emptied final page', async ({ page }) => {
-            await page.evaluate((_) => {
+            await page.evaluate(() => {
                 const table = window.createTable();
                 table.page(2);
                 table.removeRow(1);
@@ -322,7 +330,7 @@ test.describe('Table', () => {
         test('leaves nonorderable headings and disabled features unchanged', async ({ page }) => {
             await page.evaluate(() => window.createTable({ columns: [{ orderable: false }, {}], paging: false, searching: false }));
             await page.getByRole('columnheader', { name: 'Name', exact: true }).click();
-            await page.evaluate((_) => {
+            await page.evaluate(() => {
                 const table = $('#table').table();
                 table.search('missing'); table.page(5); table.length(1);
             });
@@ -367,12 +375,12 @@ test.describe('Table', () => {
             });
         }
         test('allows disposal during sanitization and custom layout rendering', async ({ page }) => {
-            await page.evaluate((_) => window.createTable({ sanitize(html) {
+            await page.evaluate(() => window.createTable({ sanitize(html) {
                 $.getData('#table', 'table').dispose();
                 return html;
             } }));
             await expect(page.locator('.table-responsive')).toHaveCount(0);
-            await page.evaluate((_) => {
+            await page.evaluate(() => {
                 UI.Table.layout.stop = function() {
                     this.dispose();
                 };
@@ -382,8 +390,10 @@ test.describe('Table', () => {
             await expect(page.locator('caption')).toHaveText('Scores');
         });
         test('passes the footer and callback indexes in draw order', async ({ page }) => {
-            await page.evaluate((_) => {
-                document.querySelector('#table').insertAdjacentHTML('beforeend', '<tfoot><tr><td colspan="2">Footer</td></tr></tfoot>');
+            await page.evaluate(() => {
+                $.append('#table', $.create('tfoot', {
+                    html: '<tr><td colspan="2">Footer</td></tr>',
+                }));
                 window.calls = [];
                 const record = (value) => window.calls.push(value);
                 window.createTable({
@@ -407,7 +417,7 @@ test.describe('Table', () => {
                         record('draw');
                     },
                     footerCallback(footer) {
-                        record('footer'); footer.querySelector('td').textContent = 'Updated footer'; this.dispose();
+                        record('footer'); $.setText($.findOne('td', footer), 'Updated footer'); this.dispose();
                     },
                 });
             });
@@ -417,7 +427,7 @@ test.describe('Table', () => {
             await expect(page.locator('.table-responsive')).toHaveCount(0);
         });
         test('stops an obsolete draw when a callback changes the search', async ({ page }) => {
-            await page.evaluate((_) => {
+            await page.evaluate(() => {
                 let first = true;
                 window.createTable({ headerCallback() {
                     if (first) {
@@ -429,12 +439,12 @@ test.describe('Table', () => {
             await expect(page.getByRole('status')).toHaveText('Showing results 1 to 1 of 1 (filtered from 4 total)');
         });
         test('can cancel a draw and refresh it later', async ({ page }) => {
-            await page.evaluate((_) => {
+            await page.evaluate(() => {
                 window.cancelDraw = true;
                 window.createTable({ preDrawCallback: () => !window.cancelDraw });
             });
             await expect(page.locator('tbody tr')).toHaveCount(0);
-            await page.evaluate((_) => {
+            await page.evaluate(() => {
                 window.cancelDraw = false; $('#table').table('refresh');
             });
             await expect(page.locator('tbody tr')).toHaveCount(2);
@@ -449,10 +459,10 @@ test.describe('Table', () => {
             expect(await page.evaluate(() => window.bad)).toBeUndefined();
         });
         test('supports omitted controls and restores original DOM nodes and listeners', async ({ page }) => {
-            await page.evaluate((_) => {
-                const caption = document.querySelector('caption');
+            await page.evaluate(() => {
+                const caption = $.findOne('caption');
                 caption.addEventListener('click', () => {
-                    caption.textContent = 'Original listener';
+                    $.setText(caption, 'Original listener');
                 });
                 const table = window.createTable({ layout: { top: '', bottom: '' } });
                 table.search('A');

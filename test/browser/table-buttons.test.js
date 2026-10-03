@@ -5,15 +5,15 @@ import { readCsv, readDownload, readZip } from '../support/exports.js';
 
 test.describe('Table buttons', () => {
     test.beforeEach(async ({ page }) => {
-        await page.evaluate((_) => {
-            document.body.innerHTML = '<table id="table"><thead><tr><th>Name</th><th>Value</th></tr></thead><tbody></tbody></table>';
+        await page.evaluate(() => {
+            $.setHtml(document.body, '<table id="table"><thead><tr><th>Name</th><th>Value</th></tr></thead><tbody></tbody></table>');
         });
     });
 
     test.describe('csv', () => {
         test('round-trips punctuation, newlines, Unicode, and empty/false/zero values', async ({ page }) => {
             const rows = [['quote"only', 'line\nbreak'], ['comma,value', 'Café 🌨️'], [0, false], [null, '']];
-            await page.evaluate((data) => UI.Table.init(document.querySelector('#table'), {
+            await page.evaluate((data) => UI.Table.init($.findOne('#table'), {
                 data, order: [], buttons: [{ type: 'csv', title: 'Values' }],
             }), rows);
             const pending = page.waitForEvent('download');
@@ -25,12 +25,12 @@ test.describe('Table buttons', () => {
             ]);
         });
         test('exports current results in the requested column order and revokes the URL', async ({ page }) => {
-            await page.evaluate((_) => {
+            await page.evaluate(() => {
                 const original = URL.revokeObjectURL;
                 URL.revokeObjectURL = (url) => {
-                    document.body.dataset.revoked = 'true'; original(url);
+                    $.setDataset(document.body, 'revoked', true); original(url);
                 };
-                UI.Table.init(document.querySelector('#table'), { data: [['A', 1], ['B', 2]], length: 1,
+                UI.Table.init($.findOne('#table'), { data: [['A', 1], ['B', 2]], length: 1,
                     buttons: [{ type: 'csv', columns: [1, 0] }] });
             });
             const pending = page.waitForEvent('download');
@@ -40,7 +40,7 @@ test.describe('Table buttons', () => {
         });
         for (const escapeFormulae of [true, false]) {
             test(`honors the formula escape option (${escapeFormulae})`, async ({ page }) => {
-                await page.evaluate((escapeFormulae) => UI.Table.init(document.querySelector('#table'), {
+                await page.evaluate((escapeFormulae) => UI.Table.init($.findOne('#table'), {
                     data: [['=1+1', -2]], buttons: [{ type: 'csv', escapeFormulae }],
                 }), escapeFormulae);
                 const pending = page.waitForEvent('download');
@@ -54,7 +54,7 @@ test.describe('Table buttons', () => {
 
     test.describe('excel', () => {
         test('round-trips a large workbook and preserves date boundaries, percentages and blanks', async ({ page }) => {
-            const rows = await page.evaluate((_) => {
+            const rows = await page.evaluate(() => {
                 let seed = 123456;
                 const rows = Array.from({ length: 96 }, (_, index) => {
                     let text = `Record ${index}: `;
@@ -65,7 +65,7 @@ test.describe('Table buttons', () => {
                     return [text, index];
                 });
                 rows.push(['29/02/1900', '1900-03-01'], ['12.5%', '25%'], [null, ''], ['2024-02-30', '25:00:00']);
-                UI.Table.init(document.querySelector('#table'), { data: rows, order: [], paging: false, buttons: [{ type: 'excel' }] });
+                UI.Table.init($.findOne('#table'), { data: rows, order: [], paging: false, buttons: [{ type: 'excel' }] });
                 return rows;
             });
             const pending = page.waitForEvent('download');
@@ -88,13 +88,13 @@ test.describe('Table buttons', () => {
             expect(values[99]).toEqual(['2024-02-30', '25:00:00']);
         });
         test('downloads valid XML with dates, zero, booleans, escaping, and wide columns', async ({ page }) => {
-            await page.evaluate((_) => {
+            await page.evaluate(() => {
                 const values = [0, false, true, 'A & B & C < D < E', 'Café 🌨️', '2024-01-15', '2024-03-15 12:30:00', '12:30:00', '=1+1', 'x'.repeat(200)];
                 while (values.length < 28) {
                     values.push(`Column ${values.length + 1}`);
                 }
-                document.querySelector('thead tr').innerHTML = values.map((_, index) => `<th>Field ${index + 1}</th>`).join('');
-                UI.Table.init(document.querySelector('#table'), { data: [values], order: [], buttons: [{ type: 'excel', title: 'Workbook' }] });
+                $.setHtml($.findOne('thead tr'), values.map((_, index) => `<th>Field ${index + 1}</th>`).join(''));
+                UI.Table.init($.findOne('#table'), { data: [values], order: [], buttons: [{ type: 'excel', title: 'Workbook' }] });
             });
             const pending = page.waitForEvent('download');
             await page.getByRole('button', { name: 'Excel' }).click();
@@ -165,9 +165,9 @@ test.describe('Table buttons', () => {
                     };
                     return popup;
                 };
-                document.querySelector('#table').dir = 'rtl';
+                $.setProperty($.findOne('#table'), 'dir', 'rtl');
             });
-            await page.evaluate(() => UI.Table.init(document.querySelector('#table'), {
+            await page.evaluate(() => UI.Table.init($.findOne('#table'), {
                 data: [['Alice', 1], [0, false]], order: [], buttons: [{ type: 'print', title: '<b>Literal title</b>' }],
             }));
             const pending = page.waitForEvent('popup');
@@ -185,9 +185,9 @@ test.describe('Table buttons', () => {
             await popup.close();
         });
         test('handles a blocked popup', async ({ page }) => {
-            await page.evaluate((_) => {
+            await page.evaluate(() => {
                 window.open = () => null;
-                UI.Table.init(document.querySelector('#table'), { buttons: [{ type: 'print' }] });
+                UI.Table.init($.findOne('#table'), { buttons: [{ type: 'print' }] });
             });
             await page.getByRole('button', { name: 'Print' }).click();
             await expect(page.locator('#table')).toBeVisible();

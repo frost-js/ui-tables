@@ -2,9 +2,9 @@ import { expect, test } from '#test';
 
 test.describe('Table styles', () => {
     test.beforeEach(async ({ page }) => {
-        await page.evaluate((_) => {
-            document.body.innerHTML = '<table id="table"><thead><tr><th>Name</th><th>Value</th></tr></thead><tbody></tbody></table>';
-            window.startTable = (options = {}) => UI.Table.init(document.querySelector('#table'), {
+        await page.evaluate(() => {
+            $.setHtml(document.body, '<table id="table"><thead><tr><th>Name</th><th>Value</th></tr></thead><tbody></tbody></table>');
+            window.startTable = (options = {}) => UI.Table.init($.findOne('#table'), {
                 data: [['Alice', 1], ['Bob', 2]], buttons: [{ type: 'csv' }], ...options,
             });
         });
@@ -29,8 +29,8 @@ test.describe('Table styles', () => {
 
         test('contains a wide table within the narrow viewport', async ({ page }) => {
             await page.setViewportSize({ width: 360, height: 640 });
-            await page.evaluate((_) => {
-                document.querySelector('#table').style.minWidth = '1000px';
+            await page.evaluate(() => {
+                $.setStyle($.findOne('#table'), 'minWidth', '1000px');
                 window.startTable();
             });
             await expect(page.locator('.table-responsive')).toHaveCSS('overflow-x', 'auto');
@@ -44,8 +44,8 @@ test.describe('Table styles', () => {
         for (const theme of ['light', 'dark']) {
             test(`uses the primary token for the active arrow and a visible focus treatment (${theme})`, async ({ page }) => {
                 await page.evaluate((theme) => {
-                    document.documentElement.dataset.uiTheme = theme;
-                    document.body.style.setProperty('--ui-primary', 'rgb(120, 30, 90)');
+                    $.setDataset(document.documentElement, 'uiTheme', theme);
+                    $.setStyle(document.body, '--ui-primary', 'rgb(120, 30, 90)');
                     window.startTable();
                 }, theme);
                 const heading = page.locator('th').first();
@@ -63,8 +63,8 @@ test.describe('Table styles', () => {
         for (const theme of ['light', 'dark']) {
             test(`uses UI 4 button color and focus tokens (${theme})`, async ({ page }) => {
                 await page.evaluate((theme) => {
-                    document.documentElement.dataset.uiTheme = theme;
-                    document.body.style.setProperty('--ui-secondary-color', 'rgb(120, 30, 90)');
+                    $.setDataset(document.documentElement, 'uiTheme', theme);
+                    $.setStyle(document.body, '--ui-secondary-color', 'rgb(120, 30, 90)');
                     window.startTable();
                 }, theme);
                 const button = page.getByRole('button', { name: 'CSV' });
@@ -74,7 +74,7 @@ test.describe('Table styles', () => {
                 await expect(button).not.toHaveCSS('box-shadow', 'none');
                 await button.hover();
                 await expect(button).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-                await button.evaluate((node) => node.classList.add('active'));
+                await button.evaluate((node) => $.addClass(node, 'active'));
                 await expect(button).toHaveCSS('color', 'rgb(120, 30, 90)');
                 await expect(button).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
             });
@@ -85,7 +85,7 @@ test.describe('Table styles', () => {
         for (const direction of ['ltr', 'rtl']) {
             test(`places sort arrows at the logical end (${direction})`, async ({ page }) => {
                 await page.evaluate((direction) => {
-                    document.documentElement.dir = direction;
+                    $.setProperty(document.documentElement, 'dir', direction);
                     window.startTable();
                 }, direction);
                 const heading = page.locator('th').first();

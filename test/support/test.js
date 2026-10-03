@@ -27,7 +27,7 @@ const test = base.extend({
                 waitUntil: 'domcontentloaded',
             });
 
-            await page.evaluate((_) => {
+            await page.evaluate(() => {
                 if (
                     !window.fQuery ||
                     !window.UI?.Table ||
@@ -40,7 +40,7 @@ const test = base.extend({
                 document.body.replaceChildren();
             });
 
-            await page.waitForFunction((_) => {
+            await page.waitForFunction(() => {
                 const node = document.createElement('div');
                 node.className = 'table-sort text-center';
                 document.body.append(node);
