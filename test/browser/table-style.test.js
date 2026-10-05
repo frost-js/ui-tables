@@ -14,11 +14,15 @@ test.describe('Table styles', () => {
         for (const inputStyle of ['filled', 'outline']) {
             test(`uses UI ${inputStyle} controls with accessible labels`, async ({ page }) => {
                 await page.evaluate((inputStyle) => window.startTable({ inputStyle }), inputStyle);
+
                 await expect(page.getByRole('searchbox', { name: 'Search' })).toHaveClass(new RegExp(`input-${inputStyle}`));
                 await expect(page.getByRole('combobox', { name: /Per Page/ })).toHaveValue('10');
                 await expect(page.locator('.ripple-line')).toHaveCount(0);
+
                 await page.getByRole('searchbox').focus();
+
                 await expect(page.getByRole('searchbox')).toBeFocused();
+
                 if (inputStyle === 'outline') {
                     await expect(page.getByRole('searchbox')).not.toHaveCSS('box-shadow', 'none');
                 } else {
@@ -29,10 +33,12 @@ test.describe('Table styles', () => {
 
         test('contains a wide table within the narrow viewport', async ({ page }) => {
             await page.setViewportSize({ width: 360, height: 640 });
+
             await page.evaluate(() => {
                 $.setStyle($.findOne('#table'), 'minWidth', '1000px');
                 window.startTable();
             });
+
             await expect(page.locator('.table-responsive')).toHaveCSS('overflow-x', 'auto');
             expect(await page.locator('.table-responsive').evaluate((node) => node.scrollWidth > node.clientWidth)).toBe(true);
             expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
@@ -48,11 +54,17 @@ test.describe('Table styles', () => {
                     $.setStyle(document.body, '--ui-primary', 'rgb(120, 30, 90)');
                     window.startTable();
                 }, theme);
+
                 const heading = page.locator('th').first();
+
                 expect(await heading.evaluate((node) => getComputedStyle(node, '::before').borderBottomColor)).toBe('rgb(120, 30, 90)');
+
                 await heading.focus();
+
                 await expect(heading).not.toHaveCSS('box-shadow', 'none');
+
                 await heading.press('Enter');
+
                 await expect(heading).toHaveAttribute('aria-sort', 'descending');
                 expect(await heading.evaluate((node) => getComputedStyle(node, '::after').borderTopColor)).toBe('rgb(120, 30, 90)');
             });
@@ -67,14 +79,22 @@ test.describe('Table styles', () => {
                     $.setStyle(document.body, '--ui-secondary-color', 'rgb(120, 30, 90)');
                     window.startTable();
                 }, theme);
+
                 const button = page.getByRole('button', { name: 'CSV' });
+
                 await expect(button).toHaveCSS('color', 'rgb(120, 30, 90)');
                 await expect(button).toHaveCSS('border-top-color', 'rgb(120, 30, 90)');
+
                 await button.focus();
+
                 await expect(button).not.toHaveCSS('box-shadow', 'none');
+
                 await button.hover();
+
                 await expect(button).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+
                 await button.evaluate((node) => $.addClass(node, 'active'));
+
                 await expect(button).toHaveCSS('color', 'rgb(120, 30, 90)');
                 await expect(button).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
             });
@@ -88,8 +108,10 @@ test.describe('Table styles', () => {
                     $.setProperty(document.documentElement, 'dir', direction);
                     window.startTable();
                 }, direction);
+
                 const heading = page.locator('th').first();
                 const side = direction === 'ltr' ? 'right' : 'left';
+
                 expect(await heading.evaluate((node, side) => getComputedStyle(node, '::before')[side], side)).toBe('8px');
                 await expect(heading).toHaveCSS(`padding-${side}`, /^27\.20*1?px$/);
             });

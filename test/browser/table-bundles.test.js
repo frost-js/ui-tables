@@ -8,6 +8,7 @@ test.describe('Table bundles', () => {
     ]) {
         test(`initializes with shared dependencies (${name})`, async ({ page }) => {
             await page.goto(path);
+
             await expect(page.locator('tbody td')).toHaveText(text);
             await expect(page.locator('body')).toHaveAttribute('data-shared', 'true');
             await expect(page.getByRole('searchbox')).toBeVisible();

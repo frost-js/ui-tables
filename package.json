@@ -53,10 +53,11 @@
         "lint:js": "eslint",
         "lint:sass:unused": "fusv src/scss",
         "minify:css": "cleancss -O1 --format breakWith=lf --with-rebase --source-map --source-map-inline-sources --output dist/frost-ui-tables.min.css dist/frost-ui-tables.css",
-        "test": "npm run build && npm run test:browser",
+        "test": "npm run build && npm run test:unit && npm run test:browser",
         "test:browser": "playwright test --forbid-only",
         "test:coverage": "playwright test --config=playwright.coverage.config.js --forbid-only",
         "test:headed": "playwright test --forbid-only --headed",
+        "test:unit": "playwright test --config=playwright.unit.config.js --forbid-only",
         "test:ui": "playwright test --ui"
     },
     "browserslist": [

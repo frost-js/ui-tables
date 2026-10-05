@@ -1,6 +1,7 @@
 import { expect, test } from '#test';
+import { setupTable } from '../setup/table.js';
 
-test.describe('Table', () => {
+test.describe('Table DOM data', () => {
     test.beforeEach(async ({ page }) => {
         await page.evaluate(() => {
             $.setHtml(document.body,
@@ -37,6 +38,7 @@ test.describe('Table', () => {
         test('initializes multiple tables and returns the first instance (QuerySet)', async ({ page }) => {
             expect(await page.evaluate(() => {
                 const first = $('table').table();
+
                 return {
                     returnedFirst: first === $.getData('#table1', 'table'),
                     secondInitialized: $.getData('#table2', 'table') instanceof UI.Table,
@@ -50,6 +52,7 @@ test.describe('Table', () => {
             expect(await page.evaluate(() => {
                 const node = $.findOne('#table1');
                 const first = UI.Table.init(node, { length: 1 });
+
                 return UI.Table.init(node, { length: 2 }) === first;
             })).toBe(true);
             await expect(page.locator('#table1 tbody tr')).toHaveCount(1);
@@ -70,10 +73,12 @@ test.describe('Table', () => {
                 const node = $.findOne('#table1');
                 $.setDataset(node, 'uiLength', 2);
                 UI.Table.init(node, { length: 1 });
+
                 const second = $.findOne('#table2');
                 $.setDataset(second, 'uiSearching', false);
                 UI.Table.init(second);
             });
+
             await expect(page.locator('#table1 tbody tr')).toHaveCount(1);
             await expect(page.getByRole('searchbox')).toHaveCount(1);
         });
@@ -86,18 +91,20 @@ test.describe('Table', () => {
                 });
                 UI.Table.init($.findOne('#table2'));
             });
+
             await expect(page.getByRole('combobox')).toHaveCount(1);
             await expect(page.locator('#table1 th')).toHaveCount(1);
             await expect(page.locator('#table2 th')).toHaveText('Name');
             await expect(page.getByRole('status')).toHaveCount(2);
         });
 
-        test('preserves formatted DOM headings and cells with query 5', async ({ page }) => {
+        test('preserves formatted DOM headings and cells', async ({ page }) => {
             await page.evaluate(() => {
                 $.setHtml($.findOne('#table2 th'), '<strong>Name</strong>');
                 $.setHtml($.findOne('#table2 td'), '<em>Dana</em>');
                 UI.Table.init($.findOne('#table2'));
             });
+
             await expect(page.locator('#table2 th strong')).toHaveText('Name');
             await expect(page.locator('#table2 td em')).toHaveText('Dana');
         });
@@ -127,9 +134,12 @@ test.describe('Table', () => {
                 value.dispose();
                 value.dispose();
             });
+
             expect(await instance.evaluate((value) => value.node)).toBeNull();
             expect(await instance.evaluate((value) => value.options)).toBeNull();
+
             await page.evaluate(() => $('#table1').table());
+
             await expect(page.locator('.table-responsive')).toHaveCount(1);
             await expect(page.locator('#table1 tbody td:first-child')).toHaveText(['Alice', 'Bob', 'Charlie']);
         });
@@ -141,6 +151,7 @@ test.describe('Table', () => {
                 const instance = UI.Table.init(node);
                 instance.dispose();
             });
+
             await expect(page.locator('table').nth(1)).not.toHaveAttribute('id');
             await expect(page.locator('#table1')).toHaveAttribute('id', 'table1');
         });
@@ -148,6 +159,7 @@ test.describe('Table', () => {
         test('disposes when query removes the table', async ({ page }) => {
             const instance = await page.evaluateHandle(() => UI.Table.init($.findOne('#table1')));
             await page.evaluate(() => $.remove('#table1'));
+
             expect(await instance.evaluate((value) => value.node)).toBeNull();
             await expect(page.locator('#table1')).toHaveCount(0);
             await expect(page.locator('.table-responsive')).toHaveCount(0);
@@ -178,99 +190,198 @@ test.describe('Table', () => {
                 });
                 UI.Table.init($.findOne('#table1'));
             });
+
             await expect(page.locator('output')).toHaveText('initialized, drawn');
         });
     });
+});
 
-    test.describe('data option', () => {
-        test('renders supplied object rows with nested column paths', async ({ page }) => {
-            await page.evaluate(() => UI.Table.init($.findOne('#table1'), {
-                data: [{ name: 'Zoe', result: { score: 8 } }, { name: 'Ada', result: { score: 9 } }],
-                columns: [{ data: 'name' }, { data: 'result.score' }],
-            }));
-            await expect(page.locator('#table1 tbody td')).toHaveText(['Ada', '9', 'Zoe', '8']);
-        });
+test.describe('Table supplied data', () => {
+    test.beforeEach(setupTable);
 
-        test('renders a remote response through the bundled component', async ({ page }) => {
-            await page.evaluate(() => UI.Table.init($.findOne('#table1'), {
-                getResults: async () => ({ results: [['Remote', 42]], total: 1, filtered: 1 }),
-                debounce: 0,
-            }));
-            await expect(page.locator('#table1 tbody td')).toHaveText(['Remote', '42']);
-            await expect(page.getByRole('status')).toHaveText('Showing results 1 to 1 of 1');
-        });
-    });
+    test.describe('#init', () => {
+        for (const { name, getNode } of [
+            { name: 'null', getNode: () => null },
+            { name: 'a selector', getNode: () => '#table' },
+            { name: 'a collection', getNode: () => [$.findOne('#table')] },
+            { name: 'a non-table element', getNode: () => $.create('div') },
+        ]) {
+            test(`rejects ${name} as the constructor node`, async ({ page }) => {
+                const node = await page.evaluateHandle(getNode);
 
-    test.describe('paging option', () => {
-        test('renders all rows when paging is disabled', async ({ page }) => {
-            await page.evaluate(() => UI.Table.init($.findOne('#table1'), {
-                paging: false,
-                length: 1,
-            }));
-            await expect(page.locator('#table1 tbody tr')).toHaveCount(3);
-            await expect(page.locator('[data-ui-page]')).toHaveCount(0);
-            await expect(page.getByRole('status')).toHaveText('Showing results 1 to 3 of 3');
-        });
-    });
+                const error = await node.evaluate((node) => {
+                    try {
+                        new UI.Table(node);
+                    } catch (error) {
+                        return error.name;
+                    }
+                });
 
-    test.describe('callbacks', () => {
-        test('passes the information text and heading row to callbacks', async ({ page }) => {
-            await page.evaluate(() => UI.Table.init($.findOne('#table1'), {
-                infoCallback: (start, end, total, filtered, text) => `${text} (${filtered} matches)`,
-                headerCallback: (row) => $.setDataset(row, 'callback', 'heading'),
-            }));
-            await expect(page.getByRole('status')).toHaveText('Showing results 1 to 3 of 3 (3 matches)');
-            await expect(page.locator('#table1 thead tr')).toHaveAttribute('data-callback', 'heading');
-        });
-    });
-
-    test.describe('layout option', () => {
-        test('supports a custom layout with the public component as receiver', async ({ page }) => {
-            await page.evaluate(() => {
-                UI.Table.layout.summary = function(container) {
-                    $.setText(container, $.getProperty(this.node, 'id'));
-                    $.setDataset(container, 'testSummary', '');
-                };
-                UI.Table.init($.findOne('#table1'), { layout: { top: 'summary' } });
+                expect(error).toBe('TypeError');
+                expect(await page.evaluate(() => $.hasData('#table', 'table'))).toBe(false);
+                await expect(page.locator('.table-responsive')).toHaveCount(0);
             });
-            await expect(page.locator('[data-test-summary]')).toHaveText('table1');
-            await expect(page.getByRole('searchbox')).toHaveCount(0);
-            await expect(page.getByRole('status')).toBeVisible();
+        }
+
+        test('retains the caption as the accessible table name', async ({ page }) => {
+            await page.evaluate(() => window.createTable());
+
+            await expect(page.getByRole('table', { name: 'Scores' })).toBeVisible();
+        });
+
+        for (const { name, options, error } of [
+            { name: 'columns', options: { columns: [{}] }, error: 'RangeError' },
+            { name: 'rows', options: { data: [null] }, error: 'TypeError' },
+            { name: 'order', options: { order: [[4, 'asc']] }, error: 'RangeError' },
+            { name: 'orderData', options: { order: [], columns: [{ orderData: [4] }, {}] }, error: 'RangeError' },
+            { name: 'lengths', options: { lengths: [0] }, error: 'RangeError' },
+        ]) {
+            test(`rejects invalid ${name} without leaving an instance or wrapper`, async ({ page }) => {
+                expect(await page.evaluate((options) => {
+                    try {
+                        window.createTable(options);
+                    } catch (error) {
+                        return error.name;
+                    }
+                }, options)).toBe(error);
+                expect(await page.evaluate(() => $.hasData('#table', 'table'))).toBe(false);
+                await expect(page.locator('.table-responsive')).toHaveCount(0);
+                await expect(page.locator('caption')).toHaveText('Scores');
+
+                await page.evaluate(() => window.createTable());
+
+                await expect(page.locator('tbody tr')).toHaveCount(2);
+            });
+        }
+
+        test('rejects spanning headings', async ({ page }) => {
+            expect(await page.evaluate(() => {
+                $.setProperty($.findOne('th'), 'colSpan', 2);
+                try {
+                    window.createTable();
+                } catch (error) {
+                    return error.name;
+                }
+            })).toBe('RangeError');
+
+            expect(await page.evaluate(() => $.hasData('#table', 'table'))).toBe(false);
+            await expect(page.locator('.table-responsive')).toHaveCount(0);
+        });
+
+        test('accepts columns without a heading row', async ({ page }) => {
+            await page.evaluate(() => {
+                $.remove('thead');
+                window.createTable({ columns: [{ name: 'Person' }, { name: 'Points' }] });
+            });
+
+            await expect(page.locator('th')).toHaveText(['Person', 'Points']);
         });
     });
 
-    test.describe('buttons option', () => {
-        test('invokes custom buttons with the public component as receiver', async ({ page }) => {
-            await page.evaluate(() => UI.Table.init($.findOne('#table1'), {
-                buttons: [{
-                    text: 'Inspect',
-                    callback() {
-                        $.setDataset(this.node, 'selectedValue', this.getValue(0, 0));
-                    },
-                }],
-            }));
-            await page.getByRole('button', { name: 'Inspect' }).click();
-            await expect(page.locator('#table1')).toHaveAttribute('data-selected-value', 'Alice');
+    test.describe('#dispose', () => {
+        test.use({ mockClock: true });
+
+        test('preserves original contents and query state while cleaning generated cells', async ({ page }) => {
+            expect(await page.evaluate(() => {
+                const node = $.findOne('#table');
+                const caption = $.findOne('caption', node);
+
+                $.prepend(node, [$.createText('\n'), $.createComment('Original table')]);
+                const original = $.contents(node);
+                let originalEvents = 0;
+                let generatedEvents = 0;
+                let removals = 0;
+
+                $.setData(caption, 'marker', 'original');
+                $.addEvent(caption, 'click', () => originalEvents++);
+
+                const table = window.createTable();
+                const cell = $.findOne('tbody td', node);
+
+                $.setData(cell, 'marker', 'generated');
+                $.addEvent(cell, 'click', () => generatedEvents++);
+                $.addEvent(cell, 'remove', () => {
+                    removals++;
+                    // Cleanup must tolerate another dispose call from a removal listener.
+                    table.dispose();
+                });
+
+                table.dispose();
+                $.triggerEvent(caption, 'click');
+                $.triggerEvent(cell, 'click');
+
+                const restored = $.contents(node);
+
+                return {
+                    sameContents: restored.length === original.length &&
+                        restored.every((child, index) => $.isSame(child, original[index])),
+                    originalData: $.getData(caption, 'marker'),
+                    generatedData: $.hasData(cell, 'marker'),
+                    originalEvents,
+                    generatedEvents,
+                    removals,
+                    disposed: table.node === null,
+                };
+            })).toEqual({
+                sameContents: true,
+                originalData: 'original',
+                generatedData: false,
+                originalEvents: 1,
+                generatedEvents: 0,
+                removals: 1,
+                disposed: true,
+            });
+
+            await page.evaluate(() => window.createTable());
+
+            await expect(page.locator('tbody tr')).toHaveCount(2);
         });
 
-        for (const hideScore of [false, true]) {
-            test(`passes displayed rows to the built-in CSV adapter (hidden score=${hideScore})`, async ({ page }) => {
-                await page.evaluate((hideScore) => UI.Table.init($.findOne('#table1'), {
-                    buttons: [{ type: 'csv', title: 'scores' }],
-                    columns: [{}, { visible: !hideScore }],
-                }), hideScore);
-                const downloadPromise = page.waitForEvent('download');
-                await page.getByRole('button', { name: 'CSV' }).click();
-                const download = await downloadPromise;
-                expect(download.suggestedFilename()).toBe('scores.csv');
-                const stream = await download.createReadStream();
-                const chunks = [];
-                for await (const chunk of stream) {
-                    chunks.push(chunk);
-                }
-                expect(chunks.join('')).toBe(hideScore ?
-                    'Name\r\nAlice\r\nBob\r\nCharlie' :
-                    'Name,Score\r\nAlice,10\r\nBob,20\r\nCharlie,30');
+        test('supports omitted controls and restores original DOM nodes and listeners', async ({ page }) => {
+            await page.evaluate(() => {
+                const caption = $.findOne('caption');
+                caption.addEventListener('click', () => {
+                    $.setText(caption, 'Original listener');
+                });
+                const table = window.createTable({ layout: { top: '', bottom: '' } });
+                table.search('A');
+                table.page(2);
+                table.dispose();
+            });
+
+            await page.locator('caption').click();
+
+            await expect(page.locator('caption')).toHaveText('Original listener');
+        });
+
+        test('cancels a pending local search and restores the original busy state', async ({ page }) => {
+            await page.evaluate(() => {
+                $.setAttribute($.findOne('#table'), 'aria-busy', 'true');
+                window.createTable({ debounce: 100 });
+            });
+
+            await page.getByRole('searchbox').fill('A');
+
+            await page.evaluate(() => $('#table').table('dispose'));
+
+            await page.clock.runFor(200);
+
+            await expect(page.locator('#table')).toHaveAttribute('aria-busy', 'true');
+            await expect(page.locator('tbody tr')).toHaveCount(0);
+            await expect(page.locator('caption')).toHaveText('Scores');
+        });
+    });
+
+    test.describe('events', () => {
+        for (const event of ['init', 'processing', 'processed', 'preDraw', 'draw']) {
+            test(`allows disposal during ${event}`, async ({ page }) => {
+                await page.evaluate((event) => {
+                    $.addEvent('#table', `${event}.ui.table`, () => $.getData('#table', 'table').dispose());
+                    window.createTable();
+                }, event);
+
+                await expect(page.locator('.table-responsive')).toHaveCount(0);
+                await expect(page.locator('caption')).toHaveText('Scores');
             });
         }
     });
