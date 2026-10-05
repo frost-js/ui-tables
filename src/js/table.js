@@ -1,7 +1,7 @@
 import $ from '@fr0st/query';
 import { BaseComponent, generateId, getDataset } from '@fr0st/ui';
 import { csv, excel, print } from './buttons.js';
-import { getDomData, getDomHeadings } from './helpers.js';
+import { buildTable, getDomData, getDomHeadings, validateRows } from './helpers.js';
 
 /** @typedef {Array<*>|Record<string, *>} TableRow */
 /** @typedef {[number, 'asc'|'desc']} TableOrder */
@@ -84,8 +84,9 @@ export default class Table extends BaseComponent {
             excel(options, this.#getExportData(options));
         },
         print(options) {
-            const columns = options.columns || this.#getVisibleColumns();
-            print(options, this.#buildTable(columns), $.getAttribute(this.node, 'class'));
+            const { headings, rows } = this.#getExportData(options);
+            const table = buildTable(headings, rows, $.css(this.node, 'direction'));
+            print(options, table, $.getAttribute(this.node, 'class'));
         },
     };
     // Table classes
@@ -289,7 +290,7 @@ export default class Table extends BaseComponent {
         try {
             if (!this.options.getResults) {
                 this.#data = this.options.data ?? getDomData(node);
-                this.#validateRows(this.#data);
+                validateRows(this.#data);
                 this.#data = this.#data.slice();
             }
             this.#headings = headings;
@@ -311,16 +312,37 @@ export default class Table extends BaseComponent {
                 }
             }
             this.#order = this.#normalizeOrder(this.options.order);
-            this.#getOrder();
             this.#columnCount = this.#getVisibleColumns().length;
             if (!$.getProperty(node, 'id')) {
                 $.setProperty(node, 'id', generateId('table'));
                 this.#id = true;
             }
             if (this.options.getResults) {
-                this.#getResultsInit();
+                this.#loadResults = $._debounce((version) => this.#fetchResults(version), this.options.debounce);
+                this.#getData = () => {
+                    this.#drawVersion++;
+                    const version = this.#cancelRequest();
+                    if (!this.node || version !== this.#requestVersion) {
+                        return;
+                    }
+                    this.loading();
+                    if (this.node && version === this.#requestVersion) {
+                        this.#loadResults(version);
+                    }
+                };
             } else {
-                this.#getDataInit();
+                this.#getData = () => {
+                    const version = ++this.#drawVersion;
+                    this.loading();
+                    if (!this.node || version !== this.#drawVersion) {
+                        return;
+                    }
+                    this.#updateLocal();
+                    this.loading({ show: false });
+                    if (this.node && version === this.#drawVersion) {
+                        this.#renderResults();
+                    }
+                };
             }
             this.#render();
             if (!this.node) {
@@ -345,7 +367,7 @@ export default class Table extends BaseComponent {
         if (!this.node) {
             return;
         }
-        this.#validateRows([row]);
+        validateRows([row]);
         this.#data.push(Array.isArray(row) ? [...row] : { ...row });
         this.#mutated(1);
     }
@@ -662,7 +684,7 @@ export default class Table extends BaseComponent {
      */
     setRow(index, row, { modified = true } = {}) {
         const rowIndex = this.#getIndex(index, { modified });
-        this.#validateRows([row]);
+        validateRows([row]);
         this.#data[rowIndex] = Array.isArray(row) ? [...row] : { ...row };
         this.#mutated();
     }
@@ -689,46 +711,6 @@ export default class Table extends BaseComponent {
         this.#validateColumn(index);
         this.#columns[index].visible = true;
         this.#renderResults();
-    }
-
-    /**
-     * Renders a table for specific columns.
-     * @param {Array} columns The columns to render.
-     * @returns {HTMLElement} The table element.
-     */
-    #buildTable(columns) {
-        const table = $.create('table');
-        $.setProperty(table, 'dir', $.css(this.node, 'direction'));
-        const thead = $.create('thead');
-        const tr = $.create('tr');
-
-        for (const heading of this.#getHeadings(columns)) {
-            const th = $.create('th', {
-                text: heading,
-            });
-            $.append(tr, th);
-        }
-
-        $.append(thead, tr);
-        $.append(table, thead);
-
-        const tbody = $.create('tbody');
-        for (const row of this.#getResultRows(columns)) {
-            const tr = $.create('tr');
-
-            for (const value of row) {
-                const td = $.create('td', {
-                    text: value,
-                });
-                $.append(tr, td);
-            }
-
-            $.append(tbody, tr);
-        }
-
-        $.append(table, tbody);
-
-        return table;
     }
 
     /**
@@ -901,7 +883,7 @@ export default class Table extends BaseComponent {
             if (!active()) {
                 return;
             }
-            this.#validateRows(response?.results);
+            validateRows(response?.results);
             if (
                 !Number.isSafeInteger(response.total) ||
                 !Number.isSafeInteger(response.filtered) ||
@@ -937,24 +919,6 @@ export default class Table extends BaseComponent {
         if (active()) {
             this.#renderResults();
         }
-    }
-
-    /**
-     * Initializes preloaded get data.
-     */
-    #getDataInit() {
-        this.#getData = () => {
-            const version = ++this.#drawVersion;
-            this.loading();
-            if (!this.node || version !== this.#drawVersion) {
-                return;
-            }
-            this.#updateLocal();
-            this.loading({ show: false });
-            if (this.node && version === this.#drawVersion) {
-                this.#renderResults();
-            }
-        };
     }
 
     /**
@@ -1024,24 +988,6 @@ export default class Table extends BaseComponent {
             this.#validateColumn(index);
         }
         return this.#results.map((row) => columns.map((index) => $._getDot(row, String(this.#columns[index].data))));
-    }
-
-    /**
-     * Initializes get data from callback.
-     */
-    #getResultsInit() {
-        this.#loadResults = $._debounce((version) => this.#fetchResults(version), this.options.debounce);
-        this.#getData = () => {
-            this.#drawVersion++;
-            const version = this.#cancelRequest();
-            if (!this.node || version !== this.#requestVersion) {
-                return;
-            }
-            this.loading();
-            if (this.node && version === this.#requestVersion) {
-                this.#loadResults(version);
-            }
-        };
     }
 
     /**
@@ -1864,16 +1810,6 @@ export default class Table extends BaseComponent {
     #validateColumn(index) {
         if (!Number.isInteger(index) || index < 0 || index >= this.#columns.length) {
             throw new RangeError('Column index is out of range.');
-        }
-    }
-
-    /**
-     * Validates a local or remote row collection.
-     * @param {TableRow[]} rows The supplied rows.
-     */
-    #validateRows(rows) {
-        if (!Array.isArray(rows) || rows.some((row) => !Array.isArray(row) && !$._isPlainObject(row))) {
-            throw new TypeError('Results must be an array of arrays or plain objects.');
         }
     }
 }

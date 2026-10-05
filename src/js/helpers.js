@@ -1,6 +1,48 @@
 import $ from '@fr0st/query';
 
 /**
+ * Builds a text-only table from export data.
+ * @param {string[]} headings The column headings.
+ * @param {Array<Array<*>>} rows The displayed rows.
+ * @param {string} direction The table direction.
+ * @returns {HTMLTableElement} The table element.
+ */
+export function buildTable(headings, rows, direction) {
+    const table = $.create('table');
+    $.setProperty(table, 'dir', direction);
+    const thead = $.create('thead');
+    const tr = $.create('tr');
+
+    for (const heading of headings) {
+        const th = $.create('th', {
+            text: heading,
+        });
+        $.append(tr, th);
+    }
+
+    $.append(thead, tr);
+    $.append(table, thead);
+
+    const tbody = $.create('tbody');
+    for (const row of rows) {
+        const tr = $.create('tr');
+
+        for (const value of row) {
+            const td = $.create('td', {
+                text: value,
+            });
+            $.append(tr, td);
+        }
+
+        $.append(tbody, tr);
+    }
+
+    $.append(table, tbody);
+
+    return table;
+}
+
+/**
  * Builds a data array from a DOM element.
  * @param {HTMLElement} element The element to parse.
  * @returns {Array} The parsed data.
@@ -59,4 +101,12 @@ export function saveBlob(blob, filename) {
     }
 }
 
-export { getDomData as getDataFromDOM, getDomHeadings as getHeadingsFromDOM };
+/**
+ * Validates a local or remote row collection.
+ * @param {Array<Array<*>|Record<string, *>>} rows The supplied rows.
+ */
+export function validateRows(rows) {
+    if (!Array.isArray(rows) || rows.some((row) => !Array.isArray(row) && !$._isPlainObject(row))) {
+        throw new TypeError('Results must be an array of arrays or plain objects.');
+    }
+}

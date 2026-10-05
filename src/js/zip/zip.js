@@ -1,47 +1,6 @@
 import CRC32 from './crc32.js';
+import { byteLength, encode, encodeUint16, encodeUint32 } from './helpers.js';
 import RawDeflate from './raw-deflate.js';
-
-const encoder = new TextEncoder();
-
-/**
- * Encode a string in binary.
- * @param {string} string The string.
- * @returns {Uint8Array} The encoded string.
- */
-const encode = (string) => {
-    return encoder.encode(string);
-};
-
-/**
- * Gets the byte length of a string.
- * @param {string} string The string.
- * @returns {number} The byte length.
- */
-const length = (string) => {
-    return encode(string).length;
-};
-
-/**
- * Encodes an unsigned 16-bit integer in little-endian byte order.
- * @param {number} number The number.
- * @returns {Uint8Array} The encoded bytes.
- */
-const signed16 = (number) => {
-    const bytes = new Uint8Array(2);
-    new DataView(bytes.buffer).setUint16(0, number, true);
-    return bytes;
-};
-
-/**
- * Encodes an unsigned 32-bit integer in little-endian byte order.
- * @param {number} number The number.
- * @returns {Uint8Array} The encoded bytes.
- */
-const signed32 = (number) => {
-    const bytes = new Uint8Array(4);
-    new DataView(bytes.buffer).setUint32(0, number, true);
-    return bytes;
-};
 
 /**
  * Zip Class
@@ -75,7 +34,7 @@ export default class Zip {
     addFile(filename, data) {
         const vNeeded = 20;
 
-        const filenameLength = length(filename);
+        const filenameLength = byteLength(filename);
 
         data = encode(data);
         const uncompressedSize = data.byteLength;
@@ -99,22 +58,22 @@ export default class Zip {
 
         const dir = [
             encode('\x50\x4b\x01\x02'), // dir signature
-            signed16(0), // version made by
-            signed16(vNeeded),
-            signed16(0x0800), // UTF-8 filenames
-            signed16(cMethod),
-            signed16(modTime),
-            signed16(modDate),
-            signed32(crc32),
-            signed32(compressedSize),
-            signed32(uncompressedSize),
-            signed16(filenameLength),
-            signed16(0), // extra field length
-            signed16(0), // file comment length
-            signed16(0), // disk number start
-            signed16(0), // internal file attributes
-            signed32(32), // internal file attributes
-            signed32(this.#offset), // offset of local header
+            encodeUint16(0), // version made by
+            encodeUint16(vNeeded),
+            encodeUint16(0x0800), // UTF-8 filenames
+            encodeUint16(cMethod),
+            encodeUint16(modTime),
+            encodeUint16(modDate),
+            encodeUint32(crc32),
+            encodeUint32(compressedSize),
+            encodeUint32(uncompressedSize),
+            encodeUint16(filenameLength),
+            encodeUint16(0), // extra field length
+            encodeUint16(0), // file comment length
+            encodeUint16(0), // disk number start
+            encodeUint16(0), // internal file attributes
+            encodeUint32(32), // internal file attributes
+            encodeUint32(this.#offset), // offset of local header
             encode(filename),
         ];
 
@@ -122,16 +81,16 @@ export default class Zip {
 
         const file = [
             encode('\x50\x4b\x03\x04'), // zip signature
-            signed16(vNeeded),
-            signed16(0x0800), // UTF-8 filenames
-            signed16(cMethod),
-            signed16(modTime),
-            signed16(modDate),
-            signed32(crc32),
-            signed32(compressedSize),
-            signed32(uncompressedSize),
-            signed16(filenameLength),
-            signed16(0), // extra field length
+            encodeUint16(vNeeded),
+            encodeUint16(0x0800), // UTF-8 filenames
+            encodeUint16(cMethod),
+            encodeUint16(modTime),
+            encodeUint16(modDate),
+            encodeUint32(crc32),
+            encodeUint32(compressedSize),
+            encodeUint32(uncompressedSize),
+            encodeUint16(filenameLength),
+            encodeUint16(0), // extra field length
             encode(filename),
             data,
         ];
@@ -154,13 +113,13 @@ export default class Zip {
                 ...this.#files,
                 ...this.#dir,
                 encode('\x50\x4b\x05\x06'), // end of central directory
-                signed16(0), // number of this disk
-                signed16(0), // number of the disk with the start of the central directory
-                signed16(this.#entries), // total entries on this disk
-                signed16(this.#entries), // total entries
-                signed32(dirLength), // size of central dir
-                signed32(this.#offset), // offset to start of central dir
-                signed16(0), // file comment length
+                encodeUint16(0), // number of this disk
+                encodeUint16(0), // number of the disk with the start of the central directory
+                encodeUint16(this.#entries), // total entries on this disk
+                encodeUint16(this.#entries), // total entries
+                encodeUint32(dirLength), // size of central dir
+                encodeUint32(this.#offset), // offset to start of central dir
+                encodeUint16(0), // file comment length
             ],
             { type: this.#type },
         );

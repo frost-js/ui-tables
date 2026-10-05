@@ -3,6 +3,36 @@ import $ from "@fr0st/query";
 
 //#region src/js/helpers.js
 /**
+* Builds a text-only table from export data.
+* @param {string[]} headings The column headings.
+* @param {Array<Array<*>>} rows The displayed rows.
+* @param {string} direction The table direction.
+* @returns {HTMLTableElement} The table element.
+*/
+function buildTable(headings, rows, direction) {
+	const table = $.create("table");
+	$.setProperty(table, "dir", direction);
+	const thead = $.create("thead");
+	const tr = $.create("tr");
+	for (const heading of headings) {
+		const th = $.create("th", { text: heading });
+		$.append(tr, th);
+	}
+	$.append(thead, tr);
+	$.append(table, thead);
+	const tbody = $.create("tbody");
+	for (const row of rows) {
+		const tr = $.create("tr");
+		for (const value of row) {
+			const td = $.create("td", { text: value });
+			$.append(tr, td);
+		}
+		$.append(tbody, tr);
+	}
+	$.append(table, tbody);
+	return table;
+}
+/**
 * Builds a data array from a DOM element.
 * @param {HTMLElement} element The element to parse.
 * @returns {Array} The parsed data.
@@ -45,6 +75,13 @@ function saveBlob(blob, filename) {
 		$.detach(link);
 		setTimeout(() => URL.revokeObjectURL(url), 0);
 	}
+}
+/**
+* Validates a local or remote row collection.
+* @param {Array<Array<*>|Record<string, *>>} rows The supplied rows.
+*/
+function validateRows(rows) {
+	if (!Array.isArray(rows) || rows.some((row) => !Array.isArray(row) && !$._isPlainObject(row))) throw new TypeError("Results must be an array of arrays or plain objects.");
 }
 
 //#endregion
@@ -107,6 +144,46 @@ var CRC32 = class {
 		return (crc ^ 4294967295) >>> 0;
 	}
 };
+
+//#endregion
+//#region src/js/zip/helpers.js
+var encoder = new TextEncoder();
+/**
+* Encodes a string as UTF-8 bytes.
+* @param {string} string The string.
+* @returns {Uint8Array} The encoded string.
+*/
+function encode(string) {
+	return encoder.encode(string);
+}
+/**
+* Gets the UTF-8 byte length of a string.
+* @param {string} string The string.
+* @returns {number} The byte length.
+*/
+function byteLength(string) {
+	return encode(string).length;
+}
+/**
+* Encodes an unsigned 16-bit integer in little-endian byte order.
+* @param {number} number The number.
+* @returns {Uint8Array} The encoded bytes.
+*/
+function encodeUint16(number) {
+	const bytes = /* @__PURE__ */ new Uint8Array(2);
+	new DataView(bytes.buffer).setUint16(0, number, true);
+	return bytes;
+}
+/**
+* Encodes an unsigned 32-bit integer in little-endian byte order.
+* @param {number} number The number.
+* @returns {Uint8Array} The encoded bytes.
+*/
+function encodeUint32(number) {
+	const bytes = /* @__PURE__ */ new Uint8Array(4);
+	new DataView(bytes.buffer).setUint32(0, number, true);
+	return bytes;
+}
 
 //#endregion
 //#region src/js/zip/bit-stream.js
@@ -1101,43 +1178,6 @@ var RawDeflate = class {
 
 //#endregion
 //#region src/js/zip/zip.js
-var encoder = new TextEncoder();
-/**
-* Encode a string in binary.
-* @param {string} string The string.
-* @returns {Uint8Array} The encoded string.
-*/
-var encode = (string) => {
-	return encoder.encode(string);
-};
-/**
-* Gets the byte length of a string.
-* @param {string} string The string.
-* @returns {number} The byte length.
-*/
-var length = (string) => {
-	return encode(string).length;
-};
-/**
-* Encodes an unsigned 16-bit integer in little-endian byte order.
-* @param {number} number The number.
-* @returns {Uint8Array} The encoded bytes.
-*/
-var signed16 = (number) => {
-	const bytes = /* @__PURE__ */ new Uint8Array(2);
-	new DataView(bytes.buffer).setUint16(0, number, true);
-	return bytes;
-};
-/**
-* Encodes an unsigned 32-bit integer in little-endian byte order.
-* @param {number} number The number.
-* @returns {Uint8Array} The encoded bytes.
-*/
-var signed32 = (number) => {
-	const bytes = /* @__PURE__ */ new Uint8Array(4);
-	new DataView(bytes.buffer).setUint32(0, number, true);
-	return bytes;
-};
 /**
 * Zip Class
 * Based on https://github.com/shuchkin/simplexlsxgen/blob/master/src/SimpleXLSXGen.php
@@ -1167,7 +1207,7 @@ var Zip = class {
 	*/
 	addFile(filename, data) {
 		const vNeeded = 20;
-		const filenameLength = length(filename);
+		const filenameLength = byteLength(filename);
 		data = encode(data);
 		const uncompressedSize = data.byteLength;
 		const crc32 = CRC32.calc(data);
@@ -1184,37 +1224,37 @@ var Zip = class {
 		const modDate = year - 1980 << 9 | now.getMonth() + 1 << 5 | now.getDate();
 		const dir = [
 			encode("PK"),
-			signed16(0),
-			signed16(vNeeded),
-			signed16(2048),
-			signed16(cMethod),
-			signed16(modTime),
-			signed16(modDate),
-			signed32(crc32),
-			signed32(compressedSize),
-			signed32(uncompressedSize),
-			signed16(filenameLength),
-			signed16(0),
-			signed16(0),
-			signed16(0),
-			signed16(0),
-			signed32(32),
-			signed32(this.#offset),
+			encodeUint16(0),
+			encodeUint16(vNeeded),
+			encodeUint16(2048),
+			encodeUint16(cMethod),
+			encodeUint16(modTime),
+			encodeUint16(modDate),
+			encodeUint32(crc32),
+			encodeUint32(compressedSize),
+			encodeUint32(uncompressedSize),
+			encodeUint16(filenameLength),
+			encodeUint16(0),
+			encodeUint16(0),
+			encodeUint16(0),
+			encodeUint16(0),
+			encodeUint32(32),
+			encodeUint32(this.#offset),
 			encode(filename)
 		];
 		this.#dir.push(...dir);
 		const file = [
 			encode("PK"),
-			signed16(vNeeded),
-			signed16(2048),
-			signed16(cMethod),
-			signed16(modTime),
-			signed16(modDate),
-			signed32(crc32),
-			signed32(compressedSize),
-			signed32(uncompressedSize),
-			signed16(filenameLength),
-			signed16(0),
+			encodeUint16(vNeeded),
+			encodeUint16(2048),
+			encodeUint16(cMethod),
+			encodeUint16(modTime),
+			encodeUint16(modDate),
+			encodeUint32(crc32),
+			encodeUint32(compressedSize),
+			encodeUint32(uncompressedSize),
+			encodeUint16(filenameLength),
+			encodeUint16(0),
 			encode(filename),
 			data
 		];
@@ -1232,13 +1272,13 @@ var Zip = class {
 			...this.#files,
 			...this.#dir,
 			encode("PK"),
-			signed16(0),
-			signed16(0),
-			signed16(this.#entries),
-			signed16(this.#entries),
-			signed32(dirLength),
-			signed32(this.#offset),
-			signed16(0)
+			encodeUint16(0),
+			encodeUint16(0),
+			encodeUint16(this.#entries),
+			encodeUint16(this.#entries),
+			encodeUint32(dirLength),
+			encodeUint32(this.#offset),
+			encodeUint16(0)
 		], { type: this.#type });
 	}
 };
@@ -1667,8 +1707,9 @@ var Table = class extends BaseComponent {
 			excel(options, this.#getExportData(options));
 		},
 		print(options) {
-			const columns = options.columns || this.#getVisibleColumns();
-			print(options, this.#buildTable(columns), $.getAttribute(this.node, "class"));
+			const { headings, rows } = this.#getExportData(options);
+			const table = buildTable(headings, rows, $.css(this.node, "direction"));
+			print(options, table, $.getAttribute(this.node, "class"));
 		}
 	};
 	static classes = {
@@ -1863,7 +1904,7 @@ var Table = class extends BaseComponent {
 		try {
 			if (!this.options.getResults) {
 				this.#data = this.options.data ?? getDomData(node);
-				this.#validateRows(this.#data);
+				validateRows(this.#data);
 				this.#data = this.#data.slice();
 			}
 			this.#headings = headings;
@@ -1890,14 +1931,28 @@ var Table = class extends BaseComponent {
 				column.orderData.forEach((index) => this.#validateColumn(index));
 			}
 			this.#order = this.#normalizeOrder(this.options.order);
-			this.#getOrder();
 			this.#columnCount = this.#getVisibleColumns().length;
 			if (!$.getProperty(node, "id")) {
 				$.setProperty(node, "id", generateId("table"));
 				this.#id = true;
 			}
-			if (this.options.getResults) this.#getResultsInit();
-			else this.#getDataInit();
+			if (this.options.getResults) {
+				this.#loadResults = $._debounce((version) => this.#fetchResults(version), this.options.debounce);
+				this.#getData = () => {
+					this.#drawVersion++;
+					const version = this.#cancelRequest();
+					if (!this.node || version !== this.#requestVersion) return;
+					this.loading();
+					if (this.node && version === this.#requestVersion) this.#loadResults(version);
+				};
+			} else this.#getData = () => {
+				const version = ++this.#drawVersion;
+				this.loading();
+				if (!this.node || version !== this.#drawVersion) return;
+				this.#updateLocal();
+				this.loading({ show: false });
+				if (this.node && version === this.#drawVersion) this.#renderResults();
+			};
 			this.#render();
 			if (!this.node) return;
 			this.#events();
@@ -1914,7 +1969,7 @@ var Table = class extends BaseComponent {
 	*/
 	addRow(row) {
 		if (!this.node) return;
-		this.#validateRows([row]);
+		validateRows([row]);
 		this.#data.push(Array.isArray(row) ? [...row] : { ...row });
 		this.#mutated(1);
 	}
@@ -2155,7 +2210,7 @@ var Table = class extends BaseComponent {
 	*/
 	setRow(index, row, { modified = true } = {}) {
 		const rowIndex = this.#getIndex(index, { modified });
-		this.#validateRows([row]);
+		validateRows([row]);
 		this.#data[rowIndex] = Array.isArray(row) ? [...row] : { ...row };
 		this.#mutated();
 	}
@@ -2180,34 +2235,6 @@ var Table = class extends BaseComponent {
 		this.#validateColumn(index);
 		this.#columns[index].visible = true;
 		this.#renderResults();
-	}
-	/**
-	* Renders a table for specific columns.
-	* @param {Array} columns The columns to render.
-	* @returns {HTMLElement} The table element.
-	*/
-	#buildTable(columns) {
-		const table = $.create("table");
-		$.setProperty(table, "dir", $.css(this.node, "direction"));
-		const thead = $.create("thead");
-		const tr = $.create("tr");
-		for (const heading of this.#getHeadings(columns)) {
-			const th = $.create("th", { text: heading });
-			$.append(tr, th);
-		}
-		$.append(thead, tr);
-		$.append(table, thead);
-		const tbody = $.create("tbody");
-		for (const row of this.#getResultRows(columns)) {
-			const tr = $.create("tr");
-			for (const value of row) {
-				const td = $.create("td", { text: value });
-				$.append(tr, td);
-			}
-			$.append(tbody, tr);
-		}
-		$.append(table, tbody);
-		return table;
 	}
 	/**
 	* Invalidates pending results before invoking an optional cancellation hook.
@@ -2326,7 +2353,7 @@ var Table = class extends BaseComponent {
 			this.#pending = pending;
 			response = await pending;
 			if (!active()) return;
-			this.#validateRows(response?.results);
+			validateRows(response?.results);
 			if (!Number.isSafeInteger(response.total) || !Number.isSafeInteger(response.filtered) || response.total < 0 || response.filtered < 0 || response.filtered > response.total || response.results.length > response.filtered || this.options.paging && response.results.length > this.#limit) throw new TypeError("Remote counts and rows must describe a valid result page.");
 		} catch (error) {
 			if (active()) {
@@ -2348,19 +2375,6 @@ var Table = class extends BaseComponent {
 		this.#refreshResults();
 		this.loading({ show: false });
 		if (active()) this.#renderResults();
-	}
-	/**
-	* Initializes preloaded get data.
-	*/
-	#getDataInit() {
-		this.#getData = () => {
-			const version = ++this.#drawVersion;
-			this.loading();
-			if (!this.node || version !== this.#drawVersion) return;
-			this.#updateLocal();
-			this.loading({ show: false });
-			if (this.node && version === this.#drawVersion) this.#renderResults();
-		};
 	}
 	/**
 	* Copies the headings and displayed rows required by an export button.
@@ -2419,19 +2433,6 @@ var Table = class extends BaseComponent {
 	#getResultRows(columns) {
 		for (const index of columns) this.#validateColumn(index);
 		return this.#results.map((row) => columns.map((index) => $._getDot(row, String(this.#columns[index].data))));
-	}
-	/**
-	* Initializes get data from callback.
-	*/
-	#getResultsInit() {
-		this.#loadResults = $._debounce((version) => this.#fetchResults(version), this.options.debounce);
-		this.#getData = () => {
-			this.#drawVersion++;
-			const version = this.#cancelRequest();
-			if (!this.node || version !== this.#requestVersion) return;
-			this.loading();
-			if (this.node && version === this.#requestVersion) this.#loadResults(version);
-		};
 	}
 	/**
 	* Gets the visible columns.
@@ -2974,13 +2975,6 @@ var Table = class extends BaseComponent {
 	*/
 	#validateColumn(index) {
 		if (!Number.isInteger(index) || index < 0 || index >= this.#columns.length) throw new RangeError("Column index is out of range.");
-	}
-	/**
-	* Validates a local or remote row collection.
-	* @param {TableRow[]} rows The supplied rows.
-	*/
-	#validateRows(rows) {
-		if (!Array.isArray(rows) || rows.some((row) => !Array.isArray(row) && !$._isPlainObject(row))) throw new TypeError("Results must be an array of arrays or plain objects.");
 	}
 };
 

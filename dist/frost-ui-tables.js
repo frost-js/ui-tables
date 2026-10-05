@@ -35,6 +35,36 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 
 //#region src/js/helpers.js
 /**
+	* Builds a text-only table from export data.
+	* @param {string[]} headings The column headings.
+	* @param {Array<Array<*>>} rows The displayed rows.
+	* @param {string} direction The table direction.
+	* @returns {HTMLTableElement} The table element.
+	*/
+	function buildTable(headings, rows, direction) {
+		const table = _fr0st_query.default.create("table");
+		_fr0st_query.default.setProperty(table, "dir", direction);
+		const thead = _fr0st_query.default.create("thead");
+		const tr = _fr0st_query.default.create("tr");
+		for (const heading of headings) {
+			const th = _fr0st_query.default.create("th", { text: heading });
+			_fr0st_query.default.append(tr, th);
+		}
+		_fr0st_query.default.append(thead, tr);
+		_fr0st_query.default.append(table, thead);
+		const tbody = _fr0st_query.default.create("tbody");
+		for (const row of rows) {
+			const tr = _fr0st_query.default.create("tr");
+			for (const value of row) {
+				const td = _fr0st_query.default.create("td", { text: value });
+				_fr0st_query.default.append(tr, td);
+			}
+			_fr0st_query.default.append(tbody, tr);
+		}
+		_fr0st_query.default.append(table, tbody);
+		return table;
+	}
+	/**
 	* Builds a data array from a DOM element.
 	* @param {HTMLElement} element The element to parse.
 	* @returns {Array} The parsed data.
@@ -77,6 +107,13 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			_fr0st_query.default.detach(link);
 			setTimeout(() => URL.revokeObjectURL(url), 0);
 		}
+	}
+	/**
+	* Validates a local or remote row collection.
+	* @param {Array<Array<*>|Record<string, *>>} rows The supplied rows.
+	*/
+	function validateRows(rows) {
+		if (!Array.isArray(rows) || rows.some((row) => !Array.isArray(row) && !_fr0st_query.default._isPlainObject(row))) throw new TypeError("Results must be an array of arrays or plain objects.");
 	}
 
 //#endregion
@@ -139,6 +176,46 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			return (crc ^ 4294967295) >>> 0;
 		}
 	};
+
+//#endregion
+//#region src/js/zip/helpers.js
+	var encoder = new TextEncoder();
+	/**
+	* Encodes a string as UTF-8 bytes.
+	* @param {string} string The string.
+	* @returns {Uint8Array} The encoded string.
+	*/
+	function encode(string) {
+		return encoder.encode(string);
+	}
+	/**
+	* Gets the UTF-8 byte length of a string.
+	* @param {string} string The string.
+	* @returns {number} The byte length.
+	*/
+	function byteLength(string) {
+		return encode(string).length;
+	}
+	/**
+	* Encodes an unsigned 16-bit integer in little-endian byte order.
+	* @param {number} number The number.
+	* @returns {Uint8Array} The encoded bytes.
+	*/
+	function encodeUint16(number) {
+		const bytes = /* @__PURE__ */ new Uint8Array(2);
+		new DataView(bytes.buffer).setUint16(0, number, true);
+		return bytes;
+	}
+	/**
+	* Encodes an unsigned 32-bit integer in little-endian byte order.
+	* @param {number} number The number.
+	* @returns {Uint8Array} The encoded bytes.
+	*/
+	function encodeUint32(number) {
+		const bytes = /* @__PURE__ */ new Uint8Array(4);
+		new DataView(bytes.buffer).setUint32(0, number, true);
+		return bytes;
+	}
 
 //#endregion
 //#region src/js/zip/bit-stream.js
@@ -1133,44 +1210,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 
 //#endregion
 //#region src/js/zip/zip.js
-	var encoder = new TextEncoder();
-	/**
-	* Encode a string in binary.
-	* @param {string} string The string.
-	* @returns {Uint8Array} The encoded string.
-	*/
-	var encode = (string) => {
-		return encoder.encode(string);
-	};
-	/**
-	* Gets the byte length of a string.
-	* @param {string} string The string.
-	* @returns {number} The byte length.
-	*/
-	var length = (string) => {
-		return encode(string).length;
-	};
-	/**
-	* Encodes an unsigned 16-bit integer in little-endian byte order.
-	* @param {number} number The number.
-	* @returns {Uint8Array} The encoded bytes.
-	*/
-	var signed16 = (number) => {
-		const bytes = /* @__PURE__ */ new Uint8Array(2);
-		new DataView(bytes.buffer).setUint16(0, number, true);
-		return bytes;
-	};
-	/**
-	* Encodes an unsigned 32-bit integer in little-endian byte order.
-	* @param {number} number The number.
-	* @returns {Uint8Array} The encoded bytes.
-	*/
-	var signed32 = (number) => {
-		const bytes = /* @__PURE__ */ new Uint8Array(4);
-		new DataView(bytes.buffer).setUint32(0, number, true);
-		return bytes;
-	};
-	/**
+/**
 	* Zip Class
 	* Based on https://github.com/shuchkin/simplexlsxgen/blob/master/src/SimpleXLSXGen.php
 	* @class
@@ -1199,7 +1239,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		*/
 		addFile(filename, data) {
 			const vNeeded = 20;
-			const filenameLength = length(filename);
+			const filenameLength = byteLength(filename);
 			data = encode(data);
 			const uncompressedSize = data.byteLength;
 			const crc32 = CRC32.calc(data);
@@ -1216,37 +1256,37 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			const modDate = year - 1980 << 9 | now.getMonth() + 1 << 5 | now.getDate();
 			const dir = [
 				encode("PK"),
-				signed16(0),
-				signed16(vNeeded),
-				signed16(2048),
-				signed16(cMethod),
-				signed16(modTime),
-				signed16(modDate),
-				signed32(crc32),
-				signed32(compressedSize),
-				signed32(uncompressedSize),
-				signed16(filenameLength),
-				signed16(0),
-				signed16(0),
-				signed16(0),
-				signed16(0),
-				signed32(32),
-				signed32(this.#offset),
+				encodeUint16(0),
+				encodeUint16(vNeeded),
+				encodeUint16(2048),
+				encodeUint16(cMethod),
+				encodeUint16(modTime),
+				encodeUint16(modDate),
+				encodeUint32(crc32),
+				encodeUint32(compressedSize),
+				encodeUint32(uncompressedSize),
+				encodeUint16(filenameLength),
+				encodeUint16(0),
+				encodeUint16(0),
+				encodeUint16(0),
+				encodeUint16(0),
+				encodeUint32(32),
+				encodeUint32(this.#offset),
 				encode(filename)
 			];
 			this.#dir.push(...dir);
 			const file = [
 				encode("PK"),
-				signed16(vNeeded),
-				signed16(2048),
-				signed16(cMethod),
-				signed16(modTime),
-				signed16(modDate),
-				signed32(crc32),
-				signed32(compressedSize),
-				signed32(uncompressedSize),
-				signed16(filenameLength),
-				signed16(0),
+				encodeUint16(vNeeded),
+				encodeUint16(2048),
+				encodeUint16(cMethod),
+				encodeUint16(modTime),
+				encodeUint16(modDate),
+				encodeUint32(crc32),
+				encodeUint32(compressedSize),
+				encodeUint32(uncompressedSize),
+				encodeUint16(filenameLength),
+				encodeUint16(0),
 				encode(filename),
 				data
 			];
@@ -1264,13 +1304,13 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 				...this.#files,
 				...this.#dir,
 				encode("PK"),
-				signed16(0),
-				signed16(0),
-				signed16(this.#entries),
-				signed16(this.#entries),
-				signed32(dirLength),
-				signed32(this.#offset),
-				signed16(0)
+				encodeUint16(0),
+				encodeUint16(0),
+				encodeUint16(this.#entries),
+				encodeUint16(this.#entries),
+				encodeUint32(dirLength),
+				encodeUint32(this.#offset),
+				encodeUint16(0)
 			], { type: this.#type });
 		}
 	};
@@ -1699,8 +1739,9 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 				excel(options, this.#getExportData(options));
 			},
 			print(options) {
-				const columns = options.columns || this.#getVisibleColumns();
-				print(options, this.#buildTable(columns), _fr0st_query.default.getAttribute(this.node, "class"));
+				const { headings, rows } = this.#getExportData(options);
+				const table = buildTable(headings, rows, _fr0st_query.default.css(this.node, "direction"));
+				print(options, table, _fr0st_query.default.getAttribute(this.node, "class"));
 			}
 		};
 		static classes = {
@@ -1895,7 +1936,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			try {
 				if (!this.options.getResults) {
 					this.#data = this.options.data ?? getDomData(node);
-					this.#validateRows(this.#data);
+					validateRows(this.#data);
 					this.#data = this.#data.slice();
 				}
 				this.#headings = headings;
@@ -1922,14 +1963,28 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 					column.orderData.forEach((index) => this.#validateColumn(index));
 				}
 				this.#order = this.#normalizeOrder(this.options.order);
-				this.#getOrder();
 				this.#columnCount = this.#getVisibleColumns().length;
 				if (!_fr0st_query.default.getProperty(node, "id")) {
 					_fr0st_query.default.setProperty(node, "id", (0, _fr0st_ui.generateId)("table"));
 					this.#id = true;
 				}
-				if (this.options.getResults) this.#getResultsInit();
-				else this.#getDataInit();
+				if (this.options.getResults) {
+					this.#loadResults = _fr0st_query.default._debounce((version) => this.#fetchResults(version), this.options.debounce);
+					this.#getData = () => {
+						this.#drawVersion++;
+						const version = this.#cancelRequest();
+						if (!this.node || version !== this.#requestVersion) return;
+						this.loading();
+						if (this.node && version === this.#requestVersion) this.#loadResults(version);
+					};
+				} else this.#getData = () => {
+					const version = ++this.#drawVersion;
+					this.loading();
+					if (!this.node || version !== this.#drawVersion) return;
+					this.#updateLocal();
+					this.loading({ show: false });
+					if (this.node && version === this.#drawVersion) this.#renderResults();
+				};
 				this.#render();
 				if (!this.node) return;
 				this.#events();
@@ -1946,7 +2001,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		*/
 		addRow(row) {
 			if (!this.node) return;
-			this.#validateRows([row]);
+			validateRows([row]);
 			this.#data.push(Array.isArray(row) ? [...row] : { ...row });
 			this.#mutated(1);
 		}
@@ -2187,7 +2242,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		*/
 		setRow(index, row, { modified = true } = {}) {
 			const rowIndex = this.#getIndex(index, { modified });
-			this.#validateRows([row]);
+			validateRows([row]);
 			this.#data[rowIndex] = Array.isArray(row) ? [...row] : { ...row };
 			this.#mutated();
 		}
@@ -2212,34 +2267,6 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			this.#validateColumn(index);
 			this.#columns[index].visible = true;
 			this.#renderResults();
-		}
-		/**
-		* Renders a table for specific columns.
-		* @param {Array} columns The columns to render.
-		* @returns {HTMLElement} The table element.
-		*/
-		#buildTable(columns) {
-			const table = _fr0st_query.default.create("table");
-			_fr0st_query.default.setProperty(table, "dir", _fr0st_query.default.css(this.node, "direction"));
-			const thead = _fr0st_query.default.create("thead");
-			const tr = _fr0st_query.default.create("tr");
-			for (const heading of this.#getHeadings(columns)) {
-				const th = _fr0st_query.default.create("th", { text: heading });
-				_fr0st_query.default.append(tr, th);
-			}
-			_fr0st_query.default.append(thead, tr);
-			_fr0st_query.default.append(table, thead);
-			const tbody = _fr0st_query.default.create("tbody");
-			for (const row of this.#getResultRows(columns)) {
-				const tr = _fr0st_query.default.create("tr");
-				for (const value of row) {
-					const td = _fr0st_query.default.create("td", { text: value });
-					_fr0st_query.default.append(tr, td);
-				}
-				_fr0st_query.default.append(tbody, tr);
-			}
-			_fr0st_query.default.append(table, tbody);
-			return table;
 		}
 		/**
 		* Invalidates pending results before invoking an optional cancellation hook.
@@ -2358,7 +2385,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 				this.#pending = pending;
 				response = await pending;
 				if (!active()) return;
-				this.#validateRows(response?.results);
+				validateRows(response?.results);
 				if (!Number.isSafeInteger(response.total) || !Number.isSafeInteger(response.filtered) || response.total < 0 || response.filtered < 0 || response.filtered > response.total || response.results.length > response.filtered || this.options.paging && response.results.length > this.#limit) throw new TypeError("Remote counts and rows must describe a valid result page.");
 			} catch (error) {
 				if (active()) {
@@ -2380,19 +2407,6 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			this.#refreshResults();
 			this.loading({ show: false });
 			if (active()) this.#renderResults();
-		}
-		/**
-		* Initializes preloaded get data.
-		*/
-		#getDataInit() {
-			this.#getData = () => {
-				const version = ++this.#drawVersion;
-				this.loading();
-				if (!this.node || version !== this.#drawVersion) return;
-				this.#updateLocal();
-				this.loading({ show: false });
-				if (this.node && version === this.#drawVersion) this.#renderResults();
-			};
 		}
 		/**
 		* Copies the headings and displayed rows required by an export button.
@@ -2451,19 +2465,6 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		#getResultRows(columns) {
 			for (const index of columns) this.#validateColumn(index);
 			return this.#results.map((row) => columns.map((index) => _fr0st_query.default._getDot(row, String(this.#columns[index].data))));
-		}
-		/**
-		* Initializes get data from callback.
-		*/
-		#getResultsInit() {
-			this.#loadResults = _fr0st_query.default._debounce((version) => this.#fetchResults(version), this.options.debounce);
-			this.#getData = () => {
-				this.#drawVersion++;
-				const version = this.#cancelRequest();
-				if (!this.node || version !== this.#requestVersion) return;
-				this.loading();
-				if (this.node && version === this.#requestVersion) this.#loadResults(version);
-			};
 		}
 		/**
 		* Gets the visible columns.
@@ -3006,13 +3007,6 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		*/
 		#validateColumn(index) {
 			if (!Number.isInteger(index) || index < 0 || index >= this.#columns.length) throw new RangeError("Column index is out of range.");
-		}
-		/**
-		* Validates a local or remote row collection.
-		* @param {TableRow[]} rows The supplied rows.
-		*/
-		#validateRows(rows) {
-			if (!Array.isArray(rows) || rows.some((row) => !Array.isArray(row) && !_fr0st_query.default._isPlainObject(row))) throw new TypeError("Results must be an array of arrays or plain objects.");
 		}
 	};
 
