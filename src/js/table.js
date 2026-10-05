@@ -242,7 +242,7 @@ export default class Table extends BaseComponent {
      * @param {TableOptions} [options] The component options.
      */
     constructor(node, options) {
-        if (node?.tagName !== 'TABLE') {
+        if (!$._isElement(node) || $.tagName(node) !== 'table') {
             throw new TypeError('Table requires a table element.');
         }
         const configured = { ...new.target.defaults, ...getDataset(node), ...options };
@@ -313,8 +313,8 @@ export default class Table extends BaseComponent {
             this.#order = this.#normalizeOrder(this.options.order);
             this.#getOrder();
             this.#columnCount = this.#getVisibleColumns().length;
-            if (!node.id) {
-                node.id = generateId('table');
+            if (!$.getProperty(node, 'id')) {
+                $.setProperty(node, 'id', generateId('table'));
                 this.#id = true;
             }
             if (this.options.getResults) {
@@ -407,11 +407,12 @@ export default class Table extends BaseComponent {
             }
         }
         if (this.#container) {
-            this.#container.before(node);
+            $.before(this.#container, node);
             $.remove(this.#container);
         }
         if (this.#original) {
-            node.replaceChildren(...this.#original.childNodes);
+            $.empty(node);
+            $.append(node, this.#original);
         }
         this.#original = null;
         this.#container = null;
@@ -697,7 +698,7 @@ export default class Table extends BaseComponent {
      */
     #buildTable(columns) {
         const table = $.create('table');
-        table.dir = getComputedStyle(this.node).direction;
+        $.setProperty(table, 'dir', $.css(this.node, 'direction'));
         const thead = $.create('thead');
         const tr = $.create('tr');
 
@@ -836,7 +837,7 @@ export default class Table extends BaseComponent {
         if (this.#pagination) {
             $.addEventDelegate(this.#pagination, 'click.ui.table', '[data-ui-page]', (event) => {
                 event.preventDefault();
-                if (event.currentTarget.disabled) {
+                if ($.getProperty(event.currentTarget, 'disabled')) {
                     return;
                 }
 
@@ -978,7 +979,7 @@ export default class Table extends BaseComponent {
     #getHeadings(columns) {
         return columns.map((index) => {
             this.#validateColumn(index);
-            const container = document.createElement('div');
+            const container = $.create('div');
             $.setHtml(container, $.sanitize(String(this.#headings[index].text)));
             return $.getText(container);
         });
@@ -1129,8 +1130,8 @@ export default class Table extends BaseComponent {
      * Renders the Table.
      */
     #render() {
-        this.#original = document.createDocumentFragment();
-        this.#original.append(...this.node.childNodes);
+        this.#original = $.createFragment();
+        $.append(this.#original, $.contents(this.node));
 
         this.#container = $.create('div', {
             class: this.constructor.classes.container,
@@ -1164,7 +1165,7 @@ export default class Table extends BaseComponent {
 
         const tfoot = $.findOne('tfoot', this.#original);
         if (tfoot) {
-            this.#tfoot = tfoot.cloneNode(true);
+            this.#tfoot = $.clone(tfoot)[0];
             $.append(this.node, this.#tfoot);
         }
 
@@ -1194,7 +1195,7 @@ export default class Table extends BaseComponent {
         }
         if (this.#infoContainer) {
             $.setAttribute(this.node, {
-                'aria-describedby': [this.#originalDescription, this.#infoContainer.id].filter(Boolean).join(' '),
+                'aria-describedby': [this.#originalDescription, $.getProperty(this.#infoContainer, 'id')].filter(Boolean).join(' '),
             });
         }
     }

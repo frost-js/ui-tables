@@ -20,6 +20,18 @@ test.describe('Table', () => {
     });
 
     test.describe('#init', () => {
+        test('requires a table element rather than a selector or collection', async ({ page }) => {
+            expect(await page.evaluate(() => {
+                return [null, '#table', [$.findOne('#table')], $.create('div')].map((node) => {
+                    try {
+                        new UI.Table(node);
+                    } catch (error) {
+                        return error.name;
+                    }
+                });
+            })).toEqual(['TypeError', 'TypeError', 'TypeError', 'TypeError']);
+            await expect(page.locator('.table-responsive')).toHaveCount(0);
+        });
         test('retains the caption as the accessible table name', async ({ page }) => {
             await page.evaluate(() => window.createTable());
             await expect(page.getByRole('table', { name: 'Scores' })).toBeVisible();
@@ -64,6 +76,50 @@ test.describe('Table', () => {
     });
 
     test.describe('#dispose', () => {
+        test('preserves original contents and query state while cleaning generated cells', async ({ page }) => {
+            expect(await page.evaluate(() => {
+                const node = $.findOne('#table');
+                const caption = $.findOne('caption', node);
+                $.prepend(node, [$.createText('\n'), $.createComment('Original table')]);
+                const original = $.contents(node);
+                let originalEvents = 0;
+                let generatedEvents = 0;
+                let removals = 0;
+                $.setData(caption, 'marker', 'original');
+                $.addEvent(caption, 'click', () => originalEvents++);
+                const table = window.createTable();
+                const cell = $.findOne('tbody td', node);
+                $.setData(cell, 'marker', 'generated');
+                $.addEvent(cell, 'click', () => generatedEvents++);
+                $.addEvent(cell, 'remove', () => {
+                    removals++;
+                    table.dispose();
+                });
+                table.dispose();
+                $.triggerEvent(caption, 'click');
+                $.triggerEvent(cell, 'click');
+                const restored = $.contents(node);
+                return {
+                    sameContents: restored.length === original.length && restored.every((child, index) => $.isSame(child, original[index])),
+                    originalData: $.getData(caption, 'marker'),
+                    generatedData: $.hasData(cell, 'marker'),
+                    originalEvents,
+                    generatedEvents,
+                    removals,
+                    disposed: table.node === null,
+                };
+            })).toEqual({
+                sameContents: true,
+                originalData: 'original',
+                generatedData: false,
+                originalEvents: 1,
+                generatedEvents: 0,
+                removals: 1,
+                disposed: true,
+            });
+            await page.evaluate(() => window.createTable());
+            await expect(page.locator('tbody tr')).toHaveCount(2);
+        });
         test('cancels a pending local search and restores the original busy state', async ({ page }) => {
             await page.clock.install();
             await page.clock.pauseAt(new Date());

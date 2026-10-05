@@ -10,9 +10,9 @@
     <script>const originalUI = UI; const originalAlert = UI.Alert;</script>
     <script src="/assets/frost-ui-tables.min.js"></script>
     <script>
-        const node = document.querySelector('table');
+        const node = fQuery.findOne('table');
         const table = UI.Table.init(node);
-        document.body.dataset.shared = String(UI === originalUI && UI.Alert === originalAlert && fQuery(node).table() === table);
+        fQuery.setDataset(document.body, 'shared', String(UI === originalUI && UI.Alert === originalAlert && fQuery(node).table() === table));
     </script>
 </body>
 </html>

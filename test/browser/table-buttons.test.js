@@ -73,11 +73,12 @@ test.describe('Table buttons', () => {
             const files = readZip(await readDownload(await pending));
             const values = await page.evaluate((entries) => {
                 const xml = Object.fromEntries(entries.map(([name, value]) => [name, new DOMParser().parseFromString(value.text, 'application/xml')]));
-                const strings = [...xml['xl/sharedStrings.xml'].querySelectorAll('si')].map((item) => item.textContent);
-                return [...xml['xl/worksheets/sheet1.xml'].querySelectorAll('row')].slice(1).map((row) => {
-                    return [...row.querySelectorAll('c')].map((cell) => {
-                        const type = cell.getAttribute('t');
-                        return type === 's' ? strings[Number(cell.textContent)] : cell.textContent;
+                const strings = $.find('si', xml['xl/sharedStrings.xml']).map((item) => $.getText(item));
+                return $.find('row', xml['xl/worksheets/sheet1.xml']).slice(1).map((row) => {
+                    return $.find('c', row).map((cell) => {
+                        const type = $.getAttribute(cell, 't');
+                        const text = $.getText(cell);
+                        return type === 's' ? strings[Number(text)] : text;
                     });
                 });
             }, [...files]);
@@ -105,17 +106,17 @@ test.describe('Table buttons', () => {
                 window.xml = Object.fromEntries(entries.map(([name, value]) => [name, new DOMParser().parseFromString(value.text, 'application/xml')]));
             }, [...files]);
             expect(await page.evaluate(() => Object.values(window.xml).some((doc) => doc.querySelector('parsererror')))).toBe(false);
-            const cell = async (reference) => page.evaluate((reference) => window.xml['xl/worksheets/sheet1.xml'].querySelector(`c[r="${reference}"] v`)?.textContent, reference);
+            const cell = async (reference) => page.evaluate((reference) => $.getText($.findOne(`c[r="${reference}"] v`, window.xml['xl/worksheets/sheet1.xml'])), reference);
             expect(await cell('A2')).toBe('0');
             expect(await cell('B2')).toBe('0');
             expect(await cell('C2')).toBe('1');
             expect(await cell('F2')).toBe('45306');
             expect(Number(await cell('G2'))).toBeCloseTo(45366 + 12.5 / 24, 8);
             expect(Number(await cell('H2'))).toBeCloseTo(12.5 / 24, 8);
-            expect(await page.evaluate(() => window.xml['xl/worksheets/sheet1.xml'].querySelector('dimension').getAttribute('ref'))).toBe('A1:AB2');
-            expect(await page.evaluate(() => window.xml['xl/worksheets/sheet1.xml'].querySelector('c[r="B2"]').getAttribute('t'))).toBe('b');
-            expect(await page.evaluate(() => window.xml['xl/worksheets/sheet1.xml'].querySelector('f'))).toBeNull();
-            const strings = await page.evaluate(() => window.xml['xl/sharedStrings.xml'].documentElement.textContent);
+            expect(await page.evaluate(() => $.getAttribute($.findOne('dimension', window.xml['xl/worksheets/sheet1.xml']), 'ref'))).toBe('A1:AB2');
+            expect(await page.evaluate(() => $.getAttribute($.findOne('c[r="B2"]', window.xml['xl/worksheets/sheet1.xml']), 't'))).toBe('b');
+            expect(await page.evaluate(() => $.findOne('f', window.xml['xl/worksheets/sheet1.xml']))).toBeNull();
+            const strings = await page.evaluate(() => $.getText(window.xml['xl/sharedStrings.xml'].documentElement));
             expect(strings).toContain('A & B & C < D < E');
             expect(strings).toContain('Café 🌨️');
             expect(files.get('xl/styles.xml').text).toContain('cellXfs count="9"');
@@ -128,7 +129,7 @@ test.describe('Table buttons', () => {
                 const files = readZip(new Uint8Array(await workbook.create().arrayBuffer()));
                 const names = await page.evaluate((xml) => {
                     const doc = new DOMParser().parseFromString(xml, 'application/xml');
-                    return [...doc.querySelectorAll('sheet')].map((sheet) => sheet.getAttribute('name'));
+                    return $.find('sheet', doc).map((sheet) => $.getAttribute(sheet, 'name'));
                 }, files.get('xl/workbook.xml').text);
                 expect(names).toEqual(['A & "B"', 'A & "B" (1)']);
                 expect(files.get('xl/sharedStrings.xml').text).toContain('count="3" uniqueCount="2"');
@@ -156,12 +157,12 @@ test.describe('Table buttons', () => {
                 window.open = (...args) => {
                     const popup = open(...args);
                     popup.print = () => {
-                        popup.document.body.dataset.printed = 'true';
-                        popup.document.body.dataset.stylesReady = String([...popup.document.querySelectorAll('link[rel="stylesheet"]')].every((link) => link.sheet?.cssRules.length));
-                        popup.document.body.dataset.fonts = popup.document.fonts.status;
+                        $.setDataset(popup.document.body, 'printed', 'true');
+                        $.setDataset(popup.document.body, 'stylesReady', String($.find('link[rel="stylesheet"]', popup.document).every((link) => link.sheet?.cssRules.length)));
+                        $.setDataset(popup.document.body, 'fonts', popup.document.fonts.status);
                     };
                     popup.close = () => {
-                        popup.document.body.dataset.closed = 'true';
+                        $.setDataset(popup.document.body, 'closed', 'true');
                     };
                     return popup;
                 };

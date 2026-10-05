@@ -50,22 +50,22 @@ export async function print(options, table, classes) {
     }
     const title = options.title || document.title;
     win.document.title = title;
-    win.document.documentElement.dir = table.dir || document.documentElement.dir;
+    win.document.documentElement.dir = $.getProperty(table, 'dir') || document.documentElement.dir;
     const heading = win.document.createElement('h1');
-    heading.textContent = title;
+    $.setText(heading, title);
     $.addClass(table, classes || '');
-    win.document.body.append(heading, table);
+    $.append(win.document.body, [heading, table]);
     const loads = [];
-    for (const element of document.querySelectorAll('link[rel="stylesheet"], style')) {
+    for (const element of $.find('link[rel="stylesheet"], style')) {
         const clone = win.document.importNode(element, true);
-        if (clone.tagName === 'LINK') {
-            clone.href = element.href;
+        if ($.tagName(clone) === 'link') {
+            $.setProperty(clone, 'href', $.getProperty(element, 'href'));
             loads.push(new Promise((resolve) => {
-                clone.addEventListener('load', resolve, { once: true });
-                clone.addEventListener('error', resolve, { once: true });
+                $.addEventOnce(clone, 'load', resolve);
+                $.addEventOnce(clone, 'error', resolve);
             }));
         }
-        win.document.head.append(clone);
+        $.append(win.document.head, clone);
     }
     try {
         await Promise.all(loads);

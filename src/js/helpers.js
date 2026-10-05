@@ -18,17 +18,18 @@ export function getDomData(element) {
  * @returns {Array} The parsed data.
  */
 export function getDomHeadings(element) {
-    const thead = element.tHead;
+    const thead = $.getProperty(element, 'tHead');
     if (!thead) {
         return [];
     }
+    const rows = $.getProperty(thead, 'rows');
     if (
-        thead.rows.length > 1 ||
-        $.find('th', thead).some((cell) => cell.colSpan !== 1 || cell.rowSpan !== 1)
+        rows.length > 1 ||
+        $.find('th', thead).some((cell) => $.getProperty(cell, 'colSpan') !== 1 || $.getProperty(cell, 'rowSpan') !== 1)
     ) {
         throw new RangeError('Table supports one heading row without spanning cells.');
     }
-    const row = thead.rows[0];
+    const row = rows[0];
 
     return $.children(row, 'th').map((cell) => ({
         text: $.getHtml(cell),

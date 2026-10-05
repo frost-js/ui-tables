@@ -49,10 +49,11 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 	* @returns {Array} The parsed data.
 	*/
 	function getDomHeadings(element) {
-		const thead = element.tHead;
+		const thead = _fr0st_query.default.getProperty(element, "tHead");
 		if (!thead) return [];
-		if (thead.rows.length > 1 || _fr0st_query.default.find("th", thead).some((cell) => cell.colSpan !== 1 || cell.rowSpan !== 1)) throw new RangeError("Table supports one heading row without spanning cells.");
-		const row = thead.rows[0];
+		const rows = _fr0st_query.default.getProperty(thead, "rows");
+		if (rows.length > 1 || _fr0st_query.default.find("th", thead).some((cell) => _fr0st_query.default.getProperty(cell, "colSpan") !== 1 || _fr0st_query.default.getProperty(cell, "rowSpan") !== 1)) throw new RangeError("Table supports one heading row without spanning cells.");
+		const row = rows[0];
 		return _fr0st_query.default.children(row, "th").map((cell) => ({
 			text: _fr0st_query.default.getHtml(cell),
 			class: _fr0st_query.default.getAttribute(cell, "class")
@@ -1589,22 +1590,22 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		if (!win) return;
 		const title = options.title || document.title;
 		win.document.title = title;
-		win.document.documentElement.dir = table.dir || document.documentElement.dir;
+		win.document.documentElement.dir = _fr0st_query.default.getProperty(table, "dir") || document.documentElement.dir;
 		const heading = win.document.createElement("h1");
-		heading.textContent = title;
+		_fr0st_query.default.setText(heading, title);
 		_fr0st_query.default.addClass(table, classes || "");
-		win.document.body.append(heading, table);
+		_fr0st_query.default.append(win.document.body, [heading, table]);
 		const loads = [];
-		for (const element of document.querySelectorAll("link[rel=\"stylesheet\"], style")) {
+		for (const element of _fr0st_query.default.find("link[rel=\"stylesheet\"], style")) {
 			const clone = win.document.importNode(element, true);
-			if (clone.tagName === "LINK") {
-				clone.href = element.href;
+			if (_fr0st_query.default.tagName(clone) === "link") {
+				_fr0st_query.default.setProperty(clone, "href", _fr0st_query.default.getProperty(element, "href"));
 				loads.push(new Promise((resolve) => {
-					clone.addEventListener("load", resolve, { once: true });
-					clone.addEventListener("error", resolve, { once: true });
+					_fr0st_query.default.addEventOnce(clone, "load", resolve);
+					_fr0st_query.default.addEventOnce(clone, "error", resolve);
 				}));
 			}
-			win.document.head.append(clone);
+			_fr0st_query.default.append(win.document.head, clone);
 		}
 		try {
 			await Promise.all(loads);
@@ -1857,7 +1858,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		* @param {TableOptions} [options] The component options.
 		*/
 		constructor(node, options) {
-			if (node?.tagName !== "TABLE") throw new TypeError("Table requires a table element.");
+			if (!_fr0st_query.default._isElement(node) || _fr0st_query.default.tagName(node) !== "table") throw new TypeError("Table requires a table element.");
 			const configured = {
 				...new.target.defaults,
 				...(0, _fr0st_ui.getDataset)(node),
@@ -1923,8 +1924,8 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 				this.#order = this.#normalizeOrder(this.options.order);
 				this.#getOrder();
 				this.#columnCount = this.#getVisibleColumns().length;
-				if (!node.id) {
-					node.id = (0, _fr0st_ui.generateId)("table");
+				if (!_fr0st_query.default.getProperty(node, "id")) {
+					_fr0st_query.default.setProperty(node, "id", (0, _fr0st_ui.generateId)("table"));
 					this.#id = true;
 				}
 				if (this.options.getResults) this.#getResultsInit();
@@ -1988,10 +1989,13 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			]) if (value === null || value === void 0) _fr0st_query.default.removeAttribute(node, attribute);
 			else _fr0st_query.default.setAttribute(node, { [attribute]: value });
 			if (this.#container) {
-				this.#container.before(node);
+				_fr0st_query.default.before(this.#container, node);
 				_fr0st_query.default.remove(this.#container);
 			}
-			if (this.#original) node.replaceChildren(...this.#original.childNodes);
+			if (this.#original) {
+				_fr0st_query.default.empty(node);
+				_fr0st_query.default.append(node, this.#original);
+			}
 			this.#original = null;
 			this.#container = null;
 			this.#loader = null;
@@ -2216,7 +2220,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		*/
 		#buildTable(columns) {
 			const table = _fr0st_query.default.create("table");
-			table.dir = getComputedStyle(this.node).direction;
+			_fr0st_query.default.setProperty(table, "dir", _fr0st_query.default.css(this.node, "direction"));
 			const thead = _fr0st_query.default.create("thead");
 			const tr = _fr0st_query.default.create("tr");
 			for (const heading of this.#getHeadings(columns)) {
@@ -2303,7 +2307,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			}
 			if (this.#pagination) _fr0st_query.default.addEventDelegate(this.#pagination, "click.ui.table", "[data-ui-page]", (event) => {
 				event.preventDefault();
-				if (event.currentTarget.disabled) return;
+				if (_fr0st_query.default.getProperty(event.currentTarget, "disabled")) return;
 				let page = _fr0st_query.default.getDataset(event.currentTarget, "uiPage");
 				switch (page) {
 					case "first":
@@ -2410,7 +2414,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		#getHeadings(columns) {
 			return columns.map((index) => {
 				this.#validateColumn(index);
-				const container = document.createElement("div");
+				const container = _fr0st_query.default.create("div");
 				_fr0st_query.default.setHtml(container, _fr0st_query.default.sanitize(String(this.#headings[index].text)));
 				return _fr0st_query.default.getText(container);
 			});
@@ -2521,8 +2525,8 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		* Renders the Table.
 		*/
 		#render() {
-			this.#original = document.createDocumentFragment();
-			this.#original.append(...this.node.childNodes);
+			this.#original = _fr0st_query.default.createFragment();
+			_fr0st_query.default.append(this.#original, _fr0st_query.default.contents(this.node));
 			this.#container = _fr0st_query.default.create("div", { class: this.constructor.classes.container });
 			this.#loader = _fr0st_query.default.create("div", {
 				class: this.constructor.classes.loader,
@@ -2544,7 +2548,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			_fr0st_query.default.append(this.node, this.#tbody);
 			const tfoot = _fr0st_query.default.findOne("tfoot", this.#original);
 			if (tfoot) {
-				this.#tfoot = tfoot.cloneNode(true);
+				this.#tfoot = _fr0st_query.default.clone(tfoot)[0];
 				_fr0st_query.default.append(this.node, this.#tfoot);
 			}
 			_fr0st_query.default.hide(this.#loader);
@@ -2561,7 +2565,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 				this.#renderLayoutRow(this.options.layout.bottom, this.constructor.classes.bottomRow);
 				if (!this.node) return;
 			}
-			if (this.#infoContainer) _fr0st_query.default.setAttribute(this.node, { "aria-describedby": [this.#originalDescription, this.#infoContainer.id].filter(Boolean).join(" ") });
+			if (this.#infoContainer) _fr0st_query.default.setAttribute(this.node, { "aria-describedby": [this.#originalDescription, _fr0st_query.default.getProperty(this.#infoContainer, "id")].filter(Boolean).join(" ") });
 		}
 		/**
 		* Renders the table buttons.

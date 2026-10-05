@@ -17,10 +17,11 @@ function getDomData(element) {
 * @returns {Array} The parsed data.
 */
 function getDomHeadings(element) {
-	const thead = element.tHead;
+	const thead = $.getProperty(element, "tHead");
 	if (!thead) return [];
-	if (thead.rows.length > 1 || $.find("th", thead).some((cell) => cell.colSpan !== 1 || cell.rowSpan !== 1)) throw new RangeError("Table supports one heading row without spanning cells.");
-	const row = thead.rows[0];
+	const rows = $.getProperty(thead, "rows");
+	if (rows.length > 1 || $.find("th", thead).some((cell) => $.getProperty(cell, "colSpan") !== 1 || $.getProperty(cell, "rowSpan") !== 1)) throw new RangeError("Table supports one heading row without spanning cells.");
+	const row = rows[0];
 	return $.children(row, "th").map((cell) => ({
 		text: $.getHtml(cell),
 		class: $.getAttribute(cell, "class")
@@ -1557,22 +1558,22 @@ async function print(options, table, classes) {
 	if (!win) return;
 	const title = options.title || document.title;
 	win.document.title = title;
-	win.document.documentElement.dir = table.dir || document.documentElement.dir;
+	win.document.documentElement.dir = $.getProperty(table, "dir") || document.documentElement.dir;
 	const heading = win.document.createElement("h1");
-	heading.textContent = title;
+	$.setText(heading, title);
 	$.addClass(table, classes || "");
-	win.document.body.append(heading, table);
+	$.append(win.document.body, [heading, table]);
 	const loads = [];
-	for (const element of document.querySelectorAll("link[rel=\"stylesheet\"], style")) {
+	for (const element of $.find("link[rel=\"stylesheet\"], style")) {
 		const clone = win.document.importNode(element, true);
-		if (clone.tagName === "LINK") {
-			clone.href = element.href;
+		if ($.tagName(clone) === "link") {
+			$.setProperty(clone, "href", $.getProperty(element, "href"));
 			loads.push(new Promise((resolve) => {
-				clone.addEventListener("load", resolve, { once: true });
-				clone.addEventListener("error", resolve, { once: true });
+				$.addEventOnce(clone, "load", resolve);
+				$.addEventOnce(clone, "error", resolve);
 			}));
 		}
-		win.document.head.append(clone);
+		$.append(win.document.head, clone);
 	}
 	try {
 		await Promise.all(loads);
@@ -1825,7 +1826,7 @@ var Table = class extends BaseComponent {
 	* @param {TableOptions} [options] The component options.
 	*/
 	constructor(node, options) {
-		if (node?.tagName !== "TABLE") throw new TypeError("Table requires a table element.");
+		if (!$._isElement(node) || $.tagName(node) !== "table") throw new TypeError("Table requires a table element.");
 		const configured = {
 			...new.target.defaults,
 			...getDataset(node),
@@ -1891,8 +1892,8 @@ var Table = class extends BaseComponent {
 			this.#order = this.#normalizeOrder(this.options.order);
 			this.#getOrder();
 			this.#columnCount = this.#getVisibleColumns().length;
-			if (!node.id) {
-				node.id = generateId("table");
+			if (!$.getProperty(node, "id")) {
+				$.setProperty(node, "id", generateId("table"));
 				this.#id = true;
 			}
 			if (this.options.getResults) this.#getResultsInit();
@@ -1956,10 +1957,13 @@ var Table = class extends BaseComponent {
 		]) if (value === null || value === void 0) $.removeAttribute(node, attribute);
 		else $.setAttribute(node, { [attribute]: value });
 		if (this.#container) {
-			this.#container.before(node);
+			$.before(this.#container, node);
 			$.remove(this.#container);
 		}
-		if (this.#original) node.replaceChildren(...this.#original.childNodes);
+		if (this.#original) {
+			$.empty(node);
+			$.append(node, this.#original);
+		}
 		this.#original = null;
 		this.#container = null;
 		this.#loader = null;
@@ -2184,7 +2188,7 @@ var Table = class extends BaseComponent {
 	*/
 	#buildTable(columns) {
 		const table = $.create("table");
-		table.dir = getComputedStyle(this.node).direction;
+		$.setProperty(table, "dir", $.css(this.node, "direction"));
 		const thead = $.create("thead");
 		const tr = $.create("tr");
 		for (const heading of this.#getHeadings(columns)) {
@@ -2271,7 +2275,7 @@ var Table = class extends BaseComponent {
 		}
 		if (this.#pagination) $.addEventDelegate(this.#pagination, "click.ui.table", "[data-ui-page]", (event) => {
 			event.preventDefault();
-			if (event.currentTarget.disabled) return;
+			if ($.getProperty(event.currentTarget, "disabled")) return;
 			let page = $.getDataset(event.currentTarget, "uiPage");
 			switch (page) {
 				case "first":
@@ -2378,7 +2382,7 @@ var Table = class extends BaseComponent {
 	#getHeadings(columns) {
 		return columns.map((index) => {
 			this.#validateColumn(index);
-			const container = document.createElement("div");
+			const container = $.create("div");
 			$.setHtml(container, $.sanitize(String(this.#headings[index].text)));
 			return $.getText(container);
 		});
@@ -2489,8 +2493,8 @@ var Table = class extends BaseComponent {
 	* Renders the Table.
 	*/
 	#render() {
-		this.#original = document.createDocumentFragment();
-		this.#original.append(...this.node.childNodes);
+		this.#original = $.createFragment();
+		$.append(this.#original, $.contents(this.node));
 		this.#container = $.create("div", { class: this.constructor.classes.container });
 		this.#loader = $.create("div", {
 			class: this.constructor.classes.loader,
@@ -2512,7 +2516,7 @@ var Table = class extends BaseComponent {
 		$.append(this.node, this.#tbody);
 		const tfoot = $.findOne("tfoot", this.#original);
 		if (tfoot) {
-			this.#tfoot = tfoot.cloneNode(true);
+			this.#tfoot = $.clone(tfoot)[0];
 			$.append(this.node, this.#tfoot);
 		}
 		$.hide(this.#loader);
@@ -2529,7 +2533,7 @@ var Table = class extends BaseComponent {
 			this.#renderLayoutRow(this.options.layout.bottom, this.constructor.classes.bottomRow);
 			if (!this.node) return;
 		}
-		if (this.#infoContainer) $.setAttribute(this.node, { "aria-describedby": [this.#originalDescription, this.#infoContainer.id].filter(Boolean).join(" ") });
+		if (this.#infoContainer) $.setAttribute(this.node, { "aria-describedby": [this.#originalDescription, $.getProperty(this.#infoContainer, "id")].filter(Boolean).join(" ") });
 	}
 	/**
 	* Renders the table buttons.
