@@ -93,13 +93,30 @@ test.describe('Table remote results', () => {
             });
         }
 
-        for (const { name, failure, error } of [
-            { name: 'a synchronous throw', failure: 'throw', error: 'Error' },
-            { name: 'a rejected promise', failure: 'reject', error: 'Error' },
-            { name: 'invalid results', failure: 'invalid', error: 'TypeError' },
+        for (const { name, createFailure, error } of [
+            {
+                name: 'a synchronous throw',
+                createFailure: () => () => {
+                    throw new Error('failure');
+                },
+                error: 'Error',
+            },
+            {
+                name: 'a rejected promise',
+                createFailure: () => () => Promise.reject(new Error('failure')),
+                error: 'Error',
+            },
+            {
+                name: 'invalid results',
+                createFailure: () => () => ({ results: [null], total: -1, filtered: 2 }),
+                error: 'TypeError',
+            },
         ]) {
             test(`handles ${name} and permits retry`, async ({ page }) => {
-                await page.evaluate((failure) => {
+                // Build the callback in the browser so its errors and promises stay there.
+                const failure = await page.evaluateHandle(createFailure);
+
+                await failure.evaluate((fail) => {
                     $.addEvent('#table', 'error.ui.table', (event) => {
                         $.setDataset(document.body, 'error', event.detail.error.name);
                     });
@@ -111,17 +128,10 @@ test.describe('Table remote results', () => {
                             }
 
                             first = false;
-                            if (failure === 'throw') {
-                                throw new Error('failure');
-                            }
-                            if (failure === 'reject') {
-                                return Promise.reject(new Error('failure'));
-                            }
-
-                            return { results: [null], total: -1, filtered: 2 };
+                            return fail();
                         },
                     });
-                }, failure);
+                });
 
                 await page.clock.runFor(25);
 
@@ -207,39 +217,35 @@ test.describe('Table remote results', () => {
             await expect(page.locator('#table')).toHaveAttribute('aria-busy', 'false');
         });
 
-        test('cancels the original request and ignores late resolutions and rejections', async ({ page }) => {
-            await page.evaluate(() => window.startRemote());
+        for (const { name, settle } of [
+            {
+                name: 'resolution',
+                settle: () => window.requests[0].resolve({ results: [['Old']], total: 1, filtered: 1 }),
+            },
+            {
+                name: 'rejection',
+                settle: () => window.requests[0].reject(new Error('stale failure')),
+            },
+        ]) {
+            test(`cancels the original request and ignores its late ${name}`, async ({ page }) => {
+                await page.evaluate(() => window.startRemote());
+                await page.clock.runFor(25);
 
-            await page.clock.runFor(25);
+                await page.evaluate(() => $('#table').table('search', 'new'));
 
-            await page.evaluate(() => $('#table').table('search', 'new'));
+                await expect(page.locator('body')).toHaveAttribute('data-cancelled', '1');
 
-            await expect(page.locator('body')).toHaveAttribute('data-cancelled', '1');
+                await page.clock.runFor(25);
+                await page.evaluate(() => window.requests[1].resolve({ results: [['New']], total: 1, filtered: 1 }));
 
-            await page.clock.runFor(25);
+                await expect(page.locator('tbody td')).toHaveText('New');
 
-            await page.evaluate(() => {
-                window.requests[1].resolve({ results: [['New']], total: 1, filtered: 1 });
-                window.requests[0].resolve({ results: [['Old']], total: 1, filtered: 1 });
+                await page.evaluate(settle);
+
+                await expect(page.locator('tbody td')).toHaveText('New');
+                await expect(page.locator('#table')).toHaveAttribute('aria-busy', 'false');
             });
-
-            await expect(page.locator('tbody td')).toHaveText('New');
-
-            await page.evaluate(() => $('#table').table('reload'));
-
-            await page.clock.runFor(25);
-
-            await page.evaluate(() => $('#table').table('reload'));
-
-            await page.clock.runFor(25);
-
-            await page.evaluate(() => {
-                window.requests[2].reject(new Error('stale failure'));
-                window.requests[3].resolve({ results: [['Newest']], total: 1, filtered: 1 });
-            });
-
-            await expect(page.locator('tbody td')).toHaveText('Newest');
-        });
+        }
 
         for (const { name, dispatched } of [
             { name: 'a debounced request', dispatched: false },

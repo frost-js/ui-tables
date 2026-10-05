@@ -122,7 +122,7 @@ export function readCsv(text) {
  * Parses exported XML and reads the first worksheet in the browser.
  * Pass this function to page.evaluate with the entries returned by readZip.
  * @param {Array} entries The decoded archive entries.
- * @returns {object} The XML validity, shared strings, rows, and cell metadata.
+ * @returns {object} The XML validity, data rows, and worksheet dimensions.
  */
 export function readWorksheet(entries) {
     const xml = Object.fromEntries(entries.map(([name, file]) => [
@@ -133,28 +133,19 @@ export function readWorksheet(entries) {
     const strings = $.find('si', xml['xl/sharedStrings.xml']).map((item) => $.getText(item));
     const sheet = xml['xl/worksheets/sheet1.xml'];
 
-    // Long strings are stored inline; other cells contain a value or shared-string index.
-    const cells = Object.fromEntries($.find('c', sheet).map((cell) => [
-        $.getAttribute(cell, 'r'),
-        {
-            value: $.getText($.findOne('v, is t', cell)),
-            type: $.getAttribute(cell, 't'),
-        },
-    ]));
-
     const rows = $.find('row', sheet).slice(1).map((row) => {
         return $.find('c', row).map((cell) => {
-            const { value, type } = cells[$.getAttribute(cell, 'r')];
+            // Long strings are inline; shorter strings refer to the shared-string table.
+            const type = $.getAttribute(cell, 't');
+            const value = $.getText($.findOne('v, is t', cell));
+
             return type === 's' ? strings[Number(value)] : value;
         });
     });
 
     return {
         valid,
-        strings,
         rows,
-        cells,
         dimension: $.getAttribute($.findOne('dimension', sheet), 'ref'),
-        hasFormula: Boolean($.findOne('f', sheet)),
     };
 }

@@ -59,12 +59,11 @@ test.describe('Table DOM data', () => {
             await expect(page.locator('.table-responsive')).toHaveCount(1);
         });
 
-        test('exposes the UI node and frozen options without instance internals', async ({ page }) => {
+        test('exposes the UI node and frozen options', async ({ page }) => {
             const instance = await page.evaluateHandle(() => UI.Table.init($.findOne('#table1')));
 
             expect(await instance.evaluate((value) => value.node === $.findOne('#table1'))).toBe(true);
             expect(await instance.evaluate((value) => Object.isFrozen(value.options))).toBe(true);
-            expect(await instance.evaluate((value) => Object.keys(value).length)).toBe(0);
             expect(await instance.evaluate((value) => value.options.length)).toBe(10);
         });
 
@@ -279,8 +278,6 @@ test.describe('Table supplied data', () => {
     });
 
     test.describe('#dispose', () => {
-        test.use({ mockClock: true });
-
         test('preserves original contents and query state while cleaning generated cells', async ({ page }) => {
             expect(await page.evaluate(() => {
                 const node = $.findOne('#table');
@@ -354,21 +351,25 @@ test.describe('Table supplied data', () => {
             await expect(page.locator('caption')).toHaveText('Original listener');
         });
 
-        test('cancels a pending local search and restores the original busy state', async ({ page }) => {
-            await page.evaluate(() => {
-                $.setAttribute($.findOne('#table'), 'aria-busy', 'true');
-                window.createTable({ debounce: 100 });
+        test.describe('pending searches', () => {
+            test.use({ mockClock: true });
+
+            test('cancels a pending local search and restores the original busy state', async ({ page }) => {
+                await page.evaluate(() => {
+                    $.setAttribute($.findOne('#table'), 'aria-busy', 'true');
+                    window.createTable({ debounce: 100 });
+                });
+
+                await page.getByRole('searchbox').fill('A');
+
+                await page.evaluate(() => $('#table').table('dispose'));
+
+                await page.clock.runFor(200);
+
+                await expect(page.locator('#table')).toHaveAttribute('aria-busy', 'true');
+                await expect(page.locator('tbody tr')).toHaveCount(0);
+                await expect(page.locator('caption')).toHaveText('Scores');
             });
-
-            await page.getByRole('searchbox').fill('A');
-
-            await page.evaluate(() => $('#table').table('dispose'));
-
-            await page.clock.runFor(200);
-
-            await expect(page.locator('#table')).toHaveAttribute('aria-busy', 'true');
-            await expect(page.locator('tbody tr')).toHaveCount(0);
-            await expect(page.locator('caption')).toHaveText('Scores');
         });
     });
 

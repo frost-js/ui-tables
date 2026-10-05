@@ -58,7 +58,17 @@ test.describe('Table rendering', () => {
         });
     });
 
-    test.describe('draw callbacks', () => {
+    test.describe('callbacks', () => {
+        test('passes the information text and heading row to callbacks', async ({ page }) => {
+            await page.evaluate(() => window.createTable({
+                infoCallback: (start, end, total, filtered, text) => `${text} (${filtered} matches)`,
+                headerCallback: (row) => $.setDataset(row, 'callback', 'heading'),
+            }));
+
+            await expect(page.getByRole('status')).toHaveText('Showing results 1 to 2 of 4 (4 matches)');
+            await expect(page.locator('#table thead tr')).toHaveAttribute('data-callback', 'heading');
+        });
+
         test('passes the footer and callback indexes in draw order', async ({ page }) => {
             await page.evaluate(() => {
                 $.append('#table', $.create('tfoot', {
@@ -133,7 +143,9 @@ test.describe('Table rendering', () => {
 
             await expect(page.locator('tbody tr')).toHaveCount(2);
         });
+    });
 
+    test.describe('sanitization', () => {
         test('sanitizes formatted HTML and applies cell classes', async ({ page }) => {
             await page.evaluate(() => window.createTable({
                 data: [['<strong>Safe</strong><img src=x onerror="window.bad=true">', 1]],
@@ -143,18 +155,6 @@ test.describe('Table rendering', () => {
             await expect(page.locator('td.cell-name strong')).toHaveText('Safe');
             await expect(page.locator('[onerror]')).toHaveCount(0);
             expect(await page.evaluate(() => window.bad)).toBeUndefined();
-        });
-    });
-
-    test.describe('callbacks', () => {
-        test('passes the information text and heading row to callbacks', async ({ page }) => {
-            await page.evaluate(() => window.createTable({
-                infoCallback: (start, end, total, filtered, text) => `${text} (${filtered} matches)`,
-                headerCallback: (row) => $.setDataset(row, 'callback', 'heading'),
-            }));
-
-            await expect(page.getByRole('status')).toHaveText('Showing results 1 to 2 of 4 (4 matches)');
-            await expect(page.locator('#table thead tr')).toHaveAttribute('data-callback', 'heading');
         });
     });
 

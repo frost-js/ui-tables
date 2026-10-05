@@ -4,14 +4,20 @@ test.describe('Table styles', () => {
     test.beforeEach(async ({ page }) => {
         await page.evaluate(() => {
             $.setHtml(document.body, '<table id="table"><thead><tr><th>Name</th><th>Value</th></tr></thead><tbody></tbody></table>');
+
             window.startTable = (options = {}) => UI.Table.init($.findOne('#table'), {
-                data: [['Alice', 1], ['Bob', 2]], buttons: [{ type: 'csv' }], ...options,
+                data: [['Alice', 1], ['Bob', 2]],
+                buttons: [{ type: 'csv' }],
+                ...options,
             });
         });
     });
 
     test.describe('controls and layout', () => {
-        for (const inputStyle of ['filled', 'outline']) {
+        for (const { inputStyle, focusProperty } of [
+            { inputStyle: 'filled', focusProperty: 'background-image' },
+            { inputStyle: 'outline', focusProperty: 'box-shadow' },
+        ]) {
             test(`uses UI ${inputStyle} controls with accessible labels`, async ({ page }) => {
                 await page.evaluate((inputStyle) => window.startTable({ inputStyle }), inputStyle);
 
@@ -23,11 +29,7 @@ test.describe('Table styles', () => {
 
                 await expect(page.getByRole('searchbox')).toBeFocused();
 
-                if (inputStyle === 'outline') {
-                    await expect(page.getByRole('searchbox')).not.toHaveCSS('box-shadow', 'none');
-                } else {
-                    await expect(page.getByRole('searchbox')).not.toHaveCSS('background-image', 'none');
-                }
+                await expect(page.getByRole('searchbox')).not.toHaveCSS(focusProperty, 'none');
             });
         }
 
@@ -113,7 +115,11 @@ test.describe('Table styles', () => {
                 const side = direction === 'ltr' ? 'right' : 'left';
 
                 expect(await heading.evaluate((node, side) => getComputedStyle(node, '::before')[side], side)).toBe('8px');
-                await expect(heading).toHaveCSS(`padding-${side}`, /^27\.20*1?px$/);
+                const padding = await heading.evaluate((node, side) => {
+                    return Number.parseFloat(getComputedStyle(node).getPropertyValue(`padding-${side}`));
+                }, side);
+
+                expect(padding).toBeCloseTo(27.2, 2);
             });
         }
     });

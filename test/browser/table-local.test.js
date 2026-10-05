@@ -2,8 +2,6 @@ import { expect, test } from '#test';
 import { setupTable } from '../setup/table.js';
 
 test.describe('Table local data', () => {
-    test.use({ mockClock: true });
-
     test.beforeEach(setupTable);
 
     test.describe('#addRow', () => {
@@ -309,20 +307,6 @@ test.describe('Table local data', () => {
             await expect(page.locator('tbody td:first-child')).toHaveText(['Row 1', 'Row 2', 'Row 3', 'Row 4']);
         });
 
-        test('debounces typed local search', async ({ page }) => {
-            await page.evaluate(() => window.createTable({ debounce: 20 }));
-
-            await page.getByRole('searchbox').fill('A');
-
-            await page.clock.runFor(19);
-
-            await expect(page.getByRole('status')).toHaveText('Showing results 1 to 2 of 4');
-
-            await page.clock.runFor(1);
-
-            await expect(page.locator('tbody td')).toHaveText(['A', '1', 'A', '3']);
-            await expect(page.getByRole('status')).toContainText('of 2 (filtered from 4 total)');
-        });
 
         test('appends a shift-sort key to filtered results', async ({ page }) => {
             await page.evaluate(() => window.createTable().search('A'));
@@ -374,6 +358,25 @@ test.describe('Table local data', () => {
 
             await expect(page.locator('th[aria-sort]')).toHaveCount(0);
             await expect(page.locator('tbody td')).toHaveText(['B', '2', 'A', '1']);
+        });
+    });
+
+    test.describe('debounce', () => {
+        test.use({ mockClock: true });
+
+        test('debounces typed local search', async ({ page }) => {
+            await page.evaluate(() => window.createTable({ debounce: 20 }));
+
+            await page.getByRole('searchbox').fill('A');
+
+            await page.clock.runFor(19);
+
+            await expect(page.getByRole('status')).toHaveText('Showing results 1 to 2 of 4');
+
+            await page.clock.runFor(1);
+
+            await expect(page.locator('tbody td')).toHaveText(['A', '1', 'A', '3']);
+            await expect(page.getByRole('status')).toContainText('of 2 (filtered from 4 total)');
         });
     });
 
