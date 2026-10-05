@@ -13,14 +13,29 @@ import Workbook from './workbook/workbook.js';
  */
 export function csv(options, { headings, rows }) {
     const title = options.title || document.title;
-    const lines = [headings, ...rows].map((row) => row.map((value) => {
-        let text = String(value ?? '');
-        if (options.escapeFormulae !== false && typeof value === 'string' && /^[\s]*[=+\-@\t\r]/.test(text)) {
-            text = `'${text}`;
-        }
-        return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
-    }).join(','));
-    saveBlob(new Blob([lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' }), `${title}.csv`);
+    const lines = [headings, ...rows].map((row) => {
+        const values = row.map((value) => {
+            let text = String(value ?? '');
+
+            // Spreadsheet programs interpret these string prefixes as formulas, even in CSV.
+            if (options.escapeFormulae !== false && typeof value === 'string' && /^[\s]*[=+\-@\t\r]/.test(text)) {
+                text = `'${text}`;
+            }
+
+            if (/[",\r\n]/.test(text)) {
+                return `"${text.replaceAll('"', '""')}"`;
+            }
+
+            return text;
+        });
+
+        return values.join(',');
+    });
+
+    const blob = new Blob([lines.join('\r\n')], {
+        type: 'text/csv;charset=utf-8;',
+    });
+    saveBlob(blob, `${title}.csv`);
 }
 
 /**
@@ -32,7 +47,10 @@ export function csv(options, { headings, rows }) {
  */
 export function excel(options, { headings, rows }) {
     const workbook = new Workbook();
-    workbook.addSheet({ header: headings, rows });
+    workbook.addSheet({
+        header: headings,
+        rows,
+    });
     saveBlob(workbook.create(), `${options.title || document.title}.xlsx`);
 }
 
@@ -45,9 +63,11 @@ export function excel(options, { headings, rows }) {
  */
 export async function print(options, table, classes) {
     const win = window.open('', '_blank');
+
     if (!win) {
         return;
     }
+
     const title = options.title || document.title;
     win.document.title = title;
     win.document.documentElement.dir = $.getProperty(table, 'dir') || document.documentElement.dir;
@@ -56,8 +76,11 @@ export async function print(options, table, classes) {
     $.addClass(table, classes || '');
     $.append(win.document.body, [heading, table]);
     const loads = [];
+
+    // Copy styles into the popup and wait for external stylesheets before printing.
     for (const element of $.find('link[rel="stylesheet"], style')) {
         const clone = win.document.importNode(element, true);
+
         if ($.tagName(clone) === 'link') {
             $.setProperty(clone, 'href', $.getProperty(element, 'href'));
             loads.push(new Promise((resolve) => {
@@ -65,14 +88,18 @@ export async function print(options, table, classes) {
                 $.addEventOnce(clone, 'error', resolve);
             }));
         }
+
         $.append(win.document.head, clone);
     }
+
     try {
         await Promise.all(loads);
         await win.document.fonts.ready;
+
         if (win.closed) {
             return;
         }
+
         win.focus();
         win.print();
     } finally {

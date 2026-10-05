@@ -202,12 +202,11 @@ export default class Table extends BaseComponent {
         },
     };
 
-    #columnCount;
     #columns;
     #container;
-    #data;
+    #data = [];
     #drawVersion = 0;
-    #filtered;
+    #filtered = 0;
     #getData;
     #headings;
     #id;
@@ -216,7 +215,7 @@ export default class Table extends BaseComponent {
     #limit;
     #loader;
     #loadResults;
-    #offset;
+    #offset = 0;
     #order;
     #original;
     #originalBusy;
@@ -226,15 +225,15 @@ export default class Table extends BaseComponent {
     #pagination;
     #pending;
     #requestVersion = 0;
-    #results;
-    #rowIndexes;
+    #results = [];
+    #rowIndexes = [];
     #searchHandler;
     #searchInput;
     #tbody;
-    #term;
+    #term = '';
     #tfoot;
     #theadRow;
-    #total;
+    #total = 0;
     #totalPages;
 
     /**
@@ -246,86 +245,105 @@ export default class Table extends BaseComponent {
         if (!$._isElement(node) || $.tagName(node) !== 'table') {
             throw new TypeError('Table requires a table element.');
         }
-        const configured = { ...new.target.defaults, ...getDataset(node), ...options };
-        for (const key of ['order', 'lengths', 'buttons']) {
-            if (!Array.isArray(configured[key])) {
-                throw new TypeError(`${key} must be an array.`);
-            }
-        }
-        if (configured.columns !== null && !Array.isArray(configured.columns)) {
-            throw new TypeError('Columns must be an array.');
-        }
-        if (typeof configured.sanitize !== 'function') {
-            throw new TypeError('sanitize must be a function.');
-        }
-        if (configured.lengths.some((length) => !Number.isSafeInteger(Number(length)) || Number(length) <= 0)) {
-            throw new RangeError('Page lengths must be positive integers.');
-        }
-        const headings = getDomHeadings(node);
-        if (configured.columns && headings.length && configured.columns.length !== headings.length) {
-            throw new RangeError('Column definitions must match the heading count.');
-        }
-        if (
-            configured.paging &&
-            (!Number.isSafeInteger(Number(configured.length)) || Number(configured.length) <= 0)
-        ) {
-            throw new RangeError('Page length must be a positive integer.');
-        }
+
         super(node, options);
-        // BaseComponent merges arrays by index. Configuration arrays replace defaults.
-        for (const key of ['order', 'lengths', 'buttons']) {
-            this.options[key].splice(0, this.options[key].length, ...configured[key]);
-        }
+
         this.#originalClass = $.getAttribute(node, 'class');
         this.#originalDescription = $.getAttribute(node, 'aria-describedby');
         this.#originalBusy = $.getAttribute(node, 'aria-busy');
-        this.#data = [];
-        this.#results = [];
-        this.#rowIndexes = [];
-        this.#total = 0;
-        this.#filtered = 0;
-        this.#offset = 0;
-        this.#term = '';
-        this.#limit = this.options.paging ? Number(this.options.length) : Infinity;
+
         try {
+            // BaseComponent merges arrays by index; table option arrays replace defaults.
+            const configured = { ...getDataset(node), ...options };
+
+            for (const key of ['order', 'lengths', 'buttons']) {
+                if (Object.hasOwn(configured, key)) {
+                    this.options[key].splice(0, this.options[key].length, ...configured[key]);
+                }
+            }
+
+            this.#limit = this.options.paging ? Number(this.options.length) : Infinity;
+
+            // Zero or fractional page lengths cannot produce valid page offsets.
+            if (this.options.paging && (!Number.isSafeInteger(this.#limit) || this.#limit <= 0)) {
+                throw new RangeError('Page length must be a positive integer.');
+            }
+
+            for (const length of this.options.lengths) {
+                const value = Number(length);
+
+                if (!Number.isSafeInteger(value) || value <= 0) {
+                    throw new RangeError('Page lengths must be positive integers.');
+                }
+            }
+
             if (!this.options.getResults) {
-                this.#data = this.options.data ?? getDomData(node);
-                validateRows(this.#data);
-                this.#data = this.#data.slice();
+                const data = this.options.data ?? getDomData(node);
+                validateRows(data);
+
+                this.#data = data.slice();
             }
-            this.#headings = headings;
+
+            const headings = getDomHeadings(node);
             const columns = this.options.columns ?? headings.map((_, data) => ({ data }));
-            this.#columns = columns.map((column, index) => ({
-                class: null, data: index, dir: 'asc', format: null, name: null,
-                orderData: null, orderable: true, searchable: true, visible: true,
-                createdCell: null, ...column,
-            }));
-            if (!headings.length) {
-                this.#headings = this.#columns.map((column) => ({ text: column.name ?? String(column.data), class: null }));
+
+            if (headings.length && columns.length !== headings.length) {
+                throw new RangeError('Column definitions must match the heading count.');
             }
+
+            this.#headings = headings;
+            this.#columns = columns.map((column, index) => ({
+                class: null,
+                data: index,
+                dir: 'asc',
+                format: null,
+                name: null,
+                orderData: null,
+                orderable: true,
+                searchable: true,
+                visible: true,
+                createdCell: null,
+                ...column,
+            }));
+
+            if (!headings.length) {
+                this.#headings = this.#columns.map((column) => ({
+                    text: column.name ?? String(column.data),
+                    class: null,
+                }));
+            }
+
             for (const column of this.#columns) {
                 if (column.orderData !== null) {
-                    if (!Array.isArray(column.orderData)) {
-                        throw new TypeError('orderData must be an array of column indexes.');
-                    }
                     column.orderData.forEach((index) => this.#validateColumn(index));
                 }
             }
+
             this.#order = this.#normalizeOrder(this.options.order);
-            this.#columnCount = this.#getVisibleColumns().length;
+
             if (!$.getProperty(node, 'id')) {
                 $.setProperty(node, 'id', generateId('table'));
                 this.#id = true;
             }
+
+            // Loading events and cancellation hooks can dispose the table or start another load.
+            // Only the current operation may continue after invoking them.
             if (this.options.getResults) {
-                this.#loadResults = $._debounce((version) => this.#fetchResults(version), this.options.debounce);
+                this.#loadResults = $._debounce(
+                    (version) => this.#fetchResults(version),
+                    this.options.debounce,
+                );
+
                 this.#getData = () => {
                     this.#drawVersion++;
                     const version = this.#cancelRequest();
+
                     if (!this.node || version !== this.#requestVersion) {
                         return;
                     }
+
                     this.loading();
+
                     if (this.node && version === this.#requestVersion) {
                         this.#loadResults(version);
                     }
@@ -334,22 +352,29 @@ export default class Table extends BaseComponent {
                 this.#getData = () => {
                     const version = ++this.#drawVersion;
                     this.loading();
+
                     if (!this.node || version !== this.#drawVersion) {
                         return;
                     }
+
                     this.#updateLocal();
                     this.loading({ show: false });
+
                     if (this.node && version === this.#drawVersion) {
                         this.#renderResults();
                     }
                 };
             }
+
             this.#render();
+
             if (!this.node) {
                 return;
             }
+
             this.#events();
             $.triggerEvent(this.node, 'init.ui.table');
+
             if (this.node) {
                 this.#getData();
             }
@@ -367,6 +392,7 @@ export default class Table extends BaseComponent {
         if (!this.node) {
             return;
         }
+
         validateRows([row]);
         this.#data.push(Array.isArray(row) ? [...row] : { ...row });
         this.#mutated(1);
@@ -379,10 +405,13 @@ export default class Table extends BaseComponent {
         if (!this.node) {
             return;
         }
+
         const requestVersion = this.#cancelRequest();
+
         if (!this.node || requestVersion !== this.#requestVersion) {
             return;
         }
+
         this.#searchHandler?.cancel();
         this.#data = [];
         this.#results = [];
@@ -391,11 +420,14 @@ export default class Table extends BaseComponent {
         this.#total = 0;
         this.#filtered = 0;
         this.#term = '';
+
         if (this.#searchInput) {
             $.setValue(this.#searchInput, '');
         }
+
         this.#refreshResults();
         this.loading({ show: false });
+
         if (this.node) {
             this.#renderResults();
         }
@@ -406,17 +438,24 @@ export default class Table extends BaseComponent {
         if (!this.node) {
             return;
         }
+
         const node = this.node;
+
         this.#drawVersion++;
         this.#searchHandler?.cancel();
         this.#requestVersion++;
         this.#loadResults?.cancel();
+
         const pending = this.#pending;
         this.#pending = null;
+
+        // Clear the instance first so DOM removal events cannot dispose it again.
         super.dispose();
+
         if (this.#id) {
             $.removeAttribute(node, 'id');
         }
+
         for (const [attribute, value] of [
             ['class', this.#originalClass],
             ['aria-describedby', this.#originalDescription],
@@ -428,14 +467,17 @@ export default class Table extends BaseComponent {
                 $.setAttribute(node, { [attribute]: value });
             }
         }
+
         if (this.#container) {
             $.before(this.#container, node);
             $.remove(this.#container);
         }
+
         if (this.#original) {
             $.empty(node);
             $.append(node, this.#original);
         }
+
         this.#original = null;
         this.#container = null;
         this.#loader = null;
@@ -446,14 +488,17 @@ export default class Table extends BaseComponent {
         this.#pagination = null;
         this.#lengthSelect = null;
         this.#searchInput = null;
+
         this.#columns = [];
         this.#headings = [];
         this.#data = [];
         this.#results = [];
         this.#rowIndexes = [];
+
         this.#getData = null;
         this.#loadResults = null;
         this.#searchHandler = null;
+
         // Restore the DOM before a user cancellation hook can initialize a new instance.
         try {
             pending?.cancel?.();
@@ -535,14 +580,18 @@ export default class Table extends BaseComponent {
         if (!this.node || !this.options.paging) {
             return;
         }
+
         length = Number(length);
+
         if (!Number.isSafeInteger(length) || length <= 0) {
             throw new RangeError('Page length must be a positive integer.');
         }
+
         this.#limit = length;
         this.#offset -= this.#offset % length;
         this.#syncLength();
         $.triggerEvent(this.node, 'length.ui.table');
+
         if (this.node) {
             this.#getData();
         }
@@ -557,7 +606,9 @@ export default class Table extends BaseComponent {
         if (!this.node) {
             return;
         }
+
         $.setAttribute(this.node, { 'aria-busy': String(show) });
+
         if (show) {
             $.show(this.#loader);
             $.triggerEvent(this.node, 'processing.ui.table');
@@ -575,8 +626,10 @@ export default class Table extends BaseComponent {
         if (!this.node || !this.options.ordering) {
             return;
         }
+
         this.#order = this.#normalizeOrder(order);
         $.triggerEvent(this.node, 'order.ui.table');
+
         if (this.node) {
             this.#getData();
         }
@@ -590,13 +643,17 @@ export default class Table extends BaseComponent {
         if (!this.node || !this.options.paging) {
             return;
         }
+
         page = Number(page);
+
         if (!Number.isSafeInteger(page)) {
             throw new RangeError('Page must be an integer.');
         }
+
         const pages = Math.max(1, Math.ceil(this.#filtered / this.#limit));
         this.#offset = (Math.min(pages, Math.max(1, page)) - 1) * this.#limit;
         $.triggerEvent(this.node, 'page.ui.table');
+
         if (this.node) {
             this.#getData();
         }
@@ -618,6 +675,7 @@ export default class Table extends BaseComponent {
         if (!this.node) {
             return;
         }
+
         if (reset) {
             this.#offset = 0;
         }
@@ -645,13 +703,17 @@ export default class Table extends BaseComponent {
         if (!this.node || !this.options.searching) {
             return;
         }
+
         this.#searchHandler?.cancel();
         this.#term = String(term ?? '');
         this.#offset = 0;
+
         if (this.#searchInput) {
             $.setValue(this.#searchInput, this.#term);
         }
+
         $.triggerEvent(this.node, 'search.ui.table');
+
         if (this.node) {
             this.#getData();
         }
@@ -666,12 +728,15 @@ export default class Table extends BaseComponent {
      */
     setColumn(key, column, { modified = true } = {}) {
         const indexes = modified ? this.#rowIndexes : this.#data.map((_, index) => index);
+
         if (!Array.isArray(column) || column.length !== indexes.length) {
             throw new RangeError('Column values must match the selected row count.');
         }
+
         for (const [index, rowIndex] of indexes.entries()) {
             $._setDot(this.#data[rowIndex], String(key), column[index]);
         }
+
         this.#mutated();
     }
 
@@ -722,11 +787,13 @@ export default class Table extends BaseComponent {
         this.#loadResults?.cancel();
         const pending = this.#pending;
         this.#pending = null;
+
         try {
             pending?.cancel?.();
         } catch {
             // Cancellation is best effort; version checks still reject stale results.
         }
+
         return version;
     }
 
@@ -761,18 +828,10 @@ export default class Table extends BaseComponent {
                 event.preventDefault();
 
                 const defaultDir = this.#columns[index].dir;
-                let currentDir = null;
-
-                for (const [col, dir] of this.#order) {
-                    if (col !== index) {
-                        continue;
-                    }
-
-                    currentDir = dir;
-                    break;
-                }
+                const currentDir = this.#order.find(([column]) => column === index)?.[1];
 
                 let nextDir = defaultDir;
+
                 if (currentDir === defaultDir) {
                     nextDir = defaultDir === 'asc' ?
                         'desc' :
@@ -780,21 +839,17 @@ export default class Table extends BaseComponent {
                 }
 
                 let order;
+
                 if (event.shiftKey) {
                     if (!currentDir) {
                         order = [...this.#order, [index, nextDir]];
                     } else if (currentDir === defaultDir) {
-                        order = this.#order.map(([col, dir]) => {
-                            if (col === index) {
-                                dir = nextDir;
-                            }
-
-                            return [col, dir];
-                        });
+                        order = this.#order.map(([column, direction]) => [
+                            column,
+                            column === index ? nextDir : direction,
+                        ]);
                     } else {
-                        order = this.#order.filter(([col]) => {
-                            return col !== index;
-                        });
+                        order = this.#order.filter(([column]) => column !== index);
                     }
                 } else {
                     order = [[index, nextDir]];
@@ -819,6 +874,7 @@ export default class Table extends BaseComponent {
         if (this.#pagination) {
             $.addEventDelegate(this.#pagination, 'click.ui.table', '[data-ui-page]', (event) => {
                 event.preventDefault();
+
                 if ($.getProperty(event.currentTarget, 'disabled')) {
                     return;
                 }
@@ -851,39 +907,64 @@ export default class Table extends BaseComponent {
      * @returns {Promise<void>} Completion of the request.
      */
     async #fetchResults(version) {
+        // A response is stale if a newer load began, even when cancellation is unavailable.
         const active = () => this.node && version === this.#requestVersion;
+
         if (!active()) {
             return;
         }
+
         const request = {
-            columns: { ...this.#columns.map((column) => ({
-                ...(column.name ? { name: column.name } : {}), data: column.data,
-                orderable: column.orderable, searchable: column.searchable,
-            })) },
+            columns: {},
         };
+
+        for (const [index, column] of this.#columns.entries()) {
+            request.columns[index] = {
+                data: column.data,
+                orderable: column.orderable,
+                searchable: column.searchable,
+            };
+
+            if (column.name) {
+                request.columns[index].name = column.name;
+            }
+        }
+
         if (this.#term) {
             request.term = this.#term;
         }
+
         if (this.options.ordering) {
             request.order = { ...this.#getOrder().map(([column, dir]) => ({ column, dir })) };
         }
+
         if (this.options.paging) {
-            request.offset = this.#offset; request.limit = this.#limit;
+            request.offset = this.#offset;
+            request.limit = this.#limit;
         }
+
         let response;
+
         try {
             const pending = this.options.getResults.call(this, request);
+
             if (!active()) {
+                // The callback may invalidate itself before returning a rejecting promise.
                 Promise.resolve(pending).catch(() => {});
                 pending?.cancel?.();
+
                 return;
             }
+
             this.#pending = pending;
             response = await pending;
+
             if (!active()) {
                 return;
             }
+
             validateRows(response?.results);
+
             if (
                 !Number.isSafeInteger(response.total) ||
                 !Number.isSafeInteger(response.filtered) ||
@@ -899,23 +980,31 @@ export default class Table extends BaseComponent {
             if (active()) {
                 this.#pending = null;
                 this.loading({ show: false });
+
                 if (active()) {
                     $.triggerEvent(this.node, 'error.ui.table', { detail: { error } });
                 }
             }
+
             return;
         }
+
         this.#pending = null;
         this.#total = response.total;
         this.#filtered = response.filtered;
+
         if (this.options.paging && this.#offset >= this.#filtered && this.#offset > 0) {
+            // Filtering or deleting rows may leave the requested page beyond the final page.
             this.#offset = Math.max(0, (Math.ceil(this.#filtered / this.#limit) - 1) * this.#limit);
             this.#getData();
+
             return;
         }
+
         this.#data = response.results.slice();
         this.#refreshResults();
         this.loading({ show: false });
+
         if (active()) {
             this.#renderResults();
         }
@@ -929,24 +1018,25 @@ export default class Table extends BaseComponent {
     #getExportData(options) {
         const columns = options.columns || this.#getVisibleColumns();
 
-        return {
-            headings: this.#getHeadings(columns),
-            rows: this.#getResultRows(columns),
-        };
-    }
-
-    /**
-     * Gets headings for specific columns.
-     * @param {Array} columns The columns to get.
-     * @returns {Array} The headings.
-     */
-    #getHeadings(columns) {
-        return columns.map((index) => {
+        for (const index of columns) {
             this.#validateColumn(index);
+        }
+
+        // Exports contain text, even when the displayed headings contain HTML.
+        const headings = columns.map((index) => {
             const container = $.create('div');
             $.setHtml(container, $.sanitize(String(this.#headings[index].text)));
+
             return $.getText(container);
         });
+
+        const rows = this.#results.map((row) => columns.map((index) => {
+            const key = String(this.#columns[index].data);
+
+            return $._getDot(row, key);
+        }));
+
+        return { headings, rows };
     }
 
     /**
@@ -958,36 +1048,24 @@ export default class Table extends BaseComponent {
      */
     #getIndex(index, { modified = true } = {}) {
         const count = modified ? this.#rowIndexes.length : this.#data.length;
+
         if (!Number.isInteger(index) || index < 0 || index >= count) {
             throw new RangeError('Row index is out of range.');
         }
+
         return modified ? this.#rowIndexes[index] : index;
     }
 
     /**
-     * Gets real column ordering data.
+     * Expands alternate sort columns, which were validated during initialization.
      * @returns {Array} The column ordering data.
      */
     #getOrder() {
         return this.#order.flatMap(([index, direction]) => {
             const columns = this.#columns[index].orderData ?? [index];
-            return columns.map((column) => {
-                this.#validateColumn(column);
-                return [column, direction];
-            });
-        });
-    }
 
-    /**
-     * Gets results for specific columns.
-     * @param {Array} columns The columns to get.
-     * @returns {Array} The results.
-     */
-    #getResultRows(columns) {
-        for (const index of columns) {
-            this.#validateColumn(index);
-        }
-        return this.#results.map((row) => columns.map((index) => $._getDot(row, String(this.#columns[index].data))));
+            return columns.map((column) => [column, direction]);
+        });
     }
 
     /**
@@ -1016,25 +1094,35 @@ export default class Table extends BaseComponent {
         if (!this.node) {
             return;
         }
-        if (this.options.getResults) {
-            const version = this.#cancelRequest();
-            if (!this.node || version !== this.#requestVersion) {
-                return;
-            }
-            this.#total = Math.max(0, this.#total + change);
-            this.#filtered = Math.max(0, this.#filtered + change);
-            if (!this.#data.length && this.#offset) {
-                this.#offset = Math.max(0, this.#offset - this.#limit);
-                this.#getData();
-                return;
-            }
-            this.#refreshResults();
-            this.loading({ show: false });
-            if (this.node) {
-                this.#renderResults();
-            }
-        } else {
+
+        if (!this.options.getResults) {
             this.#getData();
+
+            return;
+        }
+
+        // Remote mutations apply to the loaded page and invalidate any pending response.
+        const version = this.#cancelRequest();
+
+        if (!this.node || version !== this.#requestVersion) {
+            return;
+        }
+
+        this.#total = Math.max(0, this.#total + change);
+        this.#filtered = Math.max(0, this.#filtered + change);
+
+        if (!this.#data.length && this.#offset) {
+            this.#offset = Math.max(0, this.#offset - this.#limit);
+            this.#getData();
+
+            return;
+        }
+
+        this.#refreshResults();
+        this.loading({ show: false });
+
+        if (this.node) {
+            this.#renderResults();
         }
     }
 
@@ -1047,17 +1135,27 @@ export default class Table extends BaseComponent {
         if (!Array.isArray(order)) {
             throw new TypeError('Order must be an array.');
         }
-        return order.flatMap((entry) => {
+
+        const normalized = [];
+
+        for (const entry of order) {
             if (!Array.isArray(entry) || entry.length !== 2 || !['asc', 'desc'].includes(entry[1])) {
                 throw new TypeError('Order entries must contain a column index and asc/desc direction.');
             }
+
             // The default first-column order is harmless for a table with no columns.
             if (!this.#columns.length && entry[0] === 0) {
-                return [];
+                continue;
             }
+
             this.#validateColumn(entry[0]);
-            return this.#columns[entry[0]].orderable ? [[...entry]] : [];
-        });
+
+            if (this.#columns[entry[0]].orderable) {
+                normalized.push([...entry]);
+            }
+        }
+
+        return normalized;
     }
 
     /**
@@ -1066,9 +1164,11 @@ export default class Table extends BaseComponent {
     #refreshResults() {
         this.#page = this.options.paging ? 1 + this.#offset / this.#limit : 1;
         this.#totalPages = this.options.paging ? Math.max(1, Math.ceil(this.#filtered / this.#limit)) : 1;
+
         if (this.options.getResults) {
             this.#rowIndexes = this.#data.map((_, index) => index);
         }
+
         this.#results = this.#rowIndexes.map((index) => this.#data[index]);
     }
 
@@ -1085,7 +1185,10 @@ export default class Table extends BaseComponent {
 
         this.#loader = $.create('div', {
             class: this.constructor.classes.loader,
-            attributes: { 'role': 'progressbar', 'aria-label': this.options.lang.loading },
+            attributes: {
+                'role': 'progressbar',
+                'aria-label': this.options.lang.loading,
+            },
         });
 
         const loaderIcon = $.create('span', {
@@ -1096,6 +1199,7 @@ export default class Table extends BaseComponent {
         $.addClass(this.node, this.constructor.classes.table);
 
         const caption = $.findOne('caption', this.#original);
+
         if (caption) {
             $.append(this.node, $.clone(caption));
         }
@@ -1110,6 +1214,7 @@ export default class Table extends BaseComponent {
         $.append(this.node, this.#tbody);
 
         const tfoot = $.findOne('tfoot', this.#original);
+
         if (tfoot) {
             this.#tfoot = $.clone(tfoot)[0];
             $.append(this.node, this.#tfoot);
@@ -1121,6 +1226,7 @@ export default class Table extends BaseComponent {
 
         if (this.options.layout.top) {
             this.#renderLayoutRow(this.options.layout.top, this.constructor.classes.topRow);
+
             if (!this.node) {
                 return;
             }
@@ -1135,13 +1241,20 @@ export default class Table extends BaseComponent {
 
         if (this.options.layout.bottom) {
             this.#renderLayoutRow(this.options.layout.bottom, this.constructor.classes.bottomRow);
+
             if (!this.node) {
                 return;
             }
         }
+
         if (this.#infoContainer) {
+            const descriptions = [
+                this.#originalDescription,
+                $.getProperty(this.#infoContainer, 'id'),
+            ];
+
             $.setAttribute(this.node, {
-                'aria-describedby': [this.#originalDescription, $.getProperty(this.#infoContainer, 'id')].filter(Boolean).join(' '),
+                'aria-describedby': descriptions.filter(Boolean).join(' '),
             });
         }
     }
@@ -1171,9 +1284,9 @@ export default class Table extends BaseComponent {
                 event.preventDefault();
 
                 if (button.callback) {
-                    button.callback.bind(this)();
+                    button.callback.call(this);
                 } else if (Object.hasOwn(this.constructor.buttons, button.type)) {
-                    this.constructor.buttons[button.type].bind(this)(button);
+                    this.constructor.buttons[button.type].call(this, button);
                 }
             });
 
@@ -1203,19 +1316,23 @@ export default class Table extends BaseComponent {
         }
 
         let lastCell;
+
         for (const [index, heading] of this.#headings.entries()) {
             if (!this.#columns[index].visible) {
                 continue;
             }
 
             let cell;
+
             if (index in headings) {
                 cell = headings[index];
             } else {
                 const html = this.options.sanitize(String(heading.text));
+
                 if (!this.node || version !== this.#drawVersion) {
                     return;
                 }
+
                 cell = $.create('th', {
                     class: this.constructor.classes.tableHeading,
                     html,
@@ -1239,6 +1356,7 @@ export default class Table extends BaseComponent {
                 if (!this.node) {
                     return;
                 }
+
                 if (!lastCell) {
                     $.prepend(this.#theadRow, cell);
                 } else {
@@ -1252,15 +1370,7 @@ export default class Table extends BaseComponent {
                 continue;
             }
 
-            let dir;
-            for (const order of this.#order) {
-                if (order[0] !== index) {
-                    continue;
-                }
-
-                dir = order[1];
-                break;
-            }
+            const dir = this.#order.find(([column]) => column === index)?.[1];
 
             switch (dir) {
                 case 'asc':
@@ -1323,6 +1433,7 @@ export default class Table extends BaseComponent {
         if (!this.node || version !== this.#drawVersion) {
             return;
         }
+
         const text = $.create('small', {
             text: infoText,
         });
@@ -1337,6 +1448,7 @@ export default class Table extends BaseComponent {
         if (!this.options.info) {
             return;
         }
+
         const id = generateId('table-info');
 
         this.#infoContainer = $.create('div', {
@@ -1367,7 +1479,7 @@ export default class Table extends BaseComponent {
             });
 
             for (const element of elements.split('|')) {
-                if (!(Object.hasOwn(this.constructor.layout, element))) {
+                if (!Object.hasOwn(this.constructor.layout, element)) {
                     continue;
                 }
 
@@ -1376,6 +1488,7 @@ export default class Table extends BaseComponent {
                 });
 
                 this.constructor.layout[element].call(this, container);
+
                 if (!this.node) {
                     return;
                 }
@@ -1437,10 +1550,8 @@ export default class Table extends BaseComponent {
                 text: length,
             });
 
-
             $.append(this.#lengthSelect, option);
         }
-
 
         this.#syncLength();
         $.append(container, lengthContainer);
@@ -1452,6 +1563,10 @@ export default class Table extends BaseComponent {
      * @returns {HTMLElement} The pagnination item.
      */
     #renderPageItem(options) {
+        const label = options.text ?
+            `${options.text} ${this.options.lang.page}` :
+            `${this.options.lang.page} ${options.page}`;
+
         const container = $.create('div', {
             class: this.constructor.classes.pageItem,
         });
@@ -1461,10 +1576,8 @@ export default class Table extends BaseComponent {
             class: this.constructor.classes.pageLink,
             attributes: {
                 'type': 'button',
-                'title': options.text ?
-                    `${options.text} ${this.options.lang.page}` :
-                    `${this.options.lang.page} ${options.page}`,
-                'aria-label': options.text ? `${options.text} ${this.options.lang.page}` : `${this.options.lang.page} ${options.page}`,
+                'title': label,
+                'aria-label': label,
                 'aria-controls': $.getAttribute(this.node, 'id'),
             },
             dataset: {
@@ -1569,8 +1682,10 @@ export default class Table extends BaseComponent {
         }
 
         let lastLink = prevPage;
+
         for (let current = startPage; current <= endPage; current++) {
             let pageItem;
+
             if (current in pageLinks) {
                 pageItem = pageLinks[current];
             } else {
@@ -1581,6 +1696,7 @@ export default class Table extends BaseComponent {
             }
 
             const pageButton = $.findOne('button', pageItem);
+
             if (current === this.#page) {
                 $.setAttribute(pageButton, { 'aria-current': 'page' });
                 $.addClass(pageItem, this.constructor.classes.pageActive);
@@ -1601,6 +1717,7 @@ export default class Table extends BaseComponent {
         if (!this.options.paging) {
             return;
         }
+
         const paginationContainer = $.create('div', {
             class: this.constructor.classes.paginationContainer,
         });
@@ -1619,68 +1736,91 @@ export default class Table extends BaseComponent {
         if (!this.node) {
             return;
         }
+
+        // User callbacks may dispose the table or draw again. Stop an older draw after each callback.
         const version = ++this.#drawVersion;
         const active = () => this.node && version === this.#drawVersion;
         $.triggerEvent(this.node, 'preDraw.ui.table');
+
         if (!active()) {
             return;
         }
+
         const proceed = this.options.preDrawCallback?.call(this);
+
         if (!active() || proceed === false) {
             return;
         }
+
         $.empty(this.#tbody);
-        this.#columnCount = this.#getVisibleColumns().length;
         this.#renderHeadings();
+
         if (!active()) {
             return;
         }
+
         const end = this.#offset + this.#results.length;
         this.options.headerCallback?.call(this, this.#theadRow, this.#data, this.#offset, end, [...this.#rowIndexes]);
+
         if (!active()) {
             return;
         }
+
         if (this.#pagination) {
             this.#renderPagination();
         }
+
         if (this.#infoContainer) {
             this.#renderInfo();
         }
+
         if (!active()) {
             return;
         }
+
         if (!this.#results.length) {
             const row = $.create('tr');
             $.append(row, $.create('td', {
                 class: this.constructor.classes.emptyCell,
                 text: this.#term ? this.options.lang.noResults : this.options.lang.noData,
-                attributes: { colspan: Math.max(1, this.#columnCount) },
+                attributes: {
+                    colspan: Math.max(1, this.#getVisibleColumns().length),
+                },
             }));
             $.append(this.#tbody, row);
         } else {
             for (const [index, result] of this.#results.entries()) {
                 const row = this.#renderRow(result, index);
+
                 if (!active()) {
                     return;
                 }
+
                 this.options.rowCallback?.call(this, row, result, index, this.#offset + index, this.#rowIndexes[index]);
+
                 if (!active()) {
                     return;
                 }
+
                 $.append(this.#tbody, row);
                 this.options.createdRow?.call(this, row, result, index);
+
                 if (!active()) {
                     return;
                 }
             }
         }
+
         this.options.drawCallback?.call(this);
+
         if (!active()) {
             return;
         }
+
         if (this.#tfoot) {
             this.options.footerCallback?.call(this, this.#tfoot, this.#data, this.#offset, end, [...this.#rowIndexes]);
         }
+
         if (active()) {
             $.triggerEvent(this.node, 'draw.ui.table');
         }
@@ -1695,26 +1835,38 @@ export default class Table extends BaseComponent {
     #renderRow(data, rowIndex) {
         const row = $.create('tr');
         const version = this.#drawVersion;
+
         for (const [index, column] of this.#columns.entries()) {
             if (!column.visible) {
                 continue;
             }
+
             const value = $._getDot(data, String(column.data));
             const formatted = column.format ? column.format.call(this, value) : value;
+
             if (!this.node || version !== this.#drawVersion) {
                 return row;
             }
+
             const html = this.options.sanitize(String(formatted ?? ''));
+
             if (!this.node || version !== this.#drawVersion) {
                 return row;
             }
-            const cell = $.create('td', { html, class: column.class || '' });
+
+            const cell = $.create('td', {
+                html,
+                class: column.class || '',
+            });
             column.createdCell?.call(this, cell, value, data, rowIndex, index);
+
             if (!this.node || version !== this.#drawVersion) {
                 return row;
             }
+
             $.append(row, cell);
         }
+
         return row;
     }
 
@@ -1752,7 +1904,6 @@ export default class Table extends BaseComponent {
         });
         $.append(inputContainer, this.#searchInput);
 
-
         $.append(container, searchContainer);
     }
 
@@ -1763,9 +1914,18 @@ export default class Table extends BaseComponent {
         if (!this.#lengthSelect) {
             return;
         }
-        if (![...this.#lengthSelect.options].some((option) => Number($.getValue(option)) === this.#limit)) {
-            $.append(this.#lengthSelect, $.create('option', { value: this.#limit, text: this.#limit }));
+
+        const options = $.children(this.#lengthSelect, 'option');
+        const hasLength = options.some((option) => Number($.getValue(option)) === this.#limit);
+
+        if (!hasLength) {
+            const option = $.create('option', {
+                value: this.#limit,
+                text: this.#limit,
+            });
+            $.append(this.#lengthSelect, option);
         }
+
         $.setValue(this.#lengthSelect, this.#limit);
     }
 
@@ -1775,23 +1935,48 @@ export default class Table extends BaseComponent {
     #updateLocal() {
         this.#total = this.#data.length;
         const term = this.#term.toLocaleLowerCase();
-        let indexes = this.#data.map((_, index) => index).filter((index) => !term || this.#columns.some((column) =>
-            column.searchable && String($._getDot(this.#data[index], String(column.data)) ?? '').toLocaleLowerCase().includes(term)));
+        let indexes = this.#data.map((_, index) => index);
+
+        if (term) {
+            indexes = indexes.filter((index) => this.#columns.some((column) => {
+                if (!column.searchable) {
+                    return false;
+                }
+
+                const value = $._getDot(this.#data[index], String(column.data));
+
+                return String(value ?? '').toLocaleLowerCase().includes(term);
+            }));
+        }
+
         this.#filtered = indexes.length;
         const order = this.options.ordering ? this.#getOrder() : [];
+
         indexes.sort((a, b) => {
             for (const [index, direction] of order) {
                 const key = String(this.#columns[index].data);
-                const av = $._getDot(this.#data[a], key);
-                const bv = $._getDot(this.#data[b], key);
-                const diff = $._isNumeric(av) && $._isNumeric(bv) ? Number(av) - Number(bv) :
-                    String(av ?? '').toLocaleLowerCase().localeCompare(String(bv ?? '').toLocaleLowerCase());
-                if (diff) {
-                    return direction === 'desc' ? -diff : diff;
+                const aValue = $._getDot(this.#data[a], key);
+                const bValue = $._getDot(this.#data[b], key);
+
+                let difference;
+
+                if ($._isNumeric(aValue) && $._isNumeric(bValue)) {
+                    difference = Number(aValue) - Number(bValue);
+                } else {
+                    const aText = String(aValue ?? '').toLocaleLowerCase();
+                    const bText = String(bValue ?? '').toLocaleLowerCase();
+                    difference = aText.localeCompare(bText);
+                }
+
+                if (difference) {
+                    return direction === 'desc' ? -difference : difference;
                 }
             }
+
+            // Equal values retain their original data order across sorting and filtering.
             return a - b;
         });
+
         if (this.options.paging) {
             const lastOffset = Math.max(0, (Math.ceil(indexes.length / this.#limit) - 1) * this.#limit);
             this.#offset = Math.min(this.#offset, lastOffset);
@@ -1799,6 +1984,7 @@ export default class Table extends BaseComponent {
         } else {
             this.#offset = 0;
         }
+
         this.#rowIndexes = indexes;
         this.#refreshResults();
     }

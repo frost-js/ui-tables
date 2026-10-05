@@ -8,20 +8,20 @@ import { templates } from './templates.js';
  * @class
  */
 export default class Workbook {
-    #current;
+    #sheetCount;
     #sheets;
-    #sKeys;
     #stringCount = 0;
-    #sValues;
+    #stringIndexes;
+    #strings;
 
     /**
      * Creates a Workbook.
      */
     constructor() {
-        this.#current = 0;
+        this.#sheetCount = 0;
         this.#sheets = [];
-        this.#sKeys = new Map();
-        this.#sValues = [];
+        this.#stringIndexes = new Map();
+        this.#strings = [];
     }
 
     /**
@@ -30,19 +30,25 @@ export default class Workbook {
      * @param {string} [name] The name of the sheet.
      */
     addSheet(data, name = null) {
-        this.#current++;
+        this.#sheetCount++;
 
         if (!name) {
-            name = `Sheet${this.#current}`;
+            name = `Sheet${this.#sheetCount}`;
         }
 
-        name = String(name).replace(/[\\/?*[\]:]/g, '').replace(/^'+|'+$/g, '').slice(0, 31) || `Sheet${this.#current}`;
+        // Excel sheet names must be unique, at most 31 characters, and exclude these characters.
+        name = String(name)
+            .replace(/[\\/?*[\]:]/g, '')
+            .replace(/^'+|'+$/g, '')
+            .slice(0, 31) || `Sheet${this.#sheetCount}`;
         const base = name;
         let suffix = 1;
+
         while (this.#sheets.some((sheet) => sheet.name.toLowerCase() === name.toLowerCase())) {
             const tail = ` (${suffix++})`;
             name = base.slice(0, 31 - tail.length) + tail;
         }
+
         this.#sheets.push({
             name,
             data,
@@ -57,8 +63,9 @@ export default class Workbook {
         if (!this.#sheets.length) {
             this.addSheet({ rows: [] });
         }
-        this.#sKeys = new Map();
-        this.#sValues = [];
+
+        this.#stringIndexes = new Map();
+        this.#strings = [];
         this.#stringCount = 0;
         const worksheets = this.#sheets.map((sheet) => this.#sheetToXml(sheet, templates['xl/worksheets/sheet1.xml']));
         const zip = new Zip('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -105,11 +112,13 @@ export default class Workbook {
                     break;
                 }
                 case 'xl/sharedStrings.xml': {
-                    const strings = this.#sValues.map((string) =>
+                    const strings = this.#strings.map((string) =>
                         `<si><t xml:space="preserve">${string}</t></si>`,
                     ).join('\r\n');
 
-                    template = template.replace('{cnt}', String(this.#stringCount)).replace('{unique}', String(this.#sValues.length));
+                    template = template
+                        .replace('{cnt}', String(this.#stringCount))
+                        .replace('{unique}', String(this.#strings.length));
                     template = template.replace('{strings}', strings);
 
                     zip.addFile(filename, template);
@@ -137,17 +146,19 @@ export default class Workbook {
      * Serializes a value without interpreting strings as spreadsheet formulas.
      * @param {*} value The cell value.
      * @param {string} reference The cell reference.
-     * @param {number|null} forceStyle The optional header/footer style.
+     * @param {number|null} defaultStyle The optional header/footer style.
      * @returns {string} The cell XML.
      */
-    #cellToXml(value, reference, forceStyle) {
+    #cellToXml(value, reference, defaultStyle) {
         if (value === null || value === undefined || value === '') {
             return '';
         }
+
         let type = null;
-        let style = forceStyle;
+        let style = defaultStyle;
         let content;
         const text = String(value);
+
         if (typeof value === 'boolean') {
             type = 'b';
             content = value ? 1 : 0;
@@ -163,10 +174,17 @@ export default class Workbook {
             const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})(?: (\d{2}):(\d{2}):(\d{2}))?$/);
             const dmy = text.match(/^(\d{2})\/(\d{2})\/(\d{4})(?: (\d{2}):(\d{2}):(\d{2}))?$/);
             const time = text.match(/^(\d{2}):(\d{2}):(\d{2})$/);
+
             try {
                 if (iso || dmy) {
                     const match = iso || dmy;
-                    content = formatDate(iso ? match[1] : match[3], match[2], iso ? match[3] : match[1], match[4] || 0, match[5] || 0, match[6] || 0);
+                    const year = iso ? match[1] : match[3];
+                    const day = iso ? match[3] : match[1];
+
+                    content = formatDate(
+                        year, match[2], day,
+                        match[4] || 0, match[5] || 0, match[6] || 0,
+                    );
                     style ??= match[4] ? 6 : 4;
                 } else if (time) {
                     content = formatDate(0, 0, 0, ...time.slice(1));
@@ -175,24 +193,43 @@ export default class Workbook {
             } catch {
                 // Keep invalid date-like values as strings instead of changing their meaning.
             }
+
             if (content === undefined) {
                 const escaped = escape(text);
+
                 if (text.length > 160) {
                     type = 'inlineStr';
                     content = escaped;
                 } else {
+                    // Reuse short strings across cells; long strings stay inline in the worksheet.
                     type = 's';
                     this.#stringCount++;
-                    if (!this.#sKeys.has(escaped)) {
-                        this.#sKeys.set(escaped, this.#sValues.length);
-                        this.#sValues.push(escaped);
+
+                    if (!this.#stringIndexes.has(escaped)) {
+                        this.#stringIndexes.set(escaped, this.#strings.length);
+                        this.#strings.push(escaped);
                     }
-                    content = this.#sKeys.get(escaped);
+
+                    content = this.#stringIndexes.get(escaped);
                 }
             }
         }
-        return `<c r="${reference}"${type ? ` t="${type}"` : ''}${style !== null ? ` s="${style}"` : ''}>` +
-            (type === 'inlineStr' ? `<is><t xml:space="preserve">${content}</t></is>` : `<v>${content}</v>`) + '</c>';
+
+        let attributes = `r="${reference}"`;
+
+        if (type) {
+            attributes += ` t="${type}"`;
+        }
+
+        if (style !== null) {
+            attributes += ` s="${style}"`;
+        }
+
+        const cellValue = type === 'inlineStr' ?
+            `<is><t xml:space="preserve">${content}</t></is>` :
+            `<v>${content}</v>`;
+
+        return `<c ${attributes}>${cellValue}</c>`;
     }
 
     /**
@@ -204,26 +241,48 @@ export default class Workbook {
     #sheetToXml(sheet, template) {
         const widths = [];
         const rows = [];
-        const data = [
-            ...(sheet.data.header ? [{ values: sheet.data.header, style: 8 }] : []),
-            ...(sheet.data.rows || []).map((values) => ({ values, style: null })),
-            ...(sheet.data.footer ? [{ values: sheet.data.footer, style: 8 }] : []),
-        ];
+        const data = [];
+
+        if (sheet.data.header) {
+            data.push({ values: sheet.data.header, style: 8 });
+        }
+
+        for (const values of sheet.data.rows || []) {
+            data.push({ values, style: null });
+        }
+
+        if (sheet.data.footer) {
+            data.push({ values: sheet.data.footer, style: 8 });
+        }
+
         if (data.length > 1048576) {
             throw new RangeError('Too many worksheet rows.');
         }
+
         for (const [index, { values, style }] of data.entries()) {
             if (!Array.isArray(values) || values.length > 16384) {
                 throw new RangeError('Invalid worksheet row.');
             }
+
             const cells = values.map((value, column) => {
                 widths[column] = Math.max(widths[column] || 0, String(value ?? '').length);
+
                 return this.#cellToXml(value, `${colName(column + 1)}${index + 1}`, style);
             }).join('');
             rows.push(`<row r="${index + 1}">${cells}</row>`);
         }
-        const cols = widths.map((width, index) => `<col min="${index + 1}" max="${index + 1}" width="${Math.min(width + 5, 60)}"/>`);
+
+        const cols = widths.map((width, index) => {
+            const column = index + 1;
+            const paddedWidth = Math.min(width + 5, 60);
+
+            return `<col min="${column}" max="${column}" width="${paddedWidth}"/>`;
+        });
         const ref = rows.length && widths.length ? `A1:${colName(widths.length)}${rows.length}` : 'A1';
-        return template.replace('{ref}', ref).replace('{cols}', cols.join('')).replace('{rows}', rows.join(''));
+
+        return template
+            .replace('{ref}', ref)
+            .replace('{cols}', cols.join(''))
+            .replace('{rows}', rows.join(''));
     }
 }

@@ -1206,30 +1206,30 @@ var Zip = class {
 	* @param {string} data The data.
 	*/
 	addFile(filename, data) {
-		const vNeeded = 20;
+		const versionNeeded = 20;
 		const filenameLength = byteLength(filename);
 		data = encode(data);
 		const uncompressedSize = data.byteLength;
 		const crc32 = CRC32.calc(data);
 		let compressedSize = uncompressedSize;
-		let cMethod = 0;
+		let compressionMethod = 0;
 		if (uncompressedSize >= 256) {
 			data = RawDeflate.compress(data);
 			compressedSize = data.byteLength;
-			cMethod = 8;
+			compressionMethod = 8;
 		}
 		const now = /* @__PURE__ */ new Date();
 		const year = Math.min(2107, Math.max(1980, now.getFullYear()));
-		const modTime = now.getHours() << 11 | now.getMinutes() << 5 | Math.floor(now.getSeconds() / 2);
-		const modDate = year - 1980 << 9 | now.getMonth() + 1 << 5 | now.getDate();
+		const modifiedTime = now.getHours() << 11 | now.getMinutes() << 5 | Math.floor(now.getSeconds() / 2);
+		const modifiedDate = year - 1980 << 9 | now.getMonth() + 1 << 5 | now.getDate();
 		const dir = [
 			encode("PK"),
 			encodeUint16(0),
-			encodeUint16(vNeeded),
+			encodeUint16(versionNeeded),
 			encodeUint16(2048),
-			encodeUint16(cMethod),
-			encodeUint16(modTime),
-			encodeUint16(modDate),
+			encodeUint16(compressionMethod),
+			encodeUint16(modifiedTime),
+			encodeUint16(modifiedDate),
 			encodeUint32(crc32),
 			encodeUint32(compressedSize),
 			encodeUint32(uncompressedSize),
@@ -1245,11 +1245,11 @@ var Zip = class {
 		this.#dir.push(...dir);
 		const file = [
 			encode("PK"),
-			encodeUint16(vNeeded),
+			encodeUint16(versionNeeded),
 			encodeUint16(2048),
-			encodeUint16(cMethod),
-			encodeUint16(modTime),
-			encodeUint16(modDate),
+			encodeUint16(compressionMethod),
+			encodeUint16(modifiedTime),
+			encodeUint16(modifiedDate),
 			encodeUint32(crc32),
 			encodeUint32(compressedSize),
 			encodeUint32(uncompressedSize),
@@ -1259,7 +1259,7 @@ var Zip = class {
 			data
 		];
 		this.#files.push(...file);
-		this.#offset += file.reduce((acc, file) => acc + file.byteLength, 0);
+		this.#offset += file.reduce((size, part) => size + part.byteLength, 0);
 		this.#entries++;
 	}
 	/**
@@ -1267,7 +1267,7 @@ var Zip = class {
 	* @returns {Blob} The zip file.
 	*/
 	zip() {
-		const dirLength = this.#dir.reduce((acc, file) => acc + file.byteLength, 0);
+		const dirLength = this.#dir.reduce((size, part) => size + part.byteLength, 0);
 		return new Blob([
 			...this.#files,
 			...this.#dir,
@@ -1373,19 +1373,19 @@ var templates = {
 * @class
 */
 var Workbook = class {
-	#current;
+	#sheetCount;
 	#sheets;
-	#sKeys;
 	#stringCount = 0;
-	#sValues;
+	#stringIndexes;
+	#strings;
 	/**
 	* Creates a Workbook.
 	*/
 	constructor() {
-		this.#current = 0;
+		this.#sheetCount = 0;
 		this.#sheets = [];
-		this.#sKeys = /* @__PURE__ */ new Map();
-		this.#sValues = [];
+		this.#stringIndexes = /* @__PURE__ */ new Map();
+		this.#strings = [];
 	}
 	/**
 	* Adds a sheet to the Workbook.
@@ -1393,9 +1393,9 @@ var Workbook = class {
 	* @param {string} [name] The name of the sheet.
 	*/
 	addSheet(data, name = null) {
-		this.#current++;
-		if (!name) name = `Sheet${this.#current}`;
-		name = String(name).replace(/[\\/?*[\]:]/g, "").replace(/^'+|'+$/g, "").slice(0, 31) || `Sheet${this.#current}`;
+		this.#sheetCount++;
+		if (!name) name = `Sheet${this.#sheetCount}`;
+		name = String(name).replace(/[\\/?*[\]:]/g, "").replace(/^'+|'+$/g, "").slice(0, 31) || `Sheet${this.#sheetCount}`;
 		const base = name;
 		let suffix = 1;
 		while (this.#sheets.some((sheet) => sheet.name.toLowerCase() === name.toLowerCase())) {
@@ -1413,8 +1413,8 @@ var Workbook = class {
 	*/
 	create() {
 		if (!this.#sheets.length) this.addSheet({ rows: [] });
-		this.#sKeys = /* @__PURE__ */ new Map();
-		this.#sValues = [];
+		this.#stringIndexes = /* @__PURE__ */ new Map();
+		this.#strings = [];
 		this.#stringCount = 0;
 		const worksheets = this.#sheets.map((sheet) => this.#sheetToXml(sheet, templates["xl/worksheets/sheet1.xml"]));
 		const zip = new Zip("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
@@ -1445,8 +1445,8 @@ var Workbook = class {
 				break;
 			}
 			case "xl/sharedStrings.xml": {
-				const strings = this.#sValues.map((string) => `<si><t xml:space="preserve">${string}</t></si>`).join("\r\n");
-				template = template.replace("{cnt}", String(this.#stringCount)).replace("{unique}", String(this.#sValues.length));
+				const strings = this.#strings.map((string) => `<si><t xml:space="preserve">${string}</t></si>`).join("\r\n");
+				template = template.replace("{cnt}", String(this.#stringCount)).replace("{unique}", String(this.#strings.length));
 				template = template.replace("{strings}", strings);
 				zip.addFile(filename, template);
 				break;
@@ -1465,13 +1465,13 @@ var Workbook = class {
 	* Serializes a value without interpreting strings as spreadsheet formulas.
 	* @param {*} value The cell value.
 	* @param {string} reference The cell reference.
-	* @param {number|null} forceStyle The optional header/footer style.
+	* @param {number|null} defaultStyle The optional header/footer style.
 	* @returns {string} The cell XML.
 	*/
-	#cellToXml(value, reference, forceStyle) {
+	#cellToXml(value, reference, defaultStyle) {
 		if (value === null || value === void 0 || value === "") return "";
 		let type = null;
-		let style = forceStyle;
+		let style = defaultStyle;
 		let content;
 		const text = String(value);
 		if (typeof value === "boolean") {
@@ -1488,7 +1488,9 @@ var Workbook = class {
 			try {
 				if (iso || dmy) {
 					const match = iso || dmy;
-					content = formatDate(iso ? match[1] : match[3], match[2], iso ? match[3] : match[1], match[4] || 0, match[5] || 0, match[6] || 0);
+					const year = iso ? match[1] : match[3];
+					const day = iso ? match[3] : match[1];
+					content = formatDate(year, match[2], day, match[4] || 0, match[5] || 0, match[6] || 0);
 					style ??= match[4] ? 6 : 4;
 				} else if (time) {
 					content = formatDate(0, 0, 0, ...time.slice(1));
@@ -1503,15 +1505,19 @@ var Workbook = class {
 				} else {
 					type = "s";
 					this.#stringCount++;
-					if (!this.#sKeys.has(escaped)) {
-						this.#sKeys.set(escaped, this.#sValues.length);
-						this.#sValues.push(escaped);
+					if (!this.#stringIndexes.has(escaped)) {
+						this.#stringIndexes.set(escaped, this.#strings.length);
+						this.#strings.push(escaped);
 					}
-					content = this.#sKeys.get(escaped);
+					content = this.#stringIndexes.get(escaped);
 				}
 			}
 		}
-		return `<c r="${reference}"${type ? ` t="${type}"` : ""}${style !== null ? ` s="${style}"` : ""}>` + (type === "inlineStr" ? `<is><t xml:space="preserve">${content}</t></is>` : `<v>${content}</v>`) + "</c>";
+		let attributes = `r="${reference}"`;
+		if (type) attributes += ` t="${type}"`;
+		if (style !== null) attributes += ` s="${style}"`;
+		const cellValue = type === "inlineStr" ? `<is><t xml:space="preserve">${content}</t></is>` : `<v>${content}</v>`;
+		return `<c ${attributes}>${cellValue}</c>`;
 	}
 	/**
 	* Converts a sheet object to an XML string.
@@ -1522,20 +1528,19 @@ var Workbook = class {
 	#sheetToXml(sheet, template) {
 		const widths = [];
 		const rows = [];
-		const data = [
-			...sheet.data.header ? [{
-				values: sheet.data.header,
-				style: 8
-			}] : [],
-			...(sheet.data.rows || []).map((values) => ({
-				values,
-				style: null
-			})),
-			...sheet.data.footer ? [{
-				values: sheet.data.footer,
-				style: 8
-			}] : []
-		];
+		const data = [];
+		if (sheet.data.header) data.push({
+			values: sheet.data.header,
+			style: 8
+		});
+		for (const values of sheet.data.rows || []) data.push({
+			values,
+			style: null
+		});
+		if (sheet.data.footer) data.push({
+			values: sheet.data.footer,
+			style: 8
+		});
 		if (data.length > 1048576) throw new RangeError("Too many worksheet rows.");
 		for (const [index, { values, style }] of data.entries()) {
 			if (!Array.isArray(values) || values.length > 16384) throw new RangeError("Invalid worksheet row.");
@@ -1545,7 +1550,10 @@ var Workbook = class {
 			}).join("");
 			rows.push(`<row r="${index + 1}">${cells}</row>`);
 		}
-		const cols = widths.map((width, index) => `<col min="${index + 1}" max="${index + 1}" width="${Math.min(width + 5, 60)}"/>`);
+		const cols = widths.map((width, index) => {
+			const column = index + 1;
+			return `<col min="${column}" max="${column}" width="${Math.min(width + 5, 60)}"/>`;
+		});
 		const ref = rows.length && widths.length ? `A1:${colName(widths.length)}${rows.length}` : "A1";
 		return template.replace("{ref}", ref).replace("{cols}", cols.join("")).replace("{rows}", rows.join(""));
 	}
@@ -1564,12 +1572,16 @@ var Workbook = class {
 */
 function csv(options, { headings, rows }) {
 	const title = options.title || document.title;
-	const lines = [headings, ...rows].map((row) => row.map((value) => {
-		let text = String(value ?? "");
-		if (options.escapeFormulae !== false && typeof value === "string" && /^[\s]*[=+\-@\t\r]/.test(text)) text = `'${text}`;
-		return /[",\r\n]/.test(text) ? `"${text.replaceAll("\"", "\"\"")}"` : text;
-	}).join(","));
-	saveBlob(new Blob([lines.join("\r\n")], { type: "text/csv;charset=utf-8;" }), `${title}.csv`);
+	const lines = [headings, ...rows].map((row) => {
+		return row.map((value) => {
+			let text = String(value ?? "");
+			if (options.escapeFormulae !== false && typeof value === "string" && /^[\s]*[=+\-@\t\r]/.test(text)) text = `'${text}`;
+			if (/[",\r\n]/.test(text)) return `"${text.replaceAll("\"", "\"\"")}"`;
+			return text;
+		}).join(",");
+	});
+	const blob = new Blob([lines.join("\r\n")], { type: "text/csv;charset=utf-8;" });
+	saveBlob(blob, `${title}.csv`);
 }
 /**
 * Downloads the displayed rows as an Excel workbook.
@@ -1827,12 +1839,11 @@ var Table = class extends BaseComponent {
 			this.#renderPaginationContainer(container);
 		}
 	};
-	#columnCount;
 	#columns;
 	#container;
-	#data;
+	#data = [];
 	#drawVersion = 0;
-	#filtered;
+	#filtered = 0;
 	#getData;
 	#headings;
 	#id;
@@ -1841,7 +1852,7 @@ var Table = class extends BaseComponent {
 	#limit;
 	#loader;
 	#loadResults;
-	#offset;
+	#offset = 0;
 	#order;
 	#original;
 	#originalBusy;
@@ -1851,15 +1862,15 @@ var Table = class extends BaseComponent {
 	#pagination;
 	#pending;
 	#requestVersion = 0;
-	#results;
-	#rowIndexes;
+	#results = [];
+	#rowIndexes = [];
 	#searchHandler;
 	#searchInput;
 	#tbody;
-	#term;
+	#term = "";
 	#tfoot;
 	#theadRow;
-	#total;
+	#total = 0;
 	#totalPages;
 	/**
 	* Creates a Table.
@@ -1868,47 +1879,35 @@ var Table = class extends BaseComponent {
 	*/
 	constructor(node, options) {
 		if (!$._isElement(node) || $.tagName(node) !== "table") throw new TypeError("Table requires a table element.");
-		const configured = {
-			...new.target.defaults,
-			...getDataset(node),
-			...options
-		};
-		for (const key of [
-			"order",
-			"lengths",
-			"buttons"
-		]) if (!Array.isArray(configured[key])) throw new TypeError(`${key} must be an array.`);
-		if (configured.columns !== null && !Array.isArray(configured.columns)) throw new TypeError("Columns must be an array.");
-		if (typeof configured.sanitize !== "function") throw new TypeError("sanitize must be a function.");
-		if (configured.lengths.some((length) => !Number.isSafeInteger(Number(length)) || Number(length) <= 0)) throw new RangeError("Page lengths must be positive integers.");
-		const headings = getDomHeadings(node);
-		if (configured.columns && headings.length && configured.columns.length !== headings.length) throw new RangeError("Column definitions must match the heading count.");
-		if (configured.paging && (!Number.isSafeInteger(Number(configured.length)) || Number(configured.length) <= 0)) throw new RangeError("Page length must be a positive integer.");
 		super(node, options);
-		for (const key of [
-			"order",
-			"lengths",
-			"buttons"
-		]) this.options[key].splice(0, this.options[key].length, ...configured[key]);
 		this.#originalClass = $.getAttribute(node, "class");
 		this.#originalDescription = $.getAttribute(node, "aria-describedby");
 		this.#originalBusy = $.getAttribute(node, "aria-busy");
-		this.#data = [];
-		this.#results = [];
-		this.#rowIndexes = [];
-		this.#total = 0;
-		this.#filtered = 0;
-		this.#offset = 0;
-		this.#term = "";
-		this.#limit = this.options.paging ? Number(this.options.length) : Infinity;
 		try {
-			if (!this.options.getResults) {
-				this.#data = this.options.data ?? getDomData(node);
-				validateRows(this.#data);
-				this.#data = this.#data.slice();
+			const configured = {
+				...getDataset(node),
+				...options
+			};
+			for (const key of [
+				"order",
+				"lengths",
+				"buttons"
+			]) if (Object.hasOwn(configured, key)) this.options[key].splice(0, this.options[key].length, ...configured[key]);
+			this.#limit = this.options.paging ? Number(this.options.length) : Infinity;
+			if (this.options.paging && (!Number.isSafeInteger(this.#limit) || this.#limit <= 0)) throw new RangeError("Page length must be a positive integer.");
+			for (const length of this.options.lengths) {
+				const value = Number(length);
+				if (!Number.isSafeInteger(value) || value <= 0) throw new RangeError("Page lengths must be positive integers.");
 			}
-			this.#headings = headings;
+			if (!this.options.getResults) {
+				const data = this.options.data ?? getDomData(node);
+				validateRows(data);
+				this.#data = data.slice();
+			}
+			const headings = getDomHeadings(node);
 			const columns = this.options.columns ?? headings.map((_, data) => ({ data }));
+			if (headings.length && columns.length !== headings.length) throw new RangeError("Column definitions must match the heading count.");
+			this.#headings = headings;
 			this.#columns = columns.map((column, index) => ({
 				class: null,
 				data: index,
@@ -1926,12 +1925,8 @@ var Table = class extends BaseComponent {
 				text: column.name ?? String(column.data),
 				class: null
 			}));
-			for (const column of this.#columns) if (column.orderData !== null) {
-				if (!Array.isArray(column.orderData)) throw new TypeError("orderData must be an array of column indexes.");
-				column.orderData.forEach((index) => this.#validateColumn(index));
-			}
+			for (const column of this.#columns) if (column.orderData !== null) column.orderData.forEach((index) => this.#validateColumn(index));
 			this.#order = this.#normalizeOrder(this.options.order);
-			this.#columnCount = this.#getVisibleColumns().length;
 			if (!$.getProperty(node, "id")) {
 				$.setProperty(node, "id", generateId("table"));
 				this.#id = true;
@@ -2270,24 +2265,14 @@ var Table = class extends BaseComponent {
 				if (!this.#columns[index].orderable) return;
 				event.preventDefault();
 				const defaultDir = this.#columns[index].dir;
-				let currentDir = null;
-				for (const [col, dir] of this.#order) {
-					if (col !== index) continue;
-					currentDir = dir;
-					break;
-				}
+				const currentDir = this.#order.find(([column]) => column === index)?.[1];
 				let nextDir = defaultDir;
 				if (currentDir === defaultDir) nextDir = defaultDir === "asc" ? "desc" : "asc";
 				let order;
 				if (event.shiftKey) {
 					if (!currentDir) order = [...this.#order, [index, nextDir]];
-					else if (currentDir === defaultDir) order = this.#order.map(([col, dir]) => {
-						if (col === index) dir = nextDir;
-						return [col, dir];
-					});
-					else order = this.#order.filter(([col]) => {
-						return col !== index;
-					});
+					else if (currentDir === defaultDir) order = this.#order.map(([column, direction]) => [column, column === index ? nextDir : direction]);
+					else order = this.#order.filter(([column]) => column !== index);
 				} else order = [[index, nextDir]];
 				this.order(order);
 			};
@@ -2327,12 +2312,15 @@ var Table = class extends BaseComponent {
 	async #fetchResults(version) {
 		const active = () => this.node && version === this.#requestVersion;
 		if (!active()) return;
-		const request = { columns: { ...this.#columns.map((column) => ({
-			...column.name ? { name: column.name } : {},
-			data: column.data,
-			orderable: column.orderable,
-			searchable: column.searchable
-		})) } };
+		const request = { columns: {} };
+		for (const [index, column] of this.#columns.entries()) {
+			request.columns[index] = {
+				data: column.data,
+				orderable: column.orderable,
+				searchable: column.searchable
+			};
+			if (column.name) request.columns[index].name = column.name;
+		}
 		if (this.#term) request.term = this.#term;
 		if (this.options.ordering) request.order = { ...this.#getOrder().map(([column, dir]) => ({
 			column,
@@ -2383,23 +2371,18 @@ var Table = class extends BaseComponent {
 	*/
 	#getExportData(options) {
 		const columns = options.columns || this.#getVisibleColumns();
+		for (const index of columns) this.#validateColumn(index);
 		return {
-			headings: this.#getHeadings(columns),
-			rows: this.#getResultRows(columns)
+			headings: columns.map((index) => {
+				const container = $.create("div");
+				$.setHtml(container, $.sanitize(String(this.#headings[index].text)));
+				return $.getText(container);
+			}),
+			rows: this.#results.map((row) => columns.map((index) => {
+				const key = String(this.#columns[index].data);
+				return $._getDot(row, key);
+			}))
 		};
-	}
-	/**
-	* Gets headings for specific columns.
-	* @param {Array} columns The columns to get.
-	* @returns {Array} The headings.
-	*/
-	#getHeadings(columns) {
-		return columns.map((index) => {
-			this.#validateColumn(index);
-			const container = $.create("div");
-			$.setHtml(container, $.sanitize(String(this.#headings[index].text)));
-			return $.getText(container);
-		});
 	}
 	/**
 	* Gets an index (optionally modified).
@@ -2414,25 +2397,13 @@ var Table = class extends BaseComponent {
 		return modified ? this.#rowIndexes[index] : index;
 	}
 	/**
-	* Gets real column ordering data.
+	* Expands alternate sort columns, which were validated during initialization.
 	* @returns {Array} The column ordering data.
 	*/
 	#getOrder() {
 		return this.#order.flatMap(([index, direction]) => {
-			return (this.#columns[index].orderData ?? [index]).map((column) => {
-				this.#validateColumn(column);
-				return [column, direction];
-			});
+			return (this.#columns[index].orderData ?? [index]).map((column) => [column, direction]);
 		});
-	}
-	/**
-	* Gets results for specific columns.
-	* @param {Array} columns The columns to get.
-	* @returns {Array} The results.
-	*/
-	#getResultRows(columns) {
-		for (const index of columns) this.#validateColumn(index);
-		return this.#results.map((row) => columns.map((index) => $._getDot(row, String(this.#columns[index].data))));
 	}
 	/**
 	* Gets the visible columns.
@@ -2452,20 +2423,22 @@ var Table = class extends BaseComponent {
 	*/
 	#mutated(change = 0) {
 		if (!this.node) return;
-		if (this.options.getResults) {
-			const version = this.#cancelRequest();
-			if (!this.node || version !== this.#requestVersion) return;
-			this.#total = Math.max(0, this.#total + change);
-			this.#filtered = Math.max(0, this.#filtered + change);
-			if (!this.#data.length && this.#offset) {
-				this.#offset = Math.max(0, this.#offset - this.#limit);
-				this.#getData();
-				return;
-			}
-			this.#refreshResults();
-			this.loading({ show: false });
-			if (this.node) this.#renderResults();
-		} else this.#getData();
+		if (!this.options.getResults) {
+			this.#getData();
+			return;
+		}
+		const version = this.#cancelRequest();
+		if (!this.node || version !== this.#requestVersion) return;
+		this.#total = Math.max(0, this.#total + change);
+		this.#filtered = Math.max(0, this.#filtered + change);
+		if (!this.#data.length && this.#offset) {
+			this.#offset = Math.max(0, this.#offset - this.#limit);
+			this.#getData();
+			return;
+		}
+		this.#refreshResults();
+		this.loading({ show: false });
+		if (this.node) this.#renderResults();
 	}
 	/**
 	* Validates and copies ordering, ignoring nonorderable columns.
@@ -2474,12 +2447,14 @@ var Table = class extends BaseComponent {
 	*/
 	#normalizeOrder(order) {
 		if (!Array.isArray(order)) throw new TypeError("Order must be an array.");
-		return order.flatMap((entry) => {
+		const normalized = [];
+		for (const entry of order) {
 			if (!Array.isArray(entry) || entry.length !== 2 || !["asc", "desc"].includes(entry[1])) throw new TypeError("Order entries must contain a column index and asc/desc direction.");
-			if (!this.#columns.length && entry[0] === 0) return [];
+			if (!this.#columns.length && entry[0] === 0) continue;
 			this.#validateColumn(entry[0]);
-			return this.#columns[entry[0]].orderable ? [[...entry]] : [];
-		});
+			if (this.#columns[entry[0]].orderable) normalized.push([...entry]);
+		}
+		return normalized;
 	}
 	/**
 	* Refreshes the results.
@@ -2534,7 +2509,10 @@ var Table = class extends BaseComponent {
 			this.#renderLayoutRow(this.options.layout.bottom, this.constructor.classes.bottomRow);
 			if (!this.node) return;
 		}
-		if (this.#infoContainer) $.setAttribute(this.node, { "aria-describedby": [this.#originalDescription, $.getProperty(this.#infoContainer, "id")].filter(Boolean).join(" ") });
+		if (this.#infoContainer) {
+			const descriptions = [this.#originalDescription, $.getProperty(this.#infoContainer, "id")];
+			$.setAttribute(this.node, { "aria-describedby": descriptions.filter(Boolean).join(" ") });
+		}
 	}
 	/**
 	* Renders the table buttons.
@@ -2553,8 +2531,8 @@ var Table = class extends BaseComponent {
 			});
 			$.addEvent(btn, "click.ui.table", (event) => {
 				event.preventDefault();
-				if (button.callback) button.callback.bind(this)();
-				else if (Object.hasOwn(this.constructor.buttons, button.type)) this.constructor.buttons[button.type].bind(this)(button);
+				if (button.callback) button.callback.call(this);
+				else if (Object.hasOwn(this.constructor.buttons, button.type)) this.constructor.buttons[button.type].call(this, button);
 			});
 			$.append(btnGroup, btn);
 		}
@@ -2599,12 +2577,7 @@ var Table = class extends BaseComponent {
 			}
 			lastCell = cell;
 			if (!this.options.ordering || !this.#columns[index].orderable) continue;
-			let dir;
-			for (const order of this.#order) {
-				if (order[0] !== index) continue;
-				dir = order[1];
-				break;
-			}
+			const dir = this.#order.find(([column]) => column === index)?.[1];
 			switch (dir) {
 				case "asc":
 					$.addClass(cell, this.constructor.classes.tableSortAsc);
@@ -2723,14 +2696,15 @@ var Table = class extends BaseComponent {
 	* @returns {HTMLElement} The pagnination item.
 	*/
 	#renderPageItem(options) {
+		const label = options.text ? `${options.text} ${this.options.lang.page}` : `${this.options.lang.page} ${options.page}`;
 		const container = $.create("div", { class: this.constructor.classes.pageItem });
 		const link = $.create("button", {
 			html: options.icon || options.text || options.page,
 			class: this.constructor.classes.pageLink,
 			attributes: {
 				"type": "button",
-				"title": options.text ? `${options.text} ${this.options.lang.page}` : `${this.options.lang.page} ${options.page}`,
-				"aria-label": options.text ? `${options.text} ${this.options.lang.page}` : `${this.options.lang.page} ${options.page}`,
+				"title": label,
+				"aria-label": label,
 				"aria-controls": $.getAttribute(this.node, "id")
 			},
 			dataset: { uiPage: options.page }
@@ -2850,7 +2824,6 @@ var Table = class extends BaseComponent {
 		const proceed = this.options.preDrawCallback?.call(this);
 		if (!active() || proceed === false) return;
 		$.empty(this.#tbody);
-		this.#columnCount = this.#getVisibleColumns().length;
 		this.#renderHeadings();
 		if (!active()) return;
 		const end = this.#offset + this.#results.length;
@@ -2864,7 +2837,7 @@ var Table = class extends BaseComponent {
 			$.append(row, $.create("td", {
 				class: this.constructor.classes.emptyCell,
 				text: this.#term ? this.options.lang.noResults : this.options.lang.noData,
-				attributes: { colspan: Math.max(1, this.#columnCount) }
+				attributes: { colspan: Math.max(1, this.#getVisibleColumns().length) }
 			}));
 			$.append(this.#tbody, row);
 		} else for (const [index, result] of this.#results.entries()) {
@@ -2936,10 +2909,13 @@ var Table = class extends BaseComponent {
 	*/
 	#syncLength() {
 		if (!this.#lengthSelect) return;
-		if (![...this.#lengthSelect.options].some((option) => Number($.getValue(option)) === this.#limit)) $.append(this.#lengthSelect, $.create("option", {
-			value: this.#limit,
-			text: this.#limit
-		}));
+		if (!$.children(this.#lengthSelect, "option").some((option) => Number($.getValue(option)) === this.#limit)) {
+			const option = $.create("option", {
+				value: this.#limit,
+				text: this.#limit
+			});
+			$.append(this.#lengthSelect, option);
+		}
 		$.setValue(this.#lengthSelect, this.#limit);
 	}
 	/**
@@ -2948,16 +2924,27 @@ var Table = class extends BaseComponent {
 	#updateLocal() {
 		this.#total = this.#data.length;
 		const term = this.#term.toLocaleLowerCase();
-		let indexes = this.#data.map((_, index) => index).filter((index) => !term || this.#columns.some((column) => column.searchable && String($._getDot(this.#data[index], String(column.data)) ?? "").toLocaleLowerCase().includes(term)));
+		let indexes = this.#data.map((_, index) => index);
+		if (term) indexes = indexes.filter((index) => this.#columns.some((column) => {
+			if (!column.searchable) return false;
+			const value = $._getDot(this.#data[index], String(column.data));
+			return String(value ?? "").toLocaleLowerCase().includes(term);
+		}));
 		this.#filtered = indexes.length;
 		const order = this.options.ordering ? this.#getOrder() : [];
 		indexes.sort((a, b) => {
 			for (const [index, direction] of order) {
 				const key = String(this.#columns[index].data);
-				const av = $._getDot(this.#data[a], key);
-				const bv = $._getDot(this.#data[b], key);
-				const diff = $._isNumeric(av) && $._isNumeric(bv) ? Number(av) - Number(bv) : String(av ?? "").toLocaleLowerCase().localeCompare(String(bv ?? "").toLocaleLowerCase());
-				if (diff) return direction === "desc" ? -diff : diff;
+				const aValue = $._getDot(this.#data[a], key);
+				const bValue = $._getDot(this.#data[b], key);
+				let difference;
+				if ($._isNumeric(aValue) && $._isNumeric(bValue)) difference = Number(aValue) - Number(bValue);
+				else {
+					const aText = String(aValue ?? "").toLocaleLowerCase();
+					const bText = String(bValue ?? "").toLocaleLowerCase();
+					difference = aText.localeCompare(bText);
+				}
+				if (difference) return direction === "desc" ? -difference : difference;
 			}
 			return a - b;
 		});

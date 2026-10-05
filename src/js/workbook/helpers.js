@@ -7,12 +7,15 @@ export function colName(num) {
     if (!Number.isInteger(num) || num < 1) {
         throw new RangeError('Column must be a positive integer.');
     }
+
     let result = '';
+
     while (num) {
         num--;
         result = String.fromCharCode(65 + num % 26) + result;
         num = Math.floor(num / 26);
     }
+
     return result;
 }
 
@@ -24,10 +27,14 @@ export function colName(num) {
 export function escape(string) {
     return Array.from(String(string)).filter((character) => {
         const code = character.codePointAt(0);
+
         return (code >= 32 || [9, 10, 13].includes(code)) && code !== 0xfffe && code !== 0xffff;
     }).join('')
-        .replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
-        .replaceAll('"', '&quot;').replaceAll('\'', '&apos;');
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll('\'', '&apos;');
 }
 
 /**
@@ -42,6 +49,7 @@ export function escape(string) {
  */
 export function formatDate(year, month, day, hours = 0, minutes = 0, seconds = 0) {
     [year, month, day, hours, minutes, seconds] = [year, month, day, hours, minutes, seconds].map(Number);
+
     if (
         ![year, month, day, hours, minutes, seconds].every(Number.isInteger) ||
         hours < 0 ||
@@ -53,14 +61,20 @@ export function formatDate(year, month, day, hours = 0, minutes = 0, seconds = 0
     ) {
         throw new RangeError('Invalid date or time.');
     }
+
     const fraction = (hours * 3600 + minutes * 60 + seconds) / 86400;
+
     if (!year) {
         return fraction;
     }
+
     if (year === 1900 && month === 2 && day === 29) {
+        // Excel reserves serial 60 for a leap day that did not exist.
         return 60 + fraction;
     }
+
     const date = new Date(Date.UTC(year, month - 1, day));
+
     if (
         year < 1900 ||
         year > 9999 ||
@@ -70,6 +84,8 @@ export function formatDate(year, month, day, hours = 0, minutes = 0, seconds = 0
     ) {
         throw new RangeError('Invalid date.');
     }
+
     const days = (date.getTime() - Date.UTC(1899, 11, 31)) / 86400000;
+
     return days + (days >= 60 ? 1 : 0) + fraction;
 }

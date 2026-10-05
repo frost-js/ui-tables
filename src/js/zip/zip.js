@@ -32,7 +32,7 @@ export default class Zip {
      * @param {string} data The data.
      */
     addFile(filename, data) {
-        const vNeeded = 20;
+        const versionNeeded = 20;
 
         const filenameLength = byteLength(filename);
 
@@ -42,28 +42,31 @@ export default class Zip {
         const crc32 = CRC32.calc(data);
 
         let compressedSize = uncompressedSize;
-        let cMethod = 0;
+        let compressionMethod = 0;
 
+        // Small entries are stored directly; larger entries use DEFLATE compression.
         if (uncompressedSize >= 256) {
             data = RawDeflate.compress(data);
             compressedSize = data.byteLength;
-            cMethod = 8;
+            compressionMethod = 8;
         }
 
         const now = new Date();
 
         const year = Math.min(2107, Math.max(1980, now.getFullYear()));
-        const modTime = (now.getHours() << 11) | (now.getMinutes() << 5) | Math.floor(now.getSeconds() / 2);
-        const modDate = ((year - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate();
+        // ZIP stores dates as DOS bit fields, with years from 1980 and two-second precision.
+        const modifiedTime = (now.getHours() << 11) | (now.getMinutes() << 5) | Math.floor(now.getSeconds() / 2);
+        const modifiedDate = ((year - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate();
 
+        // The central directory indexes each entry by its local header offset.
         const dir = [
             encode('\x50\x4b\x01\x02'), // dir signature
             encodeUint16(0), // version made by
-            encodeUint16(vNeeded),
+            encodeUint16(versionNeeded),
             encodeUint16(0x0800), // UTF-8 filenames
-            encodeUint16(cMethod),
-            encodeUint16(modTime),
-            encodeUint16(modDate),
+            encodeUint16(compressionMethod),
+            encodeUint16(modifiedTime),
+            encodeUint16(modifiedDate),
             encodeUint32(crc32),
             encodeUint32(compressedSize),
             encodeUint32(uncompressedSize),
@@ -72,7 +75,7 @@ export default class Zip {
             encodeUint16(0), // file comment length
             encodeUint16(0), // disk number start
             encodeUint16(0), // internal file attributes
-            encodeUint32(32), // internal file attributes
+            encodeUint32(32), // external file attributes
             encodeUint32(this.#offset), // offset of local header
             encode(filename),
         ];
@@ -81,11 +84,11 @@ export default class Zip {
 
         const file = [
             encode('\x50\x4b\x03\x04'), // zip signature
-            encodeUint16(vNeeded),
+            encodeUint16(versionNeeded),
             encodeUint16(0x0800), // UTF-8 filenames
-            encodeUint16(cMethod),
-            encodeUint16(modTime),
-            encodeUint16(modDate),
+            encodeUint16(compressionMethod),
+            encodeUint16(modifiedTime),
+            encodeUint16(modifiedDate),
             encodeUint32(crc32),
             encodeUint32(compressedSize),
             encodeUint32(uncompressedSize),
@@ -97,7 +100,7 @@ export default class Zip {
 
         this.#files.push(...file);
 
-        this.#offset += file.reduce((acc, file) => acc + file.byteLength, 0);
+        this.#offset += file.reduce((size, part) => size + part.byteLength, 0);
         this.#entries++;
     }
 
@@ -106,7 +109,7 @@ export default class Zip {
      * @returns {Blob} The zip file.
      */
     zip() {
-        const dirLength = this.#dir.reduce((acc, file) => acc + file.byteLength, 0);
+        const dirLength = this.#dir.reduce((size, part) => size + part.byteLength, 0);
 
         return new Blob(
             [

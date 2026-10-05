@@ -24,6 +24,7 @@ export function buildTable(headings, rows, direction) {
     $.append(table, thead);
 
     const tbody = $.create('tbody');
+
     for (const row of rows) {
         const tr = $.create('tr');
 
@@ -49,6 +50,7 @@ export function buildTable(headings, rows, direction) {
  */
 export function getDomData(element) {
     const tbody = $.findOne('tbody', element);
+
     return $.children(tbody, 'tr').map(
         (row) => $.children(row, 'td').map((cell) => $.getHtml(cell)),
     );
@@ -61,16 +63,20 @@ export function getDomData(element) {
  */
 export function getDomHeadings(element) {
     const thead = $.getProperty(element, 'tHead');
+
     if (!thead) {
         return [];
     }
+
     const rows = $.getProperty(thead, 'rows');
+
     if (
         rows.length > 1 ||
         $.find('th', thead).some((cell) => $.getProperty(cell, 'colSpan') !== 1 || $.getProperty(cell, 'rowSpan') !== 1)
     ) {
         throw new RangeError('Table supports one heading row without spanning cells.');
     }
+
     const row = rows[0];
 
     return $.children(row, 'th').map((cell) => ({
@@ -92,6 +98,7 @@ export function saveBlob(blob, filename) {
             download: filename,
         },
     });
+
     try {
         $.append(document.body, link);
         $.click(link);
