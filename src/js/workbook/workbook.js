@@ -2,27 +2,26 @@ import Zip from '../zip/zip.js';
 import { colName, escape, formatDate } from './helpers.js';
 import { templates } from './templates.js';
 
+// These indexes match the cellXfs entries in the workbook's styles template.
+const cellStyles = {
+    percent: 2,
+    decimalPercent: 3,
+    date: 4,
+    time: 5,
+    dateTime: 6,
+    heading: 8,
+};
+
 /**
- * Workbook Class
- * Based on https://github.com/shuchkin/simplexlsxgen/blob/master/src/SimpleXLSXGen.php
- * @class
+ * Builds Excel workbooks from rows, headings, and optional footers.
+ * Adapted from https://github.com/shuchkin/simplexlsxgen/blob/master/src/SimpleXLSXGen.php
  */
 export default class Workbook {
-    #sheetCount;
-    #sheets;
+    #sheetCount = 0;
+    #sheets = [];
     #stringCount = 0;
-    #stringIndexes;
-    #strings;
-
-    /**
-     * Creates a Workbook.
-     */
-    constructor() {
-        this.#sheetCount = 0;
-        this.#sheets = [];
-        this.#stringIndexes = new Map();
-        this.#strings = [];
-    }
+    #stringIndexes = new Map();
+    #strings = [];
 
     /**
      * Adds a sheet to the Workbook.
@@ -41,6 +40,7 @@ export default class Workbook {
             .replace(/[\\/?*[\]:]/g, '')
             .replace(/^'+|'+$/g, '')
             .slice(0, 31) || `Sheet${this.#sheetCount}`;
+
         const base = name;
         let suffix = 1;
 
@@ -67,48 +67,56 @@ export default class Workbook {
         this.#stringIndexes = new Map();
         this.#strings = [];
         this.#stringCount = 0;
-        const worksheets = this.#sheets.map((sheet) => this.#sheetToXml(sheet, templates['xl/worksheets/sheet1.xml']));
+
+        // Serialize sheets first so all shared strings are available when writing their template.
+        const worksheetTemplate = templates['xl/worksheets/sheet1.xml'];
+        const worksheets = this.#sheets.map((sheet) => this.#sheetToXml(sheet, worksheetTemplate));
+
         const zip = new Zip('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
 
-        for (let [filename, template] of Object.entries(templates)) {
+        for (const [filename, source] of Object.entries(templates)) {
+            let template = source;
+
             switch (filename) {
                 case '[Content_Types].xml': {
                     const override = this.#sheets.map((_, index) =>
-                        `<Override PartName="/xl/worksheets/sheet${index + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`,
+                        `<Override PartName="/xl/worksheets/sheet${index + 1}.xml" ` +
+                        'ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>',
                     ).join('');
 
                     template = template.replace('{sheets}', override);
 
-                    zip.addFile(filename, template);
                     break;
                 }
                 case 'xl/_rels/workbook.xml.rels': {
                     let relationships = this.#sheets.map((_, index) =>
-                        `<Relationship Id="rId${index + 2}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${index + 1}.xml"/>\n`,
+                        `<Relationship Id="rId${index + 2}" ` +
+                        'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" ' +
+                        `Target="worksheets/sheet${index + 1}.xml"/>\n`,
                     ).join('');
 
-                    relationships += `<Relationship Id="rId${this.#sheets.length + 3}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/></Relationships>`;
+                    relationships += `<Relationship Id="rId${this.#sheets.length + 3}" ` +
+                        'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" ' +
+                        'Target="sharedStrings.xml"/></Relationships>';
 
                     template = template.replace('{sheets}', relationships);
 
-                    zip.addFile(filename, template);
                     break;
                 }
                 case 'xl/workbook.xml': {
                     const sheets = this.#sheets.map((sheet, index) =>
-                        `<sheet name="${escape(sheet.name)}" sheetId="${index + 1}" state="visible" r:id="rId${index + 2}"/>`,
+                        `<sheet name="${escape(sheet.name)}" sheetId="${index + 1}" ` +
+                        `state="visible" r:id="rId${index + 2}"/>`,
                     ).join('');
 
                     template = template.replace('{sheets}', sheets);
 
-                    zip.addFile(filename, template);
                     break;
                 }
                 case 'docProps/core.xml': {
                     const date = (new Date()).toISOString().substring(0, 19) + 'Z';
                     template = template.replaceAll('{date}', date);
 
-                    zip.addFile(filename, template);
                     break;
                 }
                 case 'xl/sharedStrings.xml': {
@@ -118,25 +126,23 @@ export default class Workbook {
 
                     template = template
                         .replace('{cnt}', String(this.#stringCount))
-                        .replace('{unique}', String(this.#strings.length));
-                    template = template.replace('{strings}', strings);
+                        .replace('{unique}', String(this.#strings.length))
+                        .replace('{strings}', strings);
 
-                    zip.addFile(filename, template);
                     break;
                 }
                 case 'xl/worksheets/sheet1.xml': {
                     for (const [index, xml] of worksheets.entries()) {
-                        filename = `xl/worksheets/sheet${index + 1}.xml`;
-
-                        zip.addFile(filename, xml);
+                        zip.addFile(`xl/worksheets/sheet${index + 1}.xml`, xml);
                     }
 
-                    break;
+                    continue;
                 }
                 default:
-                    zip.addFile(filename, template);
                     break;
             }
+
+            zip.addFile(filename, template);
         }
 
         return zip.zip();
@@ -169,7 +175,7 @@ export default class Workbook {
             content = Number(value);
         } else if (/^[-+]?\d+(?:\.\d+)?%$/.test(text)) {
             content = Number.parseFloat(text) / 100;
-            style ??= text.includes('.') ? 3 : 2;
+            style ??= text.includes('.') ? cellStyles.decimalPercent : cellStyles.percent;
         } else {
             const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})(?: (\d{2}):(\d{2}):(\d{2}))?$/);
             const dmy = text.match(/^(\d{2})\/(\d{2})\/(\d{4})(?: (\d{2}):(\d{2}):(\d{2}))?$/);
@@ -182,13 +188,17 @@ export default class Workbook {
                     const day = iso ? match[3] : match[1];
 
                     content = formatDate(
-                        year, match[2], day,
-                        match[4] || 0, match[5] || 0, match[6] || 0,
+                        year,
+                        match[2],
+                        day,
+                        match[4] || 0,
+                        match[5] || 0,
+                        match[6] || 0,
                     );
-                    style ??= match[4] ? 6 : 4;
+                    style ??= match[4] ? cellStyles.dateTime : cellStyles.date;
                 } else if (time) {
                     content = formatDate(0, 0, 0, ...time.slice(1));
-                    style ??= 5;
+                    style ??= cellStyles.time;
                 }
             } catch {
                 // Keep invalid date-like values as strings instead of changing their meaning.
@@ -244,15 +254,24 @@ export default class Workbook {
         const data = [];
 
         if (sheet.data.header) {
-            data.push({ values: sheet.data.header, style: 8 });
+            data.push({
+                values: sheet.data.header,
+                style: cellStyles.heading,
+            });
         }
 
         for (const values of sheet.data.rows || []) {
-            data.push({ values, style: null });
+            data.push({
+                values,
+                style: null,
+            });
         }
 
         if (sheet.data.footer) {
-            data.push({ values: sheet.data.footer, style: 8 });
+            data.push({
+                values: sheet.data.footer,
+                style: cellStyles.heading,
+            });
         }
 
         if (data.length > 1048576) {
@@ -269,20 +288,21 @@ export default class Workbook {
 
                 return this.#cellToXml(value, `${colName(column + 1)}${index + 1}`, style);
             }).join('');
+
             rows.push(`<row r="${index + 1}">${cells}</row>`);
         }
 
-        const cols = widths.map((width, index) => {
+        const columns = widths.map((width, index) => {
             const column = index + 1;
             const paddedWidth = Math.min(width + 5, 60);
 
             return `<col min="${column}" max="${column}" width="${paddedWidth}"/>`;
         });
-        const ref = rows.length && widths.length ? `A1:${colName(widths.length)}${rows.length}` : 'A1';
+        const reference = rows.length && widths.length ? `A1:${colName(widths.length)}${rows.length}` : 'A1';
 
         return template
-            .replace('{ref}', ref)
-            .replace('{cols}', cols.join(''))
+            .replace('{ref}', reference)
+            .replace('{cols}', columns.join(''))
             .replace('{rows}', rows.join(''));
     }
 }

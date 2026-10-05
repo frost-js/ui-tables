@@ -1,3 +1,5 @@
+/** @import { TableColumn, TableOrder } from './table.js'; */
+
 import $ from '@fr0st/query';
 
 /**
@@ -86,6 +88,95 @@ export function getDomHeadings(element) {
 }
 
 /**
+ * Applies column defaults and validates the indexes used for alternate ordering.
+ * @param {TableColumn[]|null} columns The configured columns.
+ * @param {{text: string, class: string|null}[]} headings The parsed headings.
+ * @returns {TableColumn[]} The normalized columns.
+ */
+export function normalizeColumns(columns, headings) {
+    columns ??= headings.map((_, data) => ({ data }));
+
+    if (headings.length && columns.length !== headings.length) {
+        throw new RangeError('Column definitions must match the heading count.');
+    }
+
+    const normalized = columns.map((column, index) => ({
+        class: null,
+        data: index,
+        dir: 'asc',
+        format: null,
+        name: null,
+        orderData: null,
+        orderable: true,
+        searchable: true,
+        visible: true,
+        createdCell: null,
+        ...column,
+    }));
+
+    for (const column of normalized) {
+        if (column.orderData !== null) {
+            for (const index of column.orderData) {
+                validateColumnIndex(index, normalized.length);
+            }
+        }
+    }
+
+    return normalized;
+}
+
+/**
+ * Validates and copies ordering, ignoring nonorderable columns.
+ * @param {TableOrder[]} order The requested order.
+ * @param {TableColumn[]} columns The normalized columns.
+ * @returns {TableOrder[]} The normalized order.
+ */
+export function normalizeOrder(order, columns) {
+    if (!Array.isArray(order)) {
+        throw new TypeError('Order must be an array.');
+    }
+
+    const normalized = [];
+
+    for (const entry of order) {
+        if (!Array.isArray(entry) || entry.length !== 2 || !['asc', 'desc'].includes(entry[1])) {
+            throw new TypeError('Order entries must contain a column index and asc/desc direction.');
+        }
+
+        const [index, direction] = entry;
+
+        // The default first-column order is harmless for a table with no columns.
+        if (!columns.length && index === 0) {
+            continue;
+        }
+
+        validateColumnIndex(index, columns.length);
+
+        if (columns[index].orderable) {
+            normalized.push([index, direction]);
+        }
+    }
+
+    return normalized;
+}
+
+/**
+ * Converts a page length to a positive integer for page offset calculations.
+ * @param {number|string} length The requested page length.
+ * @returns {number} The normalized length.
+ */
+export function normalizePageLength(length) {
+    length = Number(length);
+
+    // Zero or fractional lengths cannot produce valid page offsets.
+    if (!Number.isSafeInteger(length) || length <= 0) {
+        throw new RangeError('Page length must be a positive integer.');
+    }
+
+    return length;
+}
+
+/**
  * Downloads a blob.
  * @param {Blob} blob The blob to save.
  * @param {string} filename The filename.
@@ -105,6 +196,17 @@ export function saveBlob(blob, filename) {
     } finally {
         $.detach(link);
         setTimeout(() => URL.revokeObjectURL(url), 0);
+    }
+}
+
+/**
+ * Validates a data column index.
+ * @param {number} index The column index.
+ * @param {number} count The number of columns.
+ */
+export function validateColumnIndex(index, count) {
+    if (!Number.isInteger(index) || index < 0 || index >= count) {
+        throw new RangeError('Column index is out of range.');
     }
 }
 

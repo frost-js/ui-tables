@@ -13,6 +13,7 @@ import Workbook from './workbook/workbook.js';
  */
 export function csv(options, { headings, rows }) {
     const title = options.title || document.title;
+
     const lines = [headings, ...rows].map((row) => {
         const values = row.map((value) => {
             let text = String(value ?? '');
@@ -71,10 +72,12 @@ export async function print(options, table, classes) {
     const title = options.title || document.title;
     win.document.title = title;
     win.document.documentElement.dir = $.getProperty(table, 'dir') || document.documentElement.dir;
+
     const heading = win.document.createElement('h1');
     $.setText(heading, title);
     $.addClass(table, classes || '');
     $.append(win.document.body, [heading, table]);
+
     const loads = [];
 
     // Copy styles into the popup and wait for external stylesheets before printing.
@@ -83,6 +86,7 @@ export async function print(options, table, classes) {
 
         if ($.tagName(clone) === 'link') {
             $.setProperty(clone, 'href', $.getProperty(element, 'href'));
+
             loads.push(new Promise((resolve) => {
                 $.addEventOnce(clone, 'load', resolve);
                 $.addEventOnce(clone, 'error', resolve);

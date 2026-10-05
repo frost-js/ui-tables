@@ -1,7 +1,10 @@
 import $ from '@fr0st/query';
 import { BaseComponent, generateId, getDataset } from '@fr0st/ui';
 import { csv, excel, print } from './buttons.js';
-import { buildTable, getDomData, getDomHeadings, validateRows } from './helpers.js';
+import {
+    buildTable, getDomData, getDomHeadings, normalizeColumns, normalizeOrder,
+    normalizePageLength, validateColumnIndex, validateRows,
+} from './helpers.js';
 
 /** @typedef {Array<*>|Record<string, *>} TableRow */
 /** @typedef {[number, 'asc'|'desc']} TableOrder */
@@ -202,37 +205,36 @@ export default class Table extends BaseComponent {
         },
     };
 
-    #columns;
-    #container;
+    #columns = [];
+    #container = null;
     #data = [];
     #drawVersion = 0;
     #filtered = 0;
-    #getData;
-    #headings;
-    #id;
-    #infoContainer;
-    #lengthSelect;
+    #headings = [];
+    #id = false;
+    #infoContainer = null;
+    #lengthSelect = null;
     #limit;
-    #loader;
-    #loadResults;
+    #loader = null;
+    #loadResults = null;
     #offset = 0;
     #order;
-    #original;
+    #original = null;
     #originalBusy;
     #originalClass;
     #originalDescription;
     #page;
-    #pagination;
-    #pending;
+    #pagination = null;
+    #pending = null;
     #requestVersion = 0;
     #results = [];
     #rowIndexes = [];
-    #searchHandler;
-    #searchInput;
-    #tbody;
+    #searchHandler = null;
+    #searchInput = null;
+    #tbody = null;
     #term = '';
-    #tfoot;
-    #theadRow;
+    #tfoot = null;
+    #theadRow = null;
     #total = 0;
     #totalPages;
 
@@ -262,19 +264,10 @@ export default class Table extends BaseComponent {
                 }
             }
 
-            this.#limit = this.options.paging ? Number(this.options.length) : Infinity;
-
-            // Zero or fractional page lengths cannot produce valid page offsets.
-            if (this.options.paging && (!Number.isSafeInteger(this.#limit) || this.#limit <= 0)) {
-                throw new RangeError('Page length must be a positive integer.');
-            }
+            this.#limit = this.options.paging ? normalizePageLength(this.options.length) : Infinity;
 
             for (const length of this.options.lengths) {
-                const value = Number(length);
-
-                if (!Number.isSafeInteger(value) || value <= 0) {
-                    throw new RangeError('Page lengths must be positive integers.');
-                }
+                normalizePageLength(length);
             }
 
             if (!this.options.getResults) {
@@ -285,26 +278,8 @@ export default class Table extends BaseComponent {
             }
 
             const headings = getDomHeadings(node);
-            const columns = this.options.columns ?? headings.map((_, data) => ({ data }));
-
-            if (headings.length && columns.length !== headings.length) {
-                throw new RangeError('Column definitions must match the heading count.');
-            }
-
+            this.#columns = normalizeColumns(this.options.columns, headings);
             this.#headings = headings;
-            this.#columns = columns.map((column, index) => ({
-                class: null,
-                data: index,
-                dir: 'asc',
-                format: null,
-                name: null,
-                orderData: null,
-                orderable: true,
-                searchable: true,
-                visible: true,
-                createdCell: null,
-                ...column,
-            }));
 
             if (!headings.length) {
                 this.#headings = this.#columns.map((column) => ({
@@ -313,57 +288,18 @@ export default class Table extends BaseComponent {
                 }));
             }
 
-            for (const column of this.#columns) {
-                if (column.orderData !== null) {
-                    column.orderData.forEach((index) => this.#validateColumn(index));
-                }
-            }
-
-            this.#order = this.#normalizeOrder(this.options.order);
+            this.#order = normalizeOrder(this.options.order, this.#columns);
 
             if (!$.getProperty(node, 'id')) {
                 $.setProperty(node, 'id', generateId('table'));
                 this.#id = true;
             }
 
-            // Loading events and cancellation hooks can dispose the table or start another load.
-            // Only the current operation may continue after invoking them.
             if (this.options.getResults) {
                 this.#loadResults = $._debounce(
                     (version) => this.#fetchResults(version),
                     this.options.debounce,
                 );
-
-                this.#getData = () => {
-                    this.#drawVersion++;
-                    const version = this.#cancelRequest();
-
-                    if (!this.node || version !== this.#requestVersion) {
-                        return;
-                    }
-
-                    this.loading();
-
-                    if (this.node && version === this.#requestVersion) {
-                        this.#loadResults(version);
-                    }
-                };
-            } else {
-                this.#getData = () => {
-                    const version = ++this.#drawVersion;
-                    this.loading();
-
-                    if (!this.node || version !== this.#drawVersion) {
-                        return;
-                    }
-
-                    this.#updateLocal();
-                    this.loading({ show: false });
-
-                    if (this.node && version === this.#drawVersion) {
-                        this.#renderResults();
-                    }
-                };
             }
 
             this.#render();
@@ -376,7 +312,7 @@ export default class Table extends BaseComponent {
             $.triggerEvent(this.node, 'init.ui.table');
 
             if (this.node) {
-                this.#getData();
+                this.#load();
             }
         } catch (error) {
             this.dispose();
@@ -495,7 +431,6 @@ export default class Table extends BaseComponent {
         this.#results = [];
         this.#rowIndexes = [];
 
-        this.#getData = null;
         this.#loadResults = null;
         this.#searchHandler = null;
 
@@ -554,7 +489,7 @@ export default class Table extends BaseComponent {
      * @param {number} index The column index.
      */
     hideColumn(index) {
-        this.#validateColumn(index);
+        validateColumnIndex(index, this.#columns.length);
         this.#columns[index].visible = false;
         this.#renderResults();
     }
@@ -581,11 +516,7 @@ export default class Table extends BaseComponent {
             return;
         }
 
-        length = Number(length);
-
-        if (!Number.isSafeInteger(length) || length <= 0) {
-            throw new RangeError('Page length must be a positive integer.');
-        }
+        length = normalizePageLength(length);
 
         this.#limit = length;
         this.#offset -= this.#offset % length;
@@ -593,7 +524,7 @@ export default class Table extends BaseComponent {
         $.triggerEvent(this.node, 'length.ui.table');
 
         if (this.node) {
-            this.#getData();
+            this.#load();
         }
     }
 
@@ -627,11 +558,11 @@ export default class Table extends BaseComponent {
             return;
         }
 
-        this.#order = this.#normalizeOrder(order);
+        this.#order = normalizeOrder(order, this.#columns);
         $.triggerEvent(this.node, 'order.ui.table');
 
         if (this.node) {
-            this.#getData();
+            this.#load();
         }
     }
 
@@ -655,7 +586,7 @@ export default class Table extends BaseComponent {
         $.triggerEvent(this.node, 'page.ui.table');
 
         if (this.node) {
-            this.#getData();
+            this.#load();
         }
     }
 
@@ -680,7 +611,7 @@ export default class Table extends BaseComponent {
             this.#offset = 0;
         }
 
-        this.#getData();
+        this.#load();
     }
 
     /**
@@ -715,7 +646,7 @@ export default class Table extends BaseComponent {
         $.triggerEvent(this.node, 'search.ui.table');
 
         if (this.node) {
-            this.#getData();
+            this.#load();
         }
     }
 
@@ -773,7 +704,7 @@ export default class Table extends BaseComponent {
      * @param {number} index The column index.
      */
     showColumn(index) {
-        this.#validateColumn(index);
+        validateColumnIndex(index, this.#columns.length);
         this.#columns[index].visible = true;
         this.#renderResults();
     }
@@ -996,7 +927,7 @@ export default class Table extends BaseComponent {
         if (this.options.paging && this.#offset >= this.#filtered && this.#offset > 0) {
             // Filtering or deleting rows may leave the requested page beyond the final page.
             this.#offset = Math.max(0, (Math.ceil(this.#filtered / this.#limit) - 1) * this.#limit);
-            this.#getData();
+            this.#load();
 
             return;
         }
@@ -1019,7 +950,7 @@ export default class Table extends BaseComponent {
         const columns = options.columns || this.#getVisibleColumns();
 
         for (const index of columns) {
-            this.#validateColumn(index);
+            validateColumnIndex(index, this.#columns.length);
         }
 
         // Exports contain text, even when the displayed headings contain HTML.
@@ -1087,6 +1018,48 @@ export default class Table extends BaseComponent {
     }
 
     /**
+     * Loads the current page from local data or schedules a remote request.
+     */
+    #load() {
+        if (!this.node) {
+            return;
+        }
+
+        const drawVersion = ++this.#drawVersion;
+
+        // Loading events and cancellation hooks may dispose the table or start another load.
+        // Only the current operation may continue after invoking them.
+        if (this.options.getResults) {
+            const requestVersion = this.#cancelRequest();
+
+            if (!this.node || requestVersion !== this.#requestVersion) {
+                return;
+            }
+
+            this.loading();
+
+            if (this.node && requestVersion === this.#requestVersion) {
+                this.#loadResults(requestVersion);
+            }
+
+            return;
+        }
+
+        this.loading();
+
+        if (!this.node || drawVersion !== this.#drawVersion) {
+            return;
+        }
+
+        this.#updateLocal();
+        this.loading({ show: false });
+
+        if (this.node && drawVersion === this.#drawVersion) {
+            this.#renderResults();
+        }
+    }
+
+    /**
      * Redraws after a row mutation; remote mutations affect the loaded page only.
      * @param {number} [change=0] The change in the remote row count.
      */
@@ -1096,7 +1069,7 @@ export default class Table extends BaseComponent {
         }
 
         if (!this.options.getResults) {
-            this.#getData();
+            this.#load();
 
             return;
         }
@@ -1113,7 +1086,7 @@ export default class Table extends BaseComponent {
 
         if (!this.#data.length && this.#offset) {
             this.#offset = Math.max(0, this.#offset - this.#limit);
-            this.#getData();
+            this.#load();
 
             return;
         }
@@ -1124,38 +1097,6 @@ export default class Table extends BaseComponent {
         if (this.node) {
             this.#renderResults();
         }
-    }
-
-    /**
-     * Validates and copies ordering, ignoring nonorderable columns.
-     * @param {TableOrder[]} order The requested order.
-     * @returns {TableOrder[]} The normalized order.
-     */
-    #normalizeOrder(order) {
-        if (!Array.isArray(order)) {
-            throw new TypeError('Order must be an array.');
-        }
-
-        const normalized = [];
-
-        for (const entry of order) {
-            if (!Array.isArray(entry) || entry.length !== 2 || !['asc', 'desc'].includes(entry[1])) {
-                throw new TypeError('Order entries must contain a column index and asc/desc direction.');
-            }
-
-            // The default first-column order is harmless for a table with no columns.
-            if (!this.#columns.length && entry[0] === 0) {
-                continue;
-            }
-
-            this.#validateColumn(entry[0]);
-
-            if (this.#columns[entry[0]].orderable) {
-                normalized.push([...entry]);
-            }
-        }
-
-        return normalized;
     }
 
     /**
@@ -1987,15 +1928,5 @@ export default class Table extends BaseComponent {
 
         this.#rowIndexes = indexes;
         this.#refreshResults();
-    }
-
-    /**
-     * Validates a data column index.
-     * @param {number} index The column index.
-     */
-    #validateColumn(index) {
-        if (!Number.isInteger(index) || index < 0 || index >= this.#columns.length) {
-            throw new RangeError('Column index is out of range.');
-        }
     }
 }

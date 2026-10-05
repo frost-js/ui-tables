@@ -34,7 +34,8 @@ Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' });
 _fr0st_query = __toESM(_fr0st_query, 1);
 
 //#region src/js/helpers.js
-/**
+/** @import { TableColumn, TableOrder } from './table.js'; */
+	/**
 	* Builds a text-only table from export data.
 	* @param {string[]} headings The column headings.
 	* @param {Array<Array<*>>} rows The displayed rows.
@@ -90,6 +91,59 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		}));
 	}
 	/**
+	* Applies column defaults and validates the indexes used for alternate ordering.
+	* @param {TableColumn[]|null} columns The configured columns.
+	* @param {{text: string, class: string|null}[]} headings The parsed headings.
+	* @returns {TableColumn[]} The normalized columns.
+	*/
+	function normalizeColumns(columns, headings) {
+		columns ??= headings.map((_, data) => ({ data }));
+		if (headings.length && columns.length !== headings.length) throw new RangeError("Column definitions must match the heading count.");
+		const normalized = columns.map((column, index) => ({
+			class: null,
+			data: index,
+			dir: "asc",
+			format: null,
+			name: null,
+			orderData: null,
+			orderable: true,
+			searchable: true,
+			visible: true,
+			createdCell: null,
+			...column
+		}));
+		for (const column of normalized) if (column.orderData !== null) for (const index of column.orderData) validateColumnIndex(index, normalized.length);
+		return normalized;
+	}
+	/**
+	* Validates and copies ordering, ignoring nonorderable columns.
+	* @param {TableOrder[]} order The requested order.
+	* @param {TableColumn[]} columns The normalized columns.
+	* @returns {TableOrder[]} The normalized order.
+	*/
+	function normalizeOrder(order, columns) {
+		if (!Array.isArray(order)) throw new TypeError("Order must be an array.");
+		const normalized = [];
+		for (const entry of order) {
+			if (!Array.isArray(entry) || entry.length !== 2 || !["asc", "desc"].includes(entry[1])) throw new TypeError("Order entries must contain a column index and asc/desc direction.");
+			const [index, direction] = entry;
+			if (!columns.length && index === 0) continue;
+			validateColumnIndex(index, columns.length);
+			if (columns[index].orderable) normalized.push([index, direction]);
+		}
+		return normalized;
+	}
+	/**
+	* Converts a page length to a positive integer for page offset calculations.
+	* @param {number|string} length The requested page length.
+	* @returns {number} The normalized length.
+	*/
+	function normalizePageLength(length) {
+		length = Number(length);
+		if (!Number.isSafeInteger(length) || length <= 0) throw new RangeError("Page length must be a positive integer.");
+		return length;
+	}
+	/**
 	* Downloads a blob.
 	* @param {Blob} blob The blob to save.
 	* @param {string} filename The filename.
@@ -109,6 +163,14 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		}
 	}
 	/**
+	* Validates a data column index.
+	* @param {number} index The column index.
+	* @param {number} count The number of columns.
+	*/
+	function validateColumnIndex(index, count) {
+		if (!Number.isInteger(index) || index < 0 || index >= count) throw new RangeError("Column index is out of range.");
+	}
+	/**
 	* Validates a local or remote row collection.
 	* @param {Array<Array<*>|Record<string, *>>} rows The supplied rows.
 	*/
@@ -117,69 +179,10 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 	}
 
 //#endregion
-//#region src/js/zip/crc32.js
-	var table = null;
-	/**
-	* Generate the CRC32 table.
-	* @returns {Uint32Array} The CRC32 table.
-	*/
-	var generateTable = () => {
-		if (!table) {
-			table = /* @__PURE__ */ new Uint32Array(256);
-			for (let i = 0; i < 256; i++) {
-				let c = i;
-				for (let j = 0; j < 8; j++) c = c & 1 ? 3988292384 ^ c >>> 1 : c >>> 1;
-				table[i] = c >>> 0;
-			}
-		}
-		return table;
-	};
-	/**
-	* CRC32 Class
-	* Based on https://github.com/imaya/zlib.js/blob/develop/src/crc32.js
-	* @class
-	*/
-	var CRC32 = class {
-		/**
-		* Gets the CRC32 hash value.
-		* @param {Uint8Array} data The data to hash.
-		* @param {number} [pos] The data position.
-		* @param {number} [length] The data length.
-		* @returns {number} The CRC32 hash.
-		*/
-		static calc(data, pos = 0, length = null) {
-			return this.update(data, 0, pos, length);
-		}
-		/**
-		* Updates the CRC32 hash value.
-		* @param {Uint8Array} data The data to hash.
-		* @param {number} crc The CRC32 hash.
-		* @param {number} [pos] The data position.
-		* @param {number} [length] The data length.
-		* @returns {number} The CRC32 hash.
-		*/
-		static update(data, crc, pos = 0, length = null) {
-			if (length === null) length = data.length;
-			crc ^= 4294967295;
-			const table = generateTable();
-			for (let i = length & 7; i--; ++pos) crc = crc >>> 8 ^ table[(crc ^ data[pos]) & 255];
-			for (let i = length >> 3; i--; pos += 8) {
-				crc = crc >>> 8 ^ table[(crc ^ data[pos]) & 255];
-				crc = crc >>> 8 ^ table[(crc ^ data[pos + 1]) & 255];
-				crc = crc >>> 8 ^ table[(crc ^ data[pos + 2]) & 255];
-				crc = crc >>> 8 ^ table[(crc ^ data[pos + 3]) & 255];
-				crc = crc >>> 8 ^ table[(crc ^ data[pos + 4]) & 255];
-				crc = crc >>> 8 ^ table[(crc ^ data[pos + 5]) & 255];
-				crc = crc >>> 8 ^ table[(crc ^ data[pos + 6]) & 255];
-				crc = crc >>> 8 ^ table[(crc ^ data[pos + 7]) & 255];
-			}
-			return (crc ^ 4294967295) >>> 0;
-		}
-	};
-
-//#endregion
 //#region src/js/zip/helpers.js
 	var encoder = new TextEncoder();
+	var bitReverseTable = null;
+	var crc32Table = null;
 	/**
 	* Encodes a string as UTF-8 bytes.
 	* @param {string} string The string.
@@ -216,52 +219,109 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		new DataView(bytes.buffer).setUint32(0, number, true);
 		return bytes;
 	}
+	/**
+	* Gets the cached bit reversal table for all possible byte values.
+	* @returns {Uint8Array} The bit reversal table.
+	*/
+	function getBitReverseTable() {
+		if (bitReverseTable === null) {
+			bitReverseTable = /* @__PURE__ */ new Uint8Array(256);
+			for (let byte = 0; byte < 256; byte++) {
+				let remaining = byte;
+				let reversed = remaining;
+				let shift = 7;
+				for (remaining >>>= 1; remaining; remaining >>>= 1) {
+					reversed <<= 1;
+					reversed |= remaining & 1;
+					shift--;
+				}
+				bitReverseTable[byte] = (reversed << shift & 255) >>> 0;
+			}
+		}
+		return bitReverseTable;
+	}
+	/**
+	* Reverses the bits within a byte.
+	* @param {number} byte The byte to reverse.
+	* @returns {number} The reversed number.
+	*/
+	function reverseByte(byte) {
+		return getBitReverseTable()[byte];
+	}
+	/**
+	* Reverses all 32 bits of an integer.
+	* @param {number} number The number to reverse.
+	* @returns {number} The reversed number.
+	*/
+	function reverseUint32(number) {
+		const table = getBitReverseTable();
+		return table[number & 255] << 24 | table[number >>> 8 & 255] << 16 | table[number >>> 16 & 255] << 8 | table[number >>> 24 & 255];
+	}
+	/**
+	* Gets the cached CRC32 table for the polynomial used by ZIP.
+	* @returns {Uint32Array} The CRC32 table.
+	*/
+	function getCrc32Table() {
+		if (!crc32Table) {
+			crc32Table = /* @__PURE__ */ new Uint32Array(256);
+			for (let i = 0; i < 256; i++) {
+				let checksum = i;
+				for (let j = 0; j < 8; j++) checksum = checksum & 1 ? 3988292384 ^ checksum >>> 1 : checksum >>> 1;
+				crc32Table[i] = checksum >>> 0;
+			}
+		}
+		return crc32Table;
+	}
+
+//#endregion
+//#region src/js/zip/crc32.js
+/**
+	* Calculates and updates ZIP CRC32 checksums.
+	* Adapted from https://github.com/imaya/zlib.js/blob/develop/src/crc32.js
+	*/
+	var CRC32 = class {
+		/**
+		* Gets the CRC32 hash value.
+		* @param {Uint8Array} data The data to hash.
+		* @param {number} [position] The data position.
+		* @param {number} [length] The data length.
+		* @returns {number} The CRC32 hash.
+		*/
+		static calc(data, position = 0, length = null) {
+			return this.update(data, 0, position, length);
+		}
+		/**
+		* Updates the CRC32 hash value.
+		* @param {Uint8Array} data The data to hash.
+		* @param {number} checksum The CRC32 hash.
+		* @param {number} [position] The data position.
+		* @param {number} [length] The data length.
+		* @returns {number} The CRC32 hash.
+		*/
+		static update(data, checksum, position = 0, length = null) {
+			if (length === null) length = data.length;
+			checksum ^= 4294967295;
+			const table = getCrc32Table();
+			for (let i = length & 7; i--; ++position) checksum = checksum >>> 8 ^ table[(checksum ^ data[position]) & 255];
+			for (let i = length >> 3; i--; position += 8) {
+				checksum = checksum >>> 8 ^ table[(checksum ^ data[position]) & 255];
+				checksum = checksum >>> 8 ^ table[(checksum ^ data[position + 1]) & 255];
+				checksum = checksum >>> 8 ^ table[(checksum ^ data[position + 2]) & 255];
+				checksum = checksum >>> 8 ^ table[(checksum ^ data[position + 3]) & 255];
+				checksum = checksum >>> 8 ^ table[(checksum ^ data[position + 4]) & 255];
+				checksum = checksum >>> 8 ^ table[(checksum ^ data[position + 5]) & 255];
+				checksum = checksum >>> 8 ^ table[(checksum ^ data[position + 6]) & 255];
+				checksum = checksum >>> 8 ^ table[(checksum ^ data[position + 7]) & 255];
+			}
+			return (checksum ^ 4294967295) >>> 0;
+		}
+	};
 
 //#endregion
 //#region src/js/zip/bit-stream.js
-	var reverseTable = null;
-	/**
-	* Generate the reverse table.
-	* @returns {Uint8Array} The reverse table.
-	*/
-	var buildReverseTable = () => {
-		if (reverseTable === null) {
-			reverseTable = /* @__PURE__ */ new Uint8Array(256);
-			for (let i = 0; i < 256; ++i) {
-				let n = i;
-				let r = n;
-				let s = 7;
-				for (n >>>= 1; n; n >>>= 1) {
-					r <<= 1;
-					r |= n & 1;
-					--s;
-				}
-				reverseTable[i] = (r << s & 255) >>> 0;
-			}
-		}
-		return reverseTable;
-	};
-	/**
-	* Reverse the bit order.
-	* @param {number} n The number to reverse.
-	* @returns {number} The reversed number.
-	*/
-	var rev = (n) => {
-		return buildReverseTable()[n];
-	};
-	/**
-	* Reverse the bit order (32-bit).
-	* @param {number} n The number to reverse.
-	* @returns {number} The reversed number.
-	*/
-	var rev32 = (n) => {
-		const reverseTable = buildReverseTable();
-		return reverseTable[n & 255] << 24 | reverseTable[n >>> 8 & 255] << 16 | reverseTable[n >>> 16 & 255] << 8 | reverseTable[n >>> 24 & 255];
-	};
-	/**
-	* BitStream Class
-	* Based on https://github.com/imaya/zlib.js/blob/develop/src/bitstream.js
-	* @class
+/**
+	* Writes the bit stream used by DEFLATE.
+	* Adapted from https://github.com/imaya/zlib.js/blob/develop/src/bitstream.js
 	*/
 	var BitStream = class {
 		#bitIndex;
@@ -279,14 +339,14 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			if (this.#buffer.length <= this.#index) this.#expandBuffer();
 		}
 		/**
-		* Finish writing and return the buffer.
+		* Finishes writing and returns the buffer.
 		* @returns {Uint8Array} The buffer.
 		*/
 		finish() {
 			let index = this.#index;
 			if (this.#bitIndex > 0) {
 				this.#buffer[index] <<= 8 - this.#bitIndex;
-				this.#buffer[index] = rev(this.#buffer[index]);
+				this.#buffer[index] = reverseByte(this.#buffer[index]);
 				index++;
 			}
 			return this.#buffer.subarray(0, index);
@@ -294,20 +354,20 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		/**
 		* Writes bits to the buffer.
 		* @param {number} number The number to write.
-		* @param {number} n The number of bits to write.
-		* @param {number} [reverse] Whether to write in reverse order.
+		* @param {number} bitCount The number of bits to write.
+		* @param {boolean} [reverse] Whether to write in reverse order.
 		*/
-		writeBits(number, n, reverse) {
-			if (reverse && n > 1) number = n > 8 ? rev32(number) >> 32 - n : rev(number) >> 8 - n;
+		writeBits(number, bitCount, reverse) {
+			if (reverse && bitCount > 1) number = bitCount > 8 ? reverseUint32(number) >> 32 - bitCount : reverseByte(number) >> 8 - bitCount;
 			let current = this.#buffer[this.#index];
-			if (n + this.#bitIndex < 8) {
-				current = current << n | number;
-				this.#bitIndex += n;
-			} else for (let i = 0; i < n; i++) {
-				current = current << 1 | number >> n - i - 1 & 1;
+			if (bitCount + this.#bitIndex < 8) {
+				current = current << bitCount | number;
+				this.#bitIndex += bitCount;
+			} else for (let i = 0; i < bitCount; i++) {
+				current = current << 1 | number >> bitCount - i - 1 & 1;
 				if (++this.#bitIndex === 8) {
 					this.#bitIndex = 0;
-					this.#buffer[this.#index++] = rev(current);
+					this.#buffer[this.#index++] = reverseByte(current);
 					current = 0;
 					if (this.#index === this.#buffer.length) this.#expandBuffer();
 				}
@@ -315,7 +375,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			this.#buffer[this.#index] = current;
 		}
 		/**
-		* Expand the buffer size.
+		* Expands the buffer size.
 		*/
 		#expandBuffer() {
 			const oldBuffer = this.#buffer;
@@ -328,25 +388,8 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 //#endregion
 //#region src/js/zip/heap.js
 /**
-	* Gets index of parent node.
-	* @param {number} index The index.
-	* @returns {number} The parent index.
-	*/
-	var getParent = (index) => {
-		return ((index - 2) / 4 | 0) * 2;
-	};
-	/**
-	* Gets index of child node.
-	* @param {number} index The index.
-	* @returns {number} The child index.
-	*/
-	var getChild = (index) => {
-		return 2 * index + 2;
-	};
-	/**
-	* Heap Class
-	* Based on https://github.com/imaya/zlib.js/blob/develop/src/heap.js
-	* @class
+	* Stores symbol frequencies in a max heap.
+	* Adapted from https://github.com/imaya/zlib.js/blob/develop/src/heap.js
 	*/
 	var Heap = class {
 		#buffer;
@@ -378,7 +421,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			this.#buffer[1] = this.#buffer[this.#length + 1];
 			let parent = 0;
 			while (true) {
-				let current = getChild(parent);
+				let current = 2 * parent + 2;
 				if (current >= this.#length) break;
 				if (current + 2 < this.#length && this.#buffer[current + 2] > this.#buffer[current]) current += 2;
 				if (this.#buffer[current] > this.#buffer[parent]) {
@@ -406,7 +449,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			this.#buffer[this.#length++] = value;
 			this.#buffer[this.#length++] = index;
 			while (current > 0) {
-				const parent = getParent(current);
+				const parent = ((current - 2) / 4 | 0) * 2;
 				if (this.#buffer[current] > this.#buffer[parent]) {
 					let swap = this.#buffer[current];
 					this.#buffer[current] = this.#buffer[parent];
@@ -421,14 +464,201 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 	};
 
 //#endregion
-//#region src/js/zip/lz77-match.js
+//#region src/js/zip/huffman.js
+/**
+	* Gets the Huffman codes from the code lengths.
+	* @param {Uint8Array} lengths The code lengths.
+	* @returns {Uint16Array} The Huffman codes.
+	*/
+	function getCodesFromLengths(lengths) {
+		const codes = new Uint16Array(lengths.length);
+		const count = [];
+		const startCode = [];
+		let code = 0;
+		for (let i = 0; i < lengths.length; i++) count[lengths[i]] = (count[lengths[i]] | 0) + 1;
+		for (let i = 1; i <= 16; i++) {
+			startCode[i] = code;
+			code += count[i] | 0;
+			code <<= 1;
+		}
+		for (let i = 0; i < lengths.length; i++) {
+			code = startCode[lengths[i]];
+			startCode[lengths[i]] += 1;
+			codes[i] = 0;
+			for (let j = 0; j < lengths[i]; j++) {
+				codes[i] = codes[i] << 1 | code & 1;
+				code >>>= 1;
+			}
+		}
+		return codes;
+	}
+	/**
+	* Gets the lengths of a Huffman code.
+	* @param {Uint32Array} frequencies The frequency counts.
+	* @param {number} limit The code length limit.
+	* @returns {Uint8Array} The code lengths.
+	*/
+	function getCodeLengths(frequencies, limit) {
+		const heap = new Heap(572);
+		const length = new Uint8Array(frequencies.length);
+		for (let i = 0; i < frequencies.length; i++) if (frequencies[i] > 0) heap.push(i, frequencies[i]);
+		const nodes = new Array(heap.length / 2);
+		const values = new Uint32Array(heap.length / 2);
+		if (nodes.length === 1) {
+			length[heap.pop().index] = 1;
+			return length;
+		}
+		for (let i = 0; i < nodes.length; i++) {
+			nodes[i] = heap.pop();
+			values[i] = nodes[i].value;
+		}
+		const codeLengths = reversePackageMerge(values, values.length, limit);
+		for (let i = 0; i < nodes.length; i++) length[nodes[i].index] = codeLengths[i];
+		return length;
+	}
+	/**
+	* Encodes runs of code lengths for the dynamic Huffman tree header.
+	* @param {number} literalCount The number of literal and length symbols.
+	* @param {Uint8Array} literalCodeLengths The literal lengths and length codes.
+	* @param {number} distanceCount The number of distance symbols.
+	* @param {Uint8Array} distanceCodeLengths The distance code lengths.
+	* @returns {{codes: Uint32Array, frequencies: Uint8Array}} The encoded symbols and their frequencies.
+	*/
+	function getTreeSymbols(literalCount, literalCodeLengths, distanceCount, distanceCodeLengths) {
+		const lengths = new Uint32Array(literalCount + distanceCount);
+		const result = /* @__PURE__ */ new Uint32Array(316);
+		const frequencies = /* @__PURE__ */ new Uint8Array(19);
+		let j = 0;
+		for (let i = 0; i < literalCount; i++) lengths[j++] = literalCodeLengths[i];
+		for (let i = 0; i < distanceCount; i++) lengths[j++] = distanceCodeLengths[i];
+		let resultCount = 0;
+		for (let i = 0; i < lengths.length; i += j) {
+			for (j = 1; i + j < lengths.length && lengths[i + j] === lengths[i]; j++);
+			let runLength = j;
+			if (lengths[i] === 0) {
+				if (runLength < 3) while (runLength-- > 0) {
+					result[resultCount++] = 0;
+					frequencies[0]++;
+				}
+				else while (runLength > 0) {
+					let repeatCount = Math.min(runLength, 138);
+					if (repeatCount > runLength - 3 && repeatCount < runLength) repeatCount = runLength - 3;
+					if (repeatCount <= 10) {
+						result[resultCount++] = 17;
+						result[resultCount++] = repeatCount - 3;
+						frequencies[17]++;
+					} else {
+						result[resultCount++] = 18;
+						result[resultCount++] = repeatCount - 11;
+						frequencies[18]++;
+					}
+					runLength -= repeatCount;
+				}
+			} else {
+				result[resultCount++] = lengths[i];
+				frequencies[lengths[i]]++;
+				runLength--;
+				if (runLength < 3) while (runLength-- > 0) {
+					result[resultCount++] = lengths[i];
+					frequencies[lengths[i]]++;
+				}
+				else while (runLength > 0) {
+					let repeatCount = Math.min(runLength, 6);
+					if (repeatCount > runLength - 3 && repeatCount < runLength) repeatCount = runLength - 3;
+					result[resultCount++] = 16;
+					result[resultCount++] = repeatCount - 3;
+					frequencies[16]++;
+					runLength -= repeatCount;
+				}
+			}
+		}
+		return {
+			codes: result.subarray(0, resultCount),
+			frequencies
+		};
+	}
+	/**
+	* Finds Huffman code lengths within a bit limit using reverse package merge.
+	* @param {Uint32Array} frequencies The value frequencies.
+	* @param {number} symbolCount The number of symbols.
+	* @param {number} limit The code length limit.
+	* @returns {Uint8Array} The code lengths.
+	*/
+	function reversePackageMerge(frequencies, symbolCount, limit) {
+		const minimumCost = new Uint16Array(limit);
+		const mergeFlags = new Uint8Array(limit);
+		const codeLengths = new Uint8Array(symbolCount);
+		const weights = new Array(limit);
+		const symbolIndexes = new Array(limit);
+		const currentPosition = new Array(limit);
+		let excess = (1 << limit) - symbolCount;
+		const half = 1 << limit - 1;
+		minimumCost[limit - 1] = symbolCount;
+		for (let i = 0; i < limit; i++) {
+			if (excess < half) mergeFlags[i] = 0;
+			else {
+				mergeFlags[i] = 1;
+				excess -= half;
+			}
+			excess <<= 1;
+			minimumCost[limit - 2 - i] = (minimumCost[limit - 1 - i] / 2 | 0) + symbolCount;
+		}
+		minimumCost[0] = mergeFlags[0];
+		weights[0] = new Array(minimumCost[0]);
+		symbolIndexes[0] = new Array(minimumCost[0]);
+		for (let i = 0; i < limit; i++) {
+			if (minimumCost[i] > 2 * minimumCost[i - 1] + mergeFlags[i]) minimumCost[i] = 2 * minimumCost[i - 1] + mergeFlags[i];
+			weights[i] = new Array(minimumCost[i]);
+			symbolIndexes[i] = new Array(minimumCost[i]);
+		}
+		for (let i = 0; i < symbolCount; i++) codeLengths[i] = limit;
+		for (let i = 0; i < minimumCost[limit - 1]; i++) {
+			weights[limit - 1][i] = frequencies[i];
+			symbolIndexes[limit - 1][i] = i;
+		}
+		for (let i = 0; i < limit; i++) currentPosition[i] = 0;
+		if (mergeFlags[limit - 1] === 1) {
+			codeLengths[0]--;
+			currentPosition[limit - 1]++;
+		}
+		function takePackage(level) {
+			const symbolIndex = symbolIndexes[level][currentPosition[level]];
+			if (symbolIndex === symbolCount) {
+				takePackage(level + 1);
+				takePackage(level + 1);
+			} else codeLengths[symbolIndex]--;
+			currentPosition[level]++;
+		}
+		for (let i = limit - 2; i >= 0; i--) {
+			let symbolIndex = 0;
+			let next = currentPosition[i + 1];
+			for (let j = 0; j < minimumCost[i]; j++) {
+				const weight = weights[i + 1][next] + weights[i + 1][next + 1];
+				if (weight > frequencies[symbolIndex]) {
+					weights[i][j] = weight;
+					symbolIndexes[i][j] = symbolCount;
+					next += 2;
+				} else {
+					weights[i][j] = frequencies[symbolIndex];
+					symbolIndexes[i][j] = symbolIndex;
+					symbolIndex++;
+				}
+			}
+			currentPosition[i] = 0;
+			if (mergeFlags[i] === 1) takePackage(i);
+		}
+		return codeLengths;
+	}
+
+//#endregion
+//#region src/js/zip/lz77-helpers.js
 	var lengthCodeTable = null;
 	/**
-	* Generate the length codes.
+	* Gets the DEFLATE symbol, extra-bit value, and bit count for a match length.
 	* @param {number} length The length.
 	* @returns {Array} The LZ77 length codes.
 	*/
-	var generateLengthCodes = (length) => {
+	function generateLengthCodes(length) {
 		switch (true) {
 			case length === 3: return [
 				257,
@@ -576,192 +806,194 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 				0
 			];
 		}
-	};
+	}
 	/**
-	* Generate the length code table.
+	* Gets the cached length codes for DEFLATE matches of 3 to 258 bytes.
 	* @returns {Array} The length code table.
 	*/
-	var generateLengthTable = () => {
+	function getLengthCodeTable() {
 		if (!lengthCodeTable) {
 			lengthCodeTable = [];
 			for (let i = 3; i <= 258; i++) {
-				const c = generateLengthCodes(i);
-				lengthCodeTable[i] = c[2] << 24 | c[1] << 16 | c[0];
+				const codes = generateLengthCodes(i);
+				lengthCodeTable[i] = codes[2] << 24 | codes[1] << 16 | codes[0];
 			}
 		}
 		return lengthCodeTable;
-	};
+	}
 	/**
 	* Gets the distance code.
-	* @param {number} dist The distance.
+	* @param {number} distance The distance.
 	* @returns {Array} The distance code.
 	*/
-	var getDistanceCode = (dist) => {
+	function getDistanceCode(distance) {
 		switch (true) {
-			case dist === 1: return [
+			case distance === 1: return [
 				0,
-				dist - 1,
+				distance - 1,
 				0
 			];
-			case dist === 2: return [
+			case distance === 2: return [
 				1,
-				dist - 2,
+				distance - 2,
 				0
 			];
-			case dist === 3: return [
+			case distance === 3: return [
 				2,
-				dist - 3,
+				distance - 3,
 				0
 			];
-			case dist === 4: return [
+			case distance === 4: return [
 				3,
-				dist - 4,
+				distance - 4,
 				0
 			];
-			case dist <= 6: return [
+			case distance <= 6: return [
 				4,
-				dist - 5,
+				distance - 5,
 				1
 			];
-			case dist <= 8: return [
+			case distance <= 8: return [
 				5,
-				dist - 7,
+				distance - 7,
 				1
 			];
-			case dist <= 12: return [
+			case distance <= 12: return [
 				6,
-				dist - 9,
+				distance - 9,
 				2
 			];
-			case dist <= 16: return [
+			case distance <= 16: return [
 				7,
-				dist - 13,
+				distance - 13,
 				2
 			];
-			case dist <= 24: return [
+			case distance <= 24: return [
 				8,
-				dist - 17,
+				distance - 17,
 				3
 			];
-			case dist <= 32: return [
+			case distance <= 32: return [
 				9,
-				dist - 25,
+				distance - 25,
 				3
 			];
-			case dist <= 48: return [
+			case distance <= 48: return [
 				10,
-				dist - 33,
+				distance - 33,
 				4
 			];
-			case dist <= 64: return [
+			case distance <= 64: return [
 				11,
-				dist - 49,
+				distance - 49,
 				4
 			];
-			case dist <= 96: return [
+			case distance <= 96: return [
 				12,
-				dist - 65,
+				distance - 65,
 				5
 			];
-			case dist <= 128: return [
+			case distance <= 128: return [
 				13,
-				dist - 97,
+				distance - 97,
 				5
 			];
-			case dist <= 192: return [
+			case distance <= 192: return [
 				14,
-				dist - 129,
+				distance - 129,
 				6
 			];
-			case dist <= 256: return [
+			case distance <= 256: return [
 				15,
-				dist - 193,
+				distance - 193,
 				6
 			];
-			case dist <= 384: return [
+			case distance <= 384: return [
 				16,
-				dist - 257,
+				distance - 257,
 				7
 			];
-			case dist <= 512: return [
+			case distance <= 512: return [
 				17,
-				dist - 385,
+				distance - 385,
 				7
 			];
-			case dist <= 768: return [
+			case distance <= 768: return [
 				18,
-				dist - 513,
+				distance - 513,
 				8
 			];
-			case dist <= 1024: return [
+			case distance <= 1024: return [
 				19,
-				dist - 769,
+				distance - 769,
 				8
 			];
-			case dist <= 1536: return [
+			case distance <= 1536: return [
 				20,
-				dist - 1025,
+				distance - 1025,
 				9
 			];
-			case dist <= 2048: return [
+			case distance <= 2048: return [
 				21,
-				dist - 1537,
+				distance - 1537,
 				9
 			];
-			case dist <= 3072: return [
+			case distance <= 3072: return [
 				22,
-				dist - 2049,
+				distance - 2049,
 				10
 			];
-			case dist <= 4096: return [
+			case distance <= 4096: return [
 				23,
-				dist - 3073,
+				distance - 3073,
 				10
 			];
-			case dist <= 6144: return [
+			case distance <= 6144: return [
 				24,
-				dist - 4097,
+				distance - 4097,
 				11
 			];
-			case dist <= 8192: return [
+			case distance <= 8192: return [
 				25,
-				dist - 6145,
+				distance - 6145,
 				11
 			];
-			case dist <= 12288: return [
+			case distance <= 12288: return [
 				26,
-				dist - 8193,
+				distance - 8193,
 				12
 			];
-			case dist <= 16384: return [
+			case distance <= 16384: return [
 				27,
-				dist - 12289,
+				distance - 12289,
 				12
 			];
-			case dist <= 24576: return [
+			case distance <= 24576: return [
 				28,
-				dist - 16385,
+				distance - 16385,
 				13
 			];
-			case dist <= 32768: return [
+			case distance <= 32768: return [
 				29,
-				dist - 24577,
+				distance - 24577,
 				13
 			];
 		}
-	};
+	}
 	/**
 	* Gets the length code.
 	* @param {number} length The length.
 	* @returns {number} The length code.
 	*/
-	var getLengthCode = (length) => {
-		return generateLengthTable()[length];
-	};
-	/**
-	* Lz77Match Class
-	* Based on https://github.com/imaya/zlib.js/blob/develop/src/rawdeflate.js
-	* @class
+	function getLengthCode(length) {
+		return getLengthCodeTable()[length];
+	}
+
+//#endregion
+//#region src/js/zip/lz77-match.js
+/**
+	* Encodes a repeated byte sequence as DEFLATE length and distance symbols.
+	* Adapted from https://github.com/imaya/zlib.js/blob/develop/src/rawdeflate.js
 	*/
 	var Lz77Match = class {
 		#backwardDistance;
@@ -769,7 +1001,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		/**
 		* Creates a Lz77Match.
 		* @param {number} length The length of the match.
-		* @param {number} backwardDistance The distanch to match position.
+		* @param {number} backwardDistance The distance to the matching sequence.
 		*/
 		constructor(length, backwardDistance) {
 			this.#length = length;
@@ -787,224 +1019,42 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		* @returns {Array} The LZ77 Array.
 		*/
 		toLz77Array() {
-			const codeArray = [];
-			let pos = 0;
 			const lengthCode = getLengthCode(this.#length);
-			codeArray[pos++] = lengthCode & 65535;
-			codeArray[pos++] = lengthCode >> 16 & 255;
-			codeArray[pos++] = lengthCode >> 24;
-			const distCode = getDistanceCode(this.#backwardDistance);
-			codeArray[pos++] = distCode[0];
-			codeArray[pos++] = distCode[1];
-			codeArray[pos] = distCode[2];
-			return codeArray;
+			const distanceCode = getDistanceCode(this.#backwardDistance);
+			return [
+				lengthCode & 65535,
+				lengthCode >> 16 & 255,
+				lengthCode >> 24,
+				...distanceCode
+			];
 		}
 	};
 
 //#endregion
 //#region src/js/zip/raw-deflate.js
 /**
-	* Gets the Huffman codes from the code lengths.
-	* @param {Uint8Array} lengths The code lengths.
-	* @returns {Uint16Array} The Huffman codes.
+	* @typedef {object} RawDeflateOptions
+	* @property {number} [lazy=0] Defers shorter matches to compare the next byte's match; zero disables deferral.
+	* @property {number} [lz77MinLength=3] The minimum match length.
+	* @property {number} [lz77MaxLength=258] The maximum match length.
 	*/
-	var getCodesFromLengths = (lengths) => {
-		const codes = new Uint16Array(lengths.length);
-		const count = [];
-		const startCode = [];
-		let code = 0;
-		for (let i = 0; i < lengths.length; i++) count[lengths[i]] = (count[lengths[i]] | 0) + 1;
-		for (let i = 1; i <= 16; i++) {
-			startCode[i] = code;
-			code += count[i] | 0;
-			code <<= 1;
-		}
-		for (let i = 0; i < lengths.length; i++) {
-			code = startCode[lengths[i]];
-			startCode[lengths[i]] += 1;
-			codes[i] = 0;
-			for (let j = 0; j < lengths[i]; j++) {
-				codes[i] = codes[i] << 1 | code & 1;
-				code >>>= 1;
-			}
-		}
-		return codes;
-	};
 	/**
-	* Gets the lengths of a Huffman code.
-	* @param {Uint32Array} freqs The frequency counts.
-	* @param {number} limit The code length limit.
-	* @returns {Uint8Array} The code lengths.
-	*/
-	var getLengths = (freqs, limit) => {
-		const heap = new Heap(572);
-		const length = new Uint8Array(freqs.length);
-		for (let i = 0; i < freqs.length; i++) if (freqs[i] > 0) heap.push(i, freqs[i]);
-		const nodes = new Array(heap.length / 2);
-		const values = new Uint32Array(heap.length / 2);
-		if (nodes.length === 1) {
-			length[heap.pop().index] = 1;
-			return length;
-		}
-		for (let i = 0; i < nodes.length; i++) {
-			nodes[i] = heap.pop();
-			values[i] = nodes[i].value;
-		}
-		const codeLengths = reversePackageMerge(values, values.length, limit);
-		for (let i = 0; i < nodes.length; i++) length[nodes[i].index] = codeLengths[i];
-		return length;
-	};
-	/**
-	* Calculates the tree symbols.
-	* @param {number} hLit The HLIT.
-	* @param {Uint8Array} litLenLengths The literal lengths and length codes.
-	* @param {number} hDist The HDIST.
-	* @param {Uint8Array} distLengths The distance code lengths.
-	* @returns {object} The tree symbols.
-	*/
-	var getTreeSymbols = (hLit, litLenLengths, hDist, distLengths) => {
-		const src = new Uint32Array(hLit + hDist);
-		const result = /* @__PURE__ */ new Uint32Array(316);
-		const freqs = /* @__PURE__ */ new Uint8Array(19);
-		let j = 0;
-		for (let i = 0; i < hLit; i++) src[j++] = litLenLengths[i];
-		for (let i = 0; i < hDist; i++) src[j++] = distLengths[i];
-		let nResult = 0;
-		for (let i = 0; i < src.length; i += j) {
-			for (j = 1; i + j < src.length && src[i + j] === src[i]; j++);
-			let runLength = j;
-			if (src[i] === 0) {
-				if (runLength < 3) while (runLength-- > 0) {
-					result[nResult++] = 0;
-					freqs[0]++;
-				}
-				else while (runLength > 0) {
-					let rpt = Math.min(runLength, 138);
-					if (rpt > runLength - 3 && rpt < runLength) rpt = runLength - 3;
-					if (rpt <= 10) {
-						result[nResult++] = 17;
-						result[nResult++] = rpt - 3;
-						freqs[17]++;
-					} else {
-						result[nResult++] = 18;
-						result[nResult++] = rpt - 11;
-						freqs[18]++;
-					}
-					runLength -= rpt;
-				}
-			} else {
-				result[nResult++] = src[i];
-				freqs[src[i]]++;
-				runLength--;
-				if (runLength < 3) while (runLength-- > 0) {
-					result[nResult++] = src[i];
-					freqs[src[i]]++;
-				}
-				else while (runLength > 0) {
-					let rpt = Math.min(runLength, 6);
-					if (rpt > runLength - 3 && rpt < runLength) rpt = runLength - 3;
-					result[nResult++] = 16;
-					result[nResult++] = rpt - 3;
-					freqs[16]++;
-					runLength -= rpt;
-				}
-			}
-		}
-		return {
-			codes: result.subarray(0, nResult),
-			freqs
-		};
-	};
-	/**
-	* Finds the optimal Huffman code.
-	* @param {Uint32Array} freqs The value frequencies.
-	* @param {number} symbols The number of symbols.
-	* @param {number} limit The code length limit.
-	* @returns {Uint8Array} The code lengths.
-	*/
-	var reversePackageMerge = (freqs, symbols, limit) => {
-		const minimumCost = new Uint16Array(limit);
-		const flag = new Uint8Array(limit);
-		const codeLengths = new Uint8Array(symbols);
-		const value = new Array(limit);
-		const type = new Array(limit);
-		const currentPosition = new Array(limit);
-		let excess = (1 << limit) - symbols;
-		const half = 1 << limit - 1;
-		minimumCost[limit - 1] = symbols;
-		for (let i = 0; i < limit; i++) {
-			if (excess < half) flag[i] = 0;
-			else {
-				flag[i] = 1;
-				excess -= half;
-			}
-			excess <<= 1;
-			minimumCost[limit - 2 - i] = (minimumCost[limit - 1 - i] / 2 | 0) + symbols;
-		}
-		minimumCost[0] = flag[0];
-		value[0] = new Array(minimumCost[0]);
-		type[0] = new Array(minimumCost[0]);
-		for (let i = 0; i < limit; i++) {
-			if (minimumCost[i] > 2 * minimumCost[i - 1] + flag[i]) minimumCost[i] = 2 * minimumCost[i - 1] + flag[i];
-			value[i] = new Array(minimumCost[i]);
-			type[i] = new Array(minimumCost[i]);
-		}
-		for (let i = 0; i < symbols; i++) codeLengths[i] = limit;
-		for (let i = 0; i < minimumCost[limit - 1]; i++) {
-			value[limit - 1][i] = freqs[i];
-			type[limit - 1][i] = i;
-		}
-		for (let i = 0; i < limit; i++) currentPosition[i] = 0;
-		if (flag[limit - 1] === 1) {
-			codeLengths[0]--;
-			currentPosition[limit - 1]++;
-		}
-		const takePackage = (i) => {
-			const x = type[i][currentPosition[i]];
-			if (x === symbols) {
-				takePackage(i + 1);
-				takePackage(i + 1);
-			} else codeLengths[x]--;
-			currentPosition[i]++;
-		};
-		for (let i = limit - 2; i >= 0; i--) {
-			let t = 0;
-			let next = currentPosition[i + 1];
-			for (let j = 0; j < minimumCost[i]; j++) {
-				const weight = value[i + 1][next] + value[i + 1][next + 1];
-				if (weight > freqs[t]) {
-					value[i][j] = weight;
-					type[i][j] = symbols;
-					next += 2;
-				} else {
-					value[i][j] = freqs[t];
-					type[i][j] = t;
-					t++;
-				}
-			}
-			currentPosition[i] = 0;
-			if (flag[i] === 1) takePackage(i);
-		}
-		return codeLengths;
-	};
-	/**
-	* RawDeflate Class
-	* Based on https://github.com/imaya/zlib.js/blob/develop/src/rawdeflate.js
-	* @class
+	* Compresses bytes into a DEFLATE block with dynamic Huffman codes.
+	* Adapted from https://github.com/imaya/zlib.js/blob/develop/src/rawdeflate.js
 	*/
 	var RawDeflate = class {
-		#freqsDist;
-		#freqsLitLen;
+		#distanceFrequencies;
 		#input;
-		#lazy;
-		#lz77MaxLength;
-		#lz77MinLength;
+		#lazyThreshold;
+		#literalFrequencies;
+		#maxMatchLength;
+		#minMatchLength;
 		#output;
 		#outputIndex;
 		/**
 		* Compresses the data.
 		* @param {Uint8Array} data The input data.
-		* @param {object} options The options to create the RawDeflate with.
+		* @param {RawDeflateOptions} [options] The compression options.
 		* @returns {Uint8Array} The compressed data.
 		*/
 		static compress(data, options) {
@@ -1013,7 +1063,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		/**
 		* Creates a RawDeflate.
 		* @param {Uint8Array} input The input data.
-		* @param {object} options The options to create the RawDeflate with.
+		* @param {RawDeflateOptions} [options] The compression options.
 		*/
 		constructor(input, options) {
 			options = {
@@ -1023,9 +1073,9 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 				...options
 			};
 			this.#input = input;
-			this.#lazy = options.lazy;
-			this.#lz77MinLength = options.lz77MinLength;
-			this.#lz77MaxLength = options.lz77MaxLength;
+			this.#lazyThreshold = options.lazy;
+			this.#minMatchLength = options.lz77MinLength;
+			this.#maxMatchLength = options.lz77MaxLength;
 			this.#outputIndex = 0;
 			this.#output = /* @__PURE__ */ new Uint8Array(32768);
 		}
@@ -1035,23 +1085,22 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		*/
 		compress() {
 			const stream = new BitStream(new Uint8Array(this.#output.buffer), this.#outputIndex);
-			const bFinal = 1;
-			const bType = 2;
-			stream.writeBits(bFinal, 1, true);
-			stream.writeBits(bType, 2, true);
-			const data = this.#lz77();
-			const litLenLengths = getLengths(this.#freqsLitLen, 15);
-			const litLenCodes = getCodesFromLengths(litLenLengths);
-			const distLengths = getLengths(this.#freqsDist, 7);
-			const distCodes = getCodesFromLengths(distLengths);
-			let hLit;
-			let hDist;
-			for (hLit = 286; hLit > 257 && litLenLengths[hLit - 1] === 0; hLit--);
-			for (hDist = 30; hDist > 1 && distLengths[hDist - 1] === 0; hDist--);
-			const treeSymbols = getTreeSymbols(hLit, litLenLengths, hDist, distLengths);
-			const treeLengths = getLengths(treeSymbols.freqs, 7);
-			const transLengths = new Array(19);
-			const hcLengthOrder = [
+			const finalBlock = 1;
+			const blockType = 2;
+			stream.writeBits(finalBlock, 1, true);
+			stream.writeBits(blockType, 2, true);
+			const tokens = this.#getLz77Tokens();
+			const literalCodeLengths = getCodeLengths(this.#literalFrequencies, 15);
+			const literalCodes = getCodesFromLengths(literalCodeLengths);
+			const distanceCodeLengths = getCodeLengths(this.#distanceFrequencies, 7);
+			const distanceCodes = getCodesFromLengths(distanceCodeLengths);
+			let literalCount = 286;
+			let distanceCount = 30;
+			while (literalCount > 257 && literalCodeLengths[literalCount - 1] === 0) literalCount--;
+			while (distanceCount > 1 && distanceCodeLengths[distanceCount - 1] === 0) distanceCount--;
+			const treeSymbols = getTreeSymbols(literalCount, literalCodeLengths, distanceCount, distanceCodeLengths);
+			const treeLengths = getCodeLengths(treeSymbols.frequencies, 7);
+			const orderedCodeLengths = [
 				16,
 				17,
 				18,
@@ -1071,15 +1120,14 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 				14,
 				1,
 				15
-			];
-			for (let i = 0; i < 19; i++) transLengths[i] = treeLengths[hcLengthOrder[i]];
-			let hcLen = 19;
-			for (; hcLen > 4 && transLengths[hcLen - 1] === 0; hcLen--);
+			].map((code) => treeLengths[code]);
+			let codeLengthCount = 19;
+			while (codeLengthCount > 4 && orderedCodeLengths[codeLengthCount - 1] === 0) codeLengthCount--;
 			const treeCodes = getCodesFromLengths(treeLengths);
-			stream.writeBits(hLit - 257, 5, true);
-			stream.writeBits(hDist - 1, 5, true);
-			stream.writeBits(hcLen - 4, 4, true);
-			for (let i = 0; i < hcLen; i++) stream.writeBits(transLengths[i], 3, true);
+			stream.writeBits(literalCount - 257, 5, true);
+			stream.writeBits(distanceCount - 1, 5, true);
+			stream.writeBits(codeLengthCount - 4, 4, true);
+			for (let i = 0; i < codeLengthCount; i++) stream.writeBits(orderedCodeLengths[i], 3, true);
 			for (let i = 0; i < treeSymbols.codes.length; i++) {
 				const code = treeSymbols.codes[i];
 				stream.writeBits(treeCodes[code], treeLengths[code], true);
@@ -1098,14 +1146,18 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 					stream.writeBits(treeSymbols.codes[i], bitLength, true);
 				}
 			}
-			for (let i = 0; i < data.length; i++) {
-				const literal = data[i];
-				stream.writeBits(litLenCodes[literal], litLenLengths[literal], true);
+			for (let i = 0; i < tokens.length; i++) {
+				const literal = tokens[i];
+				stream.writeBits(literalCodes[literal], literalCodeLengths[literal], true);
 				if (literal > 256) {
-					stream.writeBits(data[++i], data[++i], true);
-					const code = data[++i];
-					stream.writeBits(distCodes[code], distLengths[code], true);
-					stream.writeBits(data[++i], data[++i], true);
+					const lengthExtra = tokens[++i];
+					const lengthBitCount = tokens[++i];
+					const distanceCode = tokens[++i];
+					const distanceExtra = tokens[++i];
+					const distanceBitCount = tokens[++i];
+					stream.writeBits(lengthExtra, lengthBitCount, true);
+					stream.writeBits(distanceCodes[distanceCode], distanceCodeLengths[distanceCode], true);
+					stream.writeBits(distanceExtra, distanceBitCount, true);
 				} else if (literal === 256) break;
 			}
 			this.#output = stream.finish();
@@ -1113,113 +1165,112 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			return this.#output;
 		}
 		/**
-		* Calculates the LZ77 array.
-		* @returns {Uint16Array} The LZ77 array.
+		* Finds the longest match from the list of matches.
+		* @param {number} position The array position.
+		* @param {number[]} matchList The earlier positions with the same prefix.
+		* @returns {Lz77Match} The longest match.
 		*/
-		#lz77() {
-			const lz77buf = new Uint16Array(this.#input.length * 2);
-			const freqsLitLen = /* @__PURE__ */ new Uint32Array(286);
-			const freqsDist = /* @__PURE__ */ new Uint32Array(30);
-			freqsLitLen[256] = 1;
-			const table = {};
-			let pos = 0;
+		#findLongestMatch(position, matchList) {
+			let matchPosition;
+			let longestLength = 0;
+			const length = matchList.length;
+			candidate: for (let i = 0; i < length; i++) {
+				const match = matchList[length - i - 1];
+				let matchLength = this.#minMatchLength;
+				if (longestLength > this.#minMatchLength) {
+					for (let j = longestLength; j > this.#minMatchLength; j--) if (this.#input[match + j - 1] !== this.#input[position + j - 1]) continue candidate;
+					matchLength = longestLength;
+				}
+				while (matchLength < this.#maxMatchLength && position + matchLength < this.#input.length && this.#input[match + matchLength] === this.#input[position + matchLength]) matchLength++;
+				if (matchLength > longestLength) {
+					matchPosition = match;
+					longestLength = matchLength;
+				}
+				if (matchLength === this.#maxMatchLength) break;
+			}
+			return new Lz77Match(longestLength, position - matchPosition);
+		}
+		/**
+		* Builds literal and match tokens while counting their Huffman symbol frequencies.
+		* @returns {Uint16Array} The literal and match tokens.
+		*/
+		#getLz77Tokens() {
+			const tokens = new Uint16Array(this.#input.length * 2);
+			const literalFrequencies = /* @__PURE__ */ new Uint32Array(286);
+			const distanceFrequencies = /* @__PURE__ */ new Uint32Array(30);
+			literalFrequencies[256] = 1;
+			const matchesByKey = {};
+			let tokenIndex = 0;
 			let skipLength = 0;
-			let prevMatch;
+			let previousMatch;
 			const writeMatch = (match, offset) => {
-				const tempArray = match.toLz77Array();
-				for (let i = 0; i < tempArray.length; i++) lz77buf[pos++] = tempArray[i];
-				freqsLitLen[tempArray[0]]++;
-				freqsDist[tempArray[3]]++;
+				const matchTokens = match.toLz77Array();
+				for (let i = 0; i < matchTokens.length; i++) tokens[tokenIndex++] = matchTokens[i];
+				literalFrequencies[matchTokens[0]]++;
+				distanceFrequencies[matchTokens[3]]++;
 				skipLength = match.length + offset - 1;
-				prevMatch = null;
+				previousMatch = null;
 			};
 			for (let position = 0; position < this.#input.length; position++) {
 				let matchKey = 0;
-				for (let i = 0; i < this.#lz77MinLength; i++) {
+				for (let i = 0; i < this.#minMatchLength; i++) {
 					if (position + i === this.#input.length) break;
 					matchKey = matchKey << 8 | this.#input[position + i];
 				}
-				if (!(matchKey in table)) table[matchKey] = [];
-				const matchList = table[matchKey];
+				if (!(matchKey in matchesByKey)) matchesByKey[matchKey] = [];
+				const matchList = matchesByKey[matchKey];
 				if (skipLength-- > 0) {
 					matchList.push(position);
 					continue;
 				}
 				while (matchList.length > 0 && position - matchList[0] > 32768) matchList.shift();
-				if (position + this.#lz77MinLength >= this.#input.length) {
-					if (prevMatch) writeMatch(prevMatch, -1);
+				if (position + this.#minMatchLength >= this.#input.length) {
+					if (previousMatch) writeMatch(previousMatch, -1);
 					for (let i = 0; i < this.#input.length - position; i++) {
-						const tmp = this.#input[position + i];
-						lz77buf[pos++] = tmp;
-						freqsLitLen[tmp]++;
+						const literal = this.#input[position + i];
+						tokens[tokenIndex++] = literal;
+						literalFrequencies[literal]++;
 					}
 					break;
 				}
 				if (matchList.length) {
-					const longestMatch = this.#searchLongestMatch(position, matchList);
-					if (prevMatch) {
-						if (prevMatch.length < longestMatch.length) {
-							const tmp = this.#input[position - 1];
-							lz77buf[pos++] = tmp;
-							freqsLitLen[tmp]++;
+					const longestMatch = this.#findLongestMatch(position, matchList);
+					if (previousMatch) {
+						if (previousMatch.length < longestMatch.length) {
+							const literal = this.#input[position - 1];
+							tokens[tokenIndex++] = literal;
+							literalFrequencies[literal]++;
 							writeMatch(longestMatch, 0);
-						} else writeMatch(prevMatch, -1);
-					} else if (longestMatch.length < this.#lazy) prevMatch = longestMatch;
+						} else writeMatch(previousMatch, -1);
+					} else if (longestMatch.length < this.#lazyThreshold) previousMatch = longestMatch;
 					else writeMatch(longestMatch, 0);
-				} else if (prevMatch) writeMatch(prevMatch, -1);
+				} else if (previousMatch) writeMatch(previousMatch, -1);
 				else {
-					const tmp = this.#input[position];
-					lz77buf[pos++] = tmp;
-					freqsLitLen[tmp]++;
+					const literal = this.#input[position];
+					tokens[tokenIndex++] = literal;
+					literalFrequencies[literal]++;
 				}
 				matchList.push(position);
 			}
-			lz77buf[pos++] = 256;
-			freqsLitLen[256]++;
-			this.#freqsLitLen = freqsLitLen;
-			this.#freqsDist = freqsDist;
-			return lz77buf.subarray(0, pos);
-		}
-		/**
-		* Finds the longest match from the list of matches.
-		* @param {number} position The array position.
-		* @param {Array} matchList The list of matches.
-		* @returns {Lz77Match} The Lz77Match.
-		*/
-		#searchLongestMatch(position, matchList) {
-			let currentMatch;
-			let matchMax = 0;
-			const length = matchList.length;
-			permatch: for (let i = 0; i < length; i++) {
-				const match = matchList[length - i - 1];
-				let matchLength = this.#lz77MinLength;
-				if (matchMax > this.#lz77MinLength) {
-					for (let j = matchMax; j > this.#lz77MinLength; j--) if (this.#input[match + j - 1] !== this.#input[position + j - 1]) continue permatch;
-					matchLength = matchMax;
-				}
-				while (matchLength < this.#lz77MaxLength && position + matchLength < this.#input.length && this.#input[match + matchLength] === this.#input[position + matchLength]) matchLength++;
-				if (matchLength > matchMax) {
-					currentMatch = match;
-					matchMax = matchLength;
-				}
-				if (matchLength === this.#lz77MaxLength) break;
-			}
-			return new Lz77Match(matchMax, position - currentMatch);
+			tokens[tokenIndex++] = 256;
+			literalFrequencies[256]++;
+			this.#literalFrequencies = literalFrequencies;
+			this.#distanceFrequencies = distanceFrequencies;
+			return tokens.subarray(0, tokenIndex);
 		}
 	};
 
 //#endregion
 //#region src/js/zip/zip.js
 /**
-	* Zip Class
-	* Based on https://github.com/shuchkin/simplexlsxgen/blob/master/src/SimpleXLSXGen.php
-	* @class
+	* Builds ZIP archives from UTF-8 files.
+	* Adapted from https://github.com/shuchkin/simplexlsxgen/blob/master/src/SimpleXLSXGen.php
 	*/
 	var Zip = class {
-		#dir;
-		#entries;
-		#files;
-		#offset;
+		#directory = [];
+		#entries = 0;
+		#files = [];
+		#offset = 0;
 		#type;
 		/**
 		* Creates a Zip.
@@ -1227,10 +1278,6 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		*/
 		constructor(type = "octet/stream") {
 			this.#type = type;
-			this.#dir = [];
-			this.#files = [];
-			this.#offset = 0;
-			this.#entries = 0;
 		}
 		/**
 		* Adds a file to the Zip.
@@ -1254,7 +1301,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			const year = Math.min(2107, Math.max(1980, now.getFullYear()));
 			const modifiedTime = now.getHours() << 11 | now.getMinutes() << 5 | Math.floor(now.getSeconds() / 2);
 			const modifiedDate = year - 1980 << 9 | now.getMonth() + 1 << 5 | now.getDate();
-			const dir = [
+			const directory = [
 				encode("PK"),
 				encodeUint16(0),
 				encodeUint16(versionNeeded),
@@ -1274,7 +1321,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 				encodeUint32(this.#offset),
 				encode(filename)
 			];
-			this.#dir.push(...dir);
+			this.#directory.push(...directory);
 			const file = [
 				encode("PK"),
 				encodeUint16(versionNeeded),
@@ -1299,16 +1346,16 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		* @returns {Blob} The zip file.
 		*/
 		zip() {
-			const dirLength = this.#dir.reduce((size, part) => size + part.byteLength, 0);
+			const directoryLength = this.#directory.reduce((size, part) => size + part.byteLength, 0);
 			return new Blob([
 				...this.#files,
-				...this.#dir,
+				...this.#directory,
 				encode("PK"),
 				encodeUint16(0),
 				encodeUint16(0),
 				encodeUint16(this.#entries),
 				encodeUint16(this.#entries),
-				encodeUint32(dirLength),
+				encodeUint32(directoryLength),
 				encodeUint32(this.#offset),
 				encodeUint16(0)
 			], { type: this.#type });
@@ -1399,26 +1446,24 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 
 //#endregion
 //#region src/js/workbook/workbook.js
-/**
-	* Workbook Class
-	* Based on https://github.com/shuchkin/simplexlsxgen/blob/master/src/SimpleXLSXGen.php
-	* @class
+	var cellStyles = {
+		percent: 2,
+		decimalPercent: 3,
+		date: 4,
+		time: 5,
+		dateTime: 6,
+		heading: 8
+	};
+	/**
+	* Builds Excel workbooks from rows, headings, and optional footers.
+	* Adapted from https://github.com/shuchkin/simplexlsxgen/blob/master/src/SimpleXLSXGen.php
 	*/
 	var Workbook = class {
-		#sheetCount;
-		#sheets;
+		#sheetCount = 0;
+		#sheets = [];
 		#stringCount = 0;
-		#stringIndexes;
-		#strings;
-		/**
-		* Creates a Workbook.
-		*/
-		constructor() {
-			this.#sheetCount = 0;
-			this.#sheets = [];
-			this.#stringIndexes = /* @__PURE__ */ new Map();
-			this.#strings = [];
-		}
+		#stringIndexes = /* @__PURE__ */ new Map();
+		#strings = [];
 		/**
 		* Adds a sheet to the Workbook.
 		* @param {object} data The sheet data.
@@ -1448,48 +1493,43 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			this.#stringIndexes = /* @__PURE__ */ new Map();
 			this.#strings = [];
 			this.#stringCount = 0;
-			const worksheets = this.#sheets.map((sheet) => this.#sheetToXml(sheet, templates["xl/worksheets/sheet1.xml"]));
+			const worksheetTemplate = templates["xl/worksheets/sheet1.xml"];
+			const worksheets = this.#sheets.map((sheet) => this.#sheetToXml(sheet, worksheetTemplate));
 			const zip = new Zip("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-			for (let [filename, template] of Object.entries(templates)) switch (filename) {
-				case "[Content_Types].xml": {
-					const override = this.#sheets.map((_, index) => `<Override PartName="/xl/worksheets/sheet${index + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join("");
-					template = template.replace("{sheets}", override);
-					zip.addFile(filename, template);
-					break;
-				}
-				case "xl/_rels/workbook.xml.rels": {
-					let relationships = this.#sheets.map((_, index) => `<Relationship Id="rId${index + 2}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${index + 1}.xml"/>\n`).join("");
-					relationships += `<Relationship Id="rId${this.#sheets.length + 3}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/></Relationships>`;
-					template = template.replace("{sheets}", relationships);
-					zip.addFile(filename, template);
-					break;
-				}
-				case "xl/workbook.xml": {
-					const sheets = this.#sheets.map((sheet, index) => `<sheet name="${escape(sheet.name)}" sheetId="${index + 1}" state="visible" r:id="rId${index + 2}"/>`).join("");
-					template = template.replace("{sheets}", sheets);
-					zip.addFile(filename, template);
-					break;
-				}
-				case "docProps/core.xml": {
-					const date = (/* @__PURE__ */ new Date()).toISOString().substring(0, 19) + "Z";
-					template = template.replaceAll("{date}", date);
-					zip.addFile(filename, template);
-					break;
-				}
-				case "xl/sharedStrings.xml": {
-					const strings = this.#strings.map((string) => `<si><t xml:space="preserve">${string}</t></si>`).join("\r\n");
-					template = template.replace("{cnt}", String(this.#stringCount)).replace("{unique}", String(this.#strings.length));
-					template = template.replace("{strings}", strings);
-					zip.addFile(filename, template);
-					break;
-				}
-				case "xl/worksheets/sheet1.xml":
-					for (const [index, xml] of worksheets.entries()) {
-						filename = `xl/worksheets/sheet${index + 1}.xml`;
-						zip.addFile(filename, xml);
+			for (const [filename, source] of Object.entries(templates)) {
+				let template = source;
+				switch (filename) {
+					case "[Content_Types].xml": {
+						const override = this.#sheets.map((_, index) => `<Override PartName="/xl/worksheets/sheet${index + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join("");
+						template = template.replace("{sheets}", override);
+						break;
 					}
-					break;
-				default: zip.addFile(filename, template);
+					case "xl/_rels/workbook.xml.rels": {
+						let relationships = this.#sheets.map((_, index) => `<Relationship Id="rId${index + 2}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${index + 1}.xml"/>\n`).join("");
+						relationships += `<Relationship Id="rId${this.#sheets.length + 3}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/></Relationships>`;
+						template = template.replace("{sheets}", relationships);
+						break;
+					}
+					case "xl/workbook.xml": {
+						const sheets = this.#sheets.map((sheet, index) => `<sheet name="${escape(sheet.name)}" sheetId="${index + 1}" state="visible" r:id="rId${index + 2}"/>`).join("");
+						template = template.replace("{sheets}", sheets);
+						break;
+					}
+					case "docProps/core.xml": {
+						const date = (/* @__PURE__ */ new Date()).toISOString().substring(0, 19) + "Z";
+						template = template.replaceAll("{date}", date);
+						break;
+					}
+					case "xl/sharedStrings.xml": {
+						const strings = this.#strings.map((string) => `<si><t xml:space="preserve">${string}</t></si>`).join("\r\n");
+						template = template.replace("{cnt}", String(this.#stringCount)).replace("{unique}", String(this.#strings.length)).replace("{strings}", strings);
+						break;
+					}
+					case "xl/worksheets/sheet1.xml":
+						for (const [index, xml] of worksheets.entries()) zip.addFile(`xl/worksheets/sheet${index + 1}.xml`, xml);
+						continue;
+				}
+				zip.addFile(filename, template);
 			}
 			return zip.zip();
 		}
@@ -1512,7 +1552,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			} else if (typeof value === "number" && Number.isFinite(value) || /^[-+]?(?:0|[1-9]\d{0,14})(?:\.\d+)?$/.test(text)) content = Number(value);
 			else if (/^[-+]?\d+(?:\.\d+)?%$/.test(text)) {
 				content = Number.parseFloat(text) / 100;
-				style ??= text.includes(".") ? 3 : 2;
+				style ??= text.includes(".") ? cellStyles.decimalPercent : cellStyles.percent;
 			} else {
 				const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})(?: (\d{2}):(\d{2}):(\d{2}))?$/);
 				const dmy = text.match(/^(\d{2})\/(\d{2})\/(\d{4})(?: (\d{2}):(\d{2}):(\d{2}))?$/);
@@ -1523,10 +1563,10 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 						const year = iso ? match[1] : match[3];
 						const day = iso ? match[3] : match[1];
 						content = formatDate(year, match[2], day, match[4] || 0, match[5] || 0, match[6] || 0);
-						style ??= match[4] ? 6 : 4;
+						style ??= match[4] ? cellStyles.dateTime : cellStyles.date;
 					} else if (time) {
 						content = formatDate(0, 0, 0, ...time.slice(1));
-						style ??= 5;
+						style ??= cellStyles.time;
 					}
 				} catch {}
 				if (content === void 0) {
@@ -1563,7 +1603,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			const data = [];
 			if (sheet.data.header) data.push({
 				values: sheet.data.header,
-				style: 8
+				style: cellStyles.heading
 			});
 			for (const values of sheet.data.rows || []) data.push({
 				values,
@@ -1571,7 +1611,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			});
 			if (sheet.data.footer) data.push({
 				values: sheet.data.footer,
-				style: 8
+				style: cellStyles.heading
 			});
 			if (data.length > 1048576) throw new RangeError("Too many worksheet rows.");
 			for (const [index, { values, style }] of data.entries()) {
@@ -1582,12 +1622,12 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 				}).join("");
 				rows.push(`<row r="${index + 1}">${cells}</row>`);
 			}
-			const cols = widths.map((width, index) => {
+			const columns = widths.map((width, index) => {
 				const column = index + 1;
 				return `<col min="${column}" max="${column}" width="${Math.min(width + 5, 60)}"/>`;
 			});
-			const ref = rows.length && widths.length ? `A1:${colName(widths.length)}${rows.length}` : "A1";
-			return template.replace("{ref}", ref).replace("{cols}", cols.join("")).replace("{rows}", rows.join(""));
+			const reference = rows.length && widths.length ? `A1:${colName(widths.length)}${rows.length}` : "A1";
+			return template.replace("{ref}", reference).replace("{cols}", columns.join("")).replace("{rows}", rows.join(""));
 		}
 	};
 
@@ -1871,37 +1911,36 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 				this.#renderPaginationContainer(container);
 			}
 		};
-		#columns;
-		#container;
+		#columns = [];
+		#container = null;
 		#data = [];
 		#drawVersion = 0;
 		#filtered = 0;
-		#getData;
-		#headings;
-		#id;
-		#infoContainer;
-		#lengthSelect;
+		#headings = [];
+		#id = false;
+		#infoContainer = null;
+		#lengthSelect = null;
 		#limit;
-		#loader;
-		#loadResults;
+		#loader = null;
+		#loadResults = null;
 		#offset = 0;
 		#order;
-		#original;
+		#original = null;
 		#originalBusy;
 		#originalClass;
 		#originalDescription;
 		#page;
-		#pagination;
-		#pending;
+		#pagination = null;
+		#pending = null;
 		#requestVersion = 0;
 		#results = [];
 		#rowIndexes = [];
-		#searchHandler;
-		#searchInput;
-		#tbody;
+		#searchHandler = null;
+		#searchInput = null;
+		#tbody = null;
 		#term = "";
-		#tfoot;
-		#theadRow;
+		#tfoot = null;
+		#theadRow = null;
 		#total = 0;
 		#totalPages;
 		/**
@@ -1925,66 +1964,31 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 					"lengths",
 					"buttons"
 				]) if (Object.hasOwn(configured, key)) this.options[key].splice(0, this.options[key].length, ...configured[key]);
-				this.#limit = this.options.paging ? Number(this.options.length) : Infinity;
-				if (this.options.paging && (!Number.isSafeInteger(this.#limit) || this.#limit <= 0)) throw new RangeError("Page length must be a positive integer.");
-				for (const length of this.options.lengths) {
-					const value = Number(length);
-					if (!Number.isSafeInteger(value) || value <= 0) throw new RangeError("Page lengths must be positive integers.");
-				}
+				this.#limit = this.options.paging ? normalizePageLength(this.options.length) : Infinity;
+				for (const length of this.options.lengths) normalizePageLength(length);
 				if (!this.options.getResults) {
 					const data = this.options.data ?? getDomData(node);
 					validateRows(data);
 					this.#data = data.slice();
 				}
 				const headings = getDomHeadings(node);
-				const columns = this.options.columns ?? headings.map((_, data) => ({ data }));
-				if (headings.length && columns.length !== headings.length) throw new RangeError("Column definitions must match the heading count.");
+				this.#columns = normalizeColumns(this.options.columns, headings);
 				this.#headings = headings;
-				this.#columns = columns.map((column, index) => ({
-					class: null,
-					data: index,
-					dir: "asc",
-					format: null,
-					name: null,
-					orderData: null,
-					orderable: true,
-					searchable: true,
-					visible: true,
-					createdCell: null,
-					...column
-				}));
 				if (!headings.length) this.#headings = this.#columns.map((column) => ({
 					text: column.name ?? String(column.data),
 					class: null
 				}));
-				for (const column of this.#columns) if (column.orderData !== null) column.orderData.forEach((index) => this.#validateColumn(index));
-				this.#order = this.#normalizeOrder(this.options.order);
+				this.#order = normalizeOrder(this.options.order, this.#columns);
 				if (!_fr0st_query.default.getProperty(node, "id")) {
 					_fr0st_query.default.setProperty(node, "id", (0, _fr0st_ui.generateId)("table"));
 					this.#id = true;
 				}
-				if (this.options.getResults) {
-					this.#loadResults = _fr0st_query.default._debounce((version) => this.#fetchResults(version), this.options.debounce);
-					this.#getData = () => {
-						this.#drawVersion++;
-						const version = this.#cancelRequest();
-						if (!this.node || version !== this.#requestVersion) return;
-						this.loading();
-						if (this.node && version === this.#requestVersion) this.#loadResults(version);
-					};
-				} else this.#getData = () => {
-					const version = ++this.#drawVersion;
-					this.loading();
-					if (!this.node || version !== this.#drawVersion) return;
-					this.#updateLocal();
-					this.loading({ show: false });
-					if (this.node && version === this.#drawVersion) this.#renderResults();
-				};
+				if (this.options.getResults) this.#loadResults = _fr0st_query.default._debounce((version) => this.#fetchResults(version), this.options.debounce);
 				this.#render();
 				if (!this.node) return;
 				this.#events();
 				_fr0st_query.default.triggerEvent(this.node, "init.ui.table");
-				if (this.node) this.#getData();
+				if (this.node) this.#load();
 			} catch (error) {
 				this.dispose();
 				throw error;
@@ -2061,7 +2065,6 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			this.#data = [];
 			this.#results = [];
 			this.#rowIndexes = [];
-			this.#getData = null;
 			this.#loadResults = null;
 			this.#searchHandler = null;
 			try {
@@ -2106,7 +2109,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		* @param {number} index The column index.
 		*/
 		hideColumn(index) {
-			this.#validateColumn(index);
+			validateColumnIndex(index, this.#columns.length);
 			this.#columns[index].visible = false;
 			this.#renderResults();
 		}
@@ -2128,13 +2131,12 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		*/
 		length(length) {
 			if (!this.node || !this.options.paging) return;
-			length = Number(length);
-			if (!Number.isSafeInteger(length) || length <= 0) throw new RangeError("Page length must be a positive integer.");
+			length = normalizePageLength(length);
 			this.#limit = length;
 			this.#offset -= this.#offset % length;
 			this.#syncLength();
 			_fr0st_query.default.triggerEvent(this.node, "length.ui.table");
-			if (this.node) this.#getData();
+			if (this.node) this.#load();
 		}
 		/**
 		* Triggers the loading indicator.
@@ -2158,9 +2160,9 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		*/
 		order(order) {
 			if (!this.node || !this.options.ordering) return;
-			this.#order = this.#normalizeOrder(order);
+			this.#order = normalizeOrder(order, this.#columns);
 			_fr0st_query.default.triggerEvent(this.node, "order.ui.table");
-			if (this.node) this.#getData();
+			if (this.node) this.#load();
 		}
 		/**
 		* Sets the Table page.
@@ -2173,7 +2175,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			const pages = Math.max(1, Math.ceil(this.#filtered / this.#limit));
 			this.#offset = (Math.min(pages, Math.max(1, page)) - 1) * this.#limit;
 			_fr0st_query.default.triggerEvent(this.node, "page.ui.table");
-			if (this.node) this.#getData();
+			if (this.node) this.#load();
 		}
 		/**
 		* Redraws the Table.
@@ -2189,7 +2191,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		reload({ reset = false } = {}) {
 			if (!this.node) return;
 			if (reset) this.#offset = 0;
-			this.#getData();
+			this.#load();
 		}
 		/**
 		* Removes a row from the data array.
@@ -2213,7 +2215,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			this.#offset = 0;
 			if (this.#searchInput) _fr0st_query.default.setValue(this.#searchInput, this.#term);
 			_fr0st_query.default.triggerEvent(this.node, "search.ui.table");
-			if (this.node) this.#getData();
+			if (this.node) this.#load();
 		}
 		/**
 		* Sets values for a single column.
@@ -2259,7 +2261,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		* @param {number} index The column index.
 		*/
 		showColumn(index) {
-			this.#validateColumn(index);
+			validateColumnIndex(index, this.#columns.length);
 			this.#columns[index].visible = true;
 			this.#renderResults();
 		}
@@ -2388,7 +2390,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			this.#filtered = response.filtered;
 			if (this.options.paging && this.#offset >= this.#filtered && this.#offset > 0) {
 				this.#offset = Math.max(0, (Math.ceil(this.#filtered / this.#limit) - 1) * this.#limit);
-				this.#getData();
+				this.#load();
 				return;
 			}
 			this.#data = response.results.slice();
@@ -2403,7 +2405,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		*/
 		#getExportData(options) {
 			const columns = options.columns || this.#getVisibleColumns();
-			for (const index of columns) this.#validateColumn(index);
+			for (const index of columns) validateColumnIndex(index, this.#columns.length);
 			return {
 				headings: columns.map((index) => {
 					const container = _fr0st_query.default.create("div");
@@ -2450,13 +2452,32 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			return columns;
 		}
 		/**
+		* Loads the current page from local data or schedules a remote request.
+		*/
+		#load() {
+			if (!this.node) return;
+			const drawVersion = ++this.#drawVersion;
+			if (this.options.getResults) {
+				const requestVersion = this.#cancelRequest();
+				if (!this.node || requestVersion !== this.#requestVersion) return;
+				this.loading();
+				if (this.node && requestVersion === this.#requestVersion) this.#loadResults(requestVersion);
+				return;
+			}
+			this.loading();
+			if (!this.node || drawVersion !== this.#drawVersion) return;
+			this.#updateLocal();
+			this.loading({ show: false });
+			if (this.node && drawVersion === this.#drawVersion) this.#renderResults();
+		}
+		/**
 		* Redraws after a row mutation; remote mutations affect the loaded page only.
 		* @param {number} [change=0] The change in the remote row count.
 		*/
 		#mutated(change = 0) {
 			if (!this.node) return;
 			if (!this.options.getResults) {
-				this.#getData();
+				this.#load();
 				return;
 			}
 			const version = this.#cancelRequest();
@@ -2465,28 +2486,12 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			this.#filtered = Math.max(0, this.#filtered + change);
 			if (!this.#data.length && this.#offset) {
 				this.#offset = Math.max(0, this.#offset - this.#limit);
-				this.#getData();
+				this.#load();
 				return;
 			}
 			this.#refreshResults();
 			this.loading({ show: false });
 			if (this.node) this.#renderResults();
-		}
-		/**
-		* Validates and copies ordering, ignoring nonorderable columns.
-		* @param {TableOrder[]} order The requested order.
-		* @returns {TableOrder[]} The normalized order.
-		*/
-		#normalizeOrder(order) {
-			if (!Array.isArray(order)) throw new TypeError("Order must be an array.");
-			const normalized = [];
-			for (const entry of order) {
-				if (!Array.isArray(entry) || entry.length !== 2 || !["asc", "desc"].includes(entry[1])) throw new TypeError("Order entries must contain a column index and asc/desc direction.");
-				if (!this.#columns.length && entry[0] === 0) continue;
-				this.#validateColumn(entry[0]);
-				if (this.#columns[entry[0]].orderable) normalized.push([...entry]);
-			}
-			return normalized;
 		}
 		/**
 		* Refreshes the results.
@@ -2987,13 +2992,6 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			} else this.#offset = 0;
 			this.#rowIndexes = indexes;
 			this.#refreshResults();
-		}
-		/**
-		* Validates a data column index.
-		* @param {number} index The column index.
-		*/
-		#validateColumn(index) {
-			if (!Number.isInteger(index) || index < 0 || index >= this.#columns.length) throw new RangeError("Column index is out of range.");
 		}
 	};
 

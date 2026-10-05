@@ -1,57 +1,8 @@
-let reverseTable = null;
+import { reverseByte, reverseUint32 } from './helpers.js';
 
 /**
- * Generate the reverse table.
- * @returns {Uint8Array} The reverse table.
- */
-const buildReverseTable = () => {
-    if (reverseTable === null) {
-        reverseTable = new Uint8Array(256);
-
-        for (let i = 0; i < 256; ++i) {
-            let n = i;
-            let r = n;
-            let s = 7;
-            for (n >>>= 1; n; n >>>= 1) {
-                r <<= 1;
-                r |= n & 1;
-                --s;
-            }
-
-            reverseTable[i] = (r << s & 0xff) >>> 0;
-        }
-    }
-
-    return reverseTable;
-};
-
-/**
- * Reverse the bit order.
- * @param {number} n The number to reverse.
- * @returns {number} The reversed number.
- */
-const rev = (n) => {
-    return buildReverseTable()[n];
-};
-
-/**
- * Reverse the bit order (32-bit).
- * @param {number} n The number to reverse.
- * @returns {number} The reversed number.
- */
-const rev32 = (n) => {
-    const reverseTable = buildReverseTable();
-
-    return (reverseTable[n & 0xff] << 24) |
-        (reverseTable[n >>> 8 & 0xff] << 16) |
-        (reverseTable[n >>> 16 & 0xff] << 8) |
-        reverseTable[n >>> 24 & 0xff];
-};
-
-/**
- * BitStream Class
- * Based on https://github.com/imaya/zlib.js/blob/develop/src/bitstream.js
- * @class
+ * Writes the bit stream used by DEFLATE.
+ * Adapted from https://github.com/imaya/zlib.js/blob/develop/src/bitstream.js
  */
 export default class BitStream {
     #bitIndex;
@@ -74,7 +25,7 @@ export default class BitStream {
     }
 
     /**
-     * Finish writing and return the buffer.
+     * Finishes writing and returns the buffer.
      * @returns {Uint8Array} The buffer.
      */
     finish() {
@@ -82,7 +33,7 @@ export default class BitStream {
 
         if (this.#bitIndex > 0) {
             this.#buffer[index] <<= 8 - this.#bitIndex;
-            this.#buffer[index] = rev(this.#buffer[index]);
+            this.#buffer[index] = reverseByte(this.#buffer[index]);
             index++;
         }
 
@@ -92,28 +43,29 @@ export default class BitStream {
     /**
      * Writes bits to the buffer.
      * @param {number} number The number to write.
-     * @param {number} n The number of bits to write.
-     * @param {number} [reverse] Whether to write in reverse order.
+     * @param {number} bitCount The number of bits to write.
+     * @param {boolean} [reverse] Whether to write in reverse order.
      */
-    writeBits(number, n, reverse) {
-        if (reverse && n > 1) {
-            number = n > 8 ?
-                rev32(number) >> (32 - n) :
-                rev(number) >> (8 - n);
+    writeBits(number, bitCount, reverse) {
+        if (reverse && bitCount > 1) {
+            number = bitCount > 8 ?
+                reverseUint32(number) >> (32 - bitCount) :
+                reverseByte(number) >> (8 - bitCount);
         }
 
         let current = this.#buffer[this.#index];
 
-        if (n + this.#bitIndex < 8) {
-            current = (current << n) | number;
-            this.#bitIndex += n;
+        if (bitCount + this.#bitIndex < 8) {
+            current = (current << bitCount) | number;
+            this.#bitIndex += bitCount;
         } else {
-            for (let i = 0; i < n; i++) {
-                current = (current << 1) | ((number >> n - i - 1) & 1);
+            for (let i = 0; i < bitCount; i++) {
+                current = (current << 1) | ((number >> bitCount - i - 1) & 1);
 
                 if (++this.#bitIndex === 8) {
                     this.#bitIndex = 0;
-                    this.#buffer[this.#index++] = rev(current);
+                    // Bits accumulate from the left; completed bytes are stored least significant bit first.
+                    this.#buffer[this.#index++] = reverseByte(current);
                     current = 0;
 
                     if (this.#index === this.#buffer.length) {
@@ -127,7 +79,7 @@ export default class BitStream {
     }
 
     /**
-     * Expand the buffer size.
+     * Expands the buffer size.
      */
     #expandBuffer() {
         const oldBuffer = this.#buffer;

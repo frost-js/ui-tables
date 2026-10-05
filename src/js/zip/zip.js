@@ -3,15 +3,14 @@ import { byteLength, encode, encodeUint16, encodeUint32 } from './helpers.js';
 import RawDeflate from './raw-deflate.js';
 
 /**
- * Zip Class
- * Based on https://github.com/shuchkin/simplexlsxgen/blob/master/src/SimpleXLSXGen.php
- * @class
+ * Builds ZIP archives from UTF-8 files.
+ * Adapted from https://github.com/shuchkin/simplexlsxgen/blob/master/src/SimpleXLSXGen.php
  */
 export default class Zip {
-    #dir;
-    #entries;
-    #files;
-    #offset;
+    #directory = [];
+    #entries = 0;
+    #files = [];
+    #offset = 0;
     #type;
 
     /**
@@ -20,10 +19,6 @@ export default class Zip {
      */
     constructor(type = 'octet/stream') {
         this.#type = type;
-        this.#dir = [];
-        this.#files = [];
-        this.#offset = 0;
-        this.#entries = 0;
     }
 
     /**
@@ -59,7 +54,7 @@ export default class Zip {
         const modifiedDate = ((year - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate();
 
         // The central directory indexes each entry by its local header offset.
-        const dir = [
+        const directory = [
             encode('\x50\x4b\x01\x02'), // dir signature
             encodeUint16(0), // version made by
             encodeUint16(versionNeeded),
@@ -80,7 +75,7 @@ export default class Zip {
             encode(filename),
         ];
 
-        this.#dir.push(...dir);
+        this.#directory.push(...directory);
 
         const file = [
             encode('\x50\x4b\x03\x04'), // zip signature
@@ -109,19 +104,19 @@ export default class Zip {
      * @returns {Blob} The zip file.
      */
     zip() {
-        const dirLength = this.#dir.reduce((size, part) => size + part.byteLength, 0);
+        const directoryLength = this.#directory.reduce((size, part) => size + part.byteLength, 0);
 
         return new Blob(
             [
                 ...this.#files,
-                ...this.#dir,
+                ...this.#directory,
                 encode('\x50\x4b\x05\x06'), // end of central directory
                 encodeUint16(0), // number of this disk
                 encodeUint16(0), // number of the disk with the start of the central directory
                 encodeUint16(this.#entries), // total entries on this disk
                 encodeUint16(this.#entries), // total entries
-                encodeUint32(dirLength), // size of central dir
-                encodeUint32(this.#offset), // offset to start of central dir
+                encodeUint32(directoryLength), // size of central directory
+                encodeUint32(this.#offset), // offset to start of central directory
                 encodeUint16(0), // file comment length
             ],
             { type: this.#type },

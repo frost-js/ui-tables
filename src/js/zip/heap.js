@@ -1,25 +1,6 @@
 /**
- * Gets index of parent node.
- * @param {number} index The index.
- * @returns {number} The parent index.
- */
-const getParent = (index) => {
-    return ((index - 2) / 4 | 0) * 2;
-};
-
-/**
- * Gets index of child node.
- * @param {number} index The index.
- * @returns {number} The child index.
- */
-const getChild = (index) => {
-    return 2 * index + 2;
-};
-
-/**
- * Heap Class
- * Based on https://github.com/imaya/zlib.js/blob/develop/src/heap.js
- * @class
+ * Stores symbol frequencies in a max heap.
+ * Adapted from https://github.com/imaya/zlib.js/blob/develop/src/heap.js
  */
 export default class Heap {
     #buffer;
@@ -30,6 +11,7 @@ export default class Heap {
      * @param {number} [length] The size of the heap.
      */
     constructor(length) {
+        // Each heap entry stores a frequency followed by its symbol index.
         this.#buffer = new Uint16Array(length * 2);
         this.#length = 0;
     }
@@ -55,8 +37,9 @@ export default class Heap {
         this.#buffer[1] = this.#buffer[this.#length + 1];
 
         let parent = 0;
+
         while (true) {
-            let current = getChild(parent);
+            let current = 2 * parent + 2;
 
             if (current >= this.#length) {
                 break;
@@ -95,7 +78,8 @@ export default class Heap {
         this.#buffer[this.#length++] = index;
 
         while (current > 0) {
-            const parent = getParent(current);
+            // Parent and child offsets advance in pairs because each entry occupies two slots.
+            const parent = ((current - 2) / 4 | 0) * 2;
 
             if (this.#buffer[current] > this.#buffer[parent]) {
                 let swap = this.#buffer[current];
