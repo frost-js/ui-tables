@@ -4,60 +4,6 @@ import { setupTable } from '../setup/table.js';
 test.describe('Table rendering', () => {
     test.beforeEach(setupTable);
 
-    test.describe('disposal during callbacks', () => {
-        for (const callback of ['preDrawCallback', 'headerCallback', 'infoCallback', 'rowCallback', 'createdRow', 'drawCallback']) {
-            test(`allows disposal during ${callback}`, async ({ page }) => {
-                await page.evaluate((callback) => window.createTable({
-                    [callback]() {
-                        this.dispose();
-                    },
-                }), callback);
-
-                await expect(page.locator('.table-responsive')).toHaveCount(0);
-                await expect(page.locator('caption')).toHaveText('Scores');
-            });
-        }
-
-        for (const callback of ['format', 'createdCell']) {
-            test(`allows disposal during column ${callback}`, async ({ page }) => {
-                await page.evaluate((callback) => window.createTable({
-                    columns: [{
-                        [callback]() {
-                            this.dispose();
-                        },
-                    }, {}],
-                }), callback);
-
-                await expect(page.locator('.table-responsive')).toHaveCount(0);
-                await expect(page.locator('caption')).toHaveText('Scores');
-            });
-        }
-
-        test('allows disposal during sanitization', async ({ page }) => {
-            await page.evaluate(() => window.createTable({
-                sanitize(html) {
-                    $.getData('#table', 'table').dispose();
-                    return html;
-                },
-            }));
-
-            await expect(page.locator('.table-responsive')).toHaveCount(0);
-            await expect(page.locator('caption')).toHaveText('Scores');
-        });
-
-        test('allows disposal during custom layout rendering', async ({ page }) => {
-            await page.evaluate(() => {
-                UI.Table.layout.stop = function() {
-                    this.dispose();
-                };
-                window.createTable({ layout: { top: 'stop' } });
-            });
-
-            await expect(page.locator('.table-responsive')).toHaveCount(0);
-            await expect(page.locator('caption')).toHaveText('Scores');
-        });
-    });
-
     test.describe('callbacks', () => {
         test('passes the information text and heading row to callbacks', async ({ page }) => {
             await page.evaluate(() => window.createTable({
@@ -171,6 +117,60 @@ test.describe('Table rendering', () => {
             await expect(page.locator('[data-test-summary]')).toHaveText('table');
             await expect(page.getByRole('searchbox')).toHaveCount(0);
             await expect(page.getByRole('status')).toBeVisible();
+        });
+    });
+
+    test.describe('disposal during callbacks', () => {
+        for (const callback of ['preDrawCallback', 'headerCallback', 'infoCallback', 'rowCallback', 'createdRow', 'drawCallback']) {
+            test(`allows disposal during ${callback}`, async ({ page }) => {
+                await page.evaluate((callback) => window.createTable({
+                    [callback]() {
+                        this.dispose();
+                    },
+                }), callback);
+
+                await expect(page.locator('.table-responsive')).toHaveCount(0);
+                await expect(page.locator('caption')).toHaveText('Scores');
+            });
+        }
+
+        for (const callback of ['format', 'createdCell']) {
+            test(`allows disposal during column ${callback}`, async ({ page }) => {
+                await page.evaluate((callback) => window.createTable({
+                    columns: [{
+                        [callback]() {
+                            this.dispose();
+                        },
+                    }, {}],
+                }), callback);
+
+                await expect(page.locator('.table-responsive')).toHaveCount(0);
+                await expect(page.locator('caption')).toHaveText('Scores');
+            });
+        }
+
+        test('allows disposal during sanitization', async ({ page }) => {
+            await page.evaluate(() => window.createTable({
+                sanitize(html) {
+                    $.getData('#table', 'table').dispose();
+                    return html;
+                },
+            }));
+
+            await expect(page.locator('.table-responsive')).toHaveCount(0);
+            await expect(page.locator('caption')).toHaveText('Scores');
+        });
+
+        test('allows disposal during custom layout rendering', async ({ page }) => {
+            await page.evaluate(() => {
+                UI.Table.layout.stop = function() {
+                    this.dispose();
+                };
+                window.createTable({ layout: { top: 'stop' } });
+            });
+
+            await expect(page.locator('.table-responsive')).toHaveCount(0);
+            await expect(page.locator('caption')).toHaveText('Scores');
         });
     });
 });

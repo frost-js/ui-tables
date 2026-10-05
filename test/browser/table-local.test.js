@@ -361,7 +361,18 @@ test.describe('Table local data', () => {
         });
     });
 
-    test.describe('debounce', () => {
+    test.describe('data option', () => {
+        test('renders supplied object rows with nested column paths', async ({ page }) => {
+            await page.evaluate(() => window.createTable({
+                data: [{ name: 'Zoe', result: { score: 8 } }, { name: 'Ada', result: { score: 9 } }],
+                columns: [{ data: 'name' }, { data: 'result.score' }],
+            }));
+
+            await expect(page.locator('#table tbody td')).toHaveText(['Ada', '9', 'Zoe', '8']);
+        });
+    });
+
+    test.describe('debounce option', () => {
         test.use({ mockClock: true });
 
         test('debounces typed local search', async ({ page }) => {
@@ -390,17 +401,6 @@ test.describe('Table local data', () => {
             await expect(page.locator('#table tbody tr')).toHaveCount(4);
             await expect(page.locator('[data-ui-page]')).toHaveCount(0);
             await expect(page.getByRole('status')).toHaveText('Showing results 1 to 4 of 4');
-        });
-    });
-
-    test.describe('data option', () => {
-        test('renders supplied object rows with nested column paths', async ({ page }) => {
-            await page.evaluate(() => window.createTable({
-                data: [{ name: 'Zoe', result: { score: 8 } }, { name: 'Ada', result: { score: 9 } }],
-                columns: [{ data: 'name' }, { data: 'result.score' }],
-            }));
-
-            await expect(page.locator('#table tbody td')).toHaveText(['Ada', '9', 'Zoe', '8']);
         });
     });
 });

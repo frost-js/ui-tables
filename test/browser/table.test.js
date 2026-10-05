@@ -199,72 +199,10 @@ test.describe('Table supplied data', () => {
     test.beforeEach(setupTable);
 
     test.describe('#init', () => {
-        for (const { name, getNode } of [
-            { name: 'null', getNode: () => null },
-            { name: 'a selector', getNode: () => '#table' },
-            { name: 'a collection', getNode: () => [$.findOne('#table')] },
-            { name: 'a non-table element', getNode: () => $.create('div') },
-        ]) {
-            test(`rejects ${name} as the constructor node`, async ({ page }) => {
-                const node = await page.evaluateHandle(getNode);
-
-                const error = await node.evaluate((node) => {
-                    try {
-                        new UI.Table(node);
-                    } catch (error) {
-                        return error.name;
-                    }
-                });
-
-                expect(error).toBe('TypeError');
-                expect(await page.evaluate(() => $.hasData('#table', 'table'))).toBe(false);
-                await expect(page.locator('.table-responsive')).toHaveCount(0);
-            });
-        }
-
         test('retains the caption as the accessible table name', async ({ page }) => {
             await page.evaluate(() => window.createTable());
 
             await expect(page.getByRole('table', { name: 'Scores' })).toBeVisible();
-        });
-
-        for (const { name, options, error } of [
-            { name: 'columns', options: { columns: [{}] }, error: 'RangeError' },
-            { name: 'rows', options: { data: [null] }, error: 'TypeError' },
-            { name: 'order', options: { order: [[4, 'asc']] }, error: 'RangeError' },
-            { name: 'orderData', options: { order: [], columns: [{ orderData: [4] }, {}] }, error: 'RangeError' },
-            { name: 'lengths', options: { lengths: [0] }, error: 'RangeError' },
-        ]) {
-            test(`rejects invalid ${name} without leaving an instance or wrapper`, async ({ page }) => {
-                expect(await page.evaluate((options) => {
-                    try {
-                        window.createTable(options);
-                    } catch (error) {
-                        return error.name;
-                    }
-                }, options)).toBe(error);
-                expect(await page.evaluate(() => $.hasData('#table', 'table'))).toBe(false);
-                await expect(page.locator('.table-responsive')).toHaveCount(0);
-                await expect(page.locator('caption')).toHaveText('Scores');
-
-                await page.evaluate(() => window.createTable());
-
-                await expect(page.locator('tbody tr')).toHaveCount(2);
-            });
-        }
-
-        test('rejects spanning headings', async ({ page }) => {
-            expect(await page.evaluate(() => {
-                $.setProperty($.findOne('th'), 'colSpan', 2);
-                try {
-                    window.createTable();
-                } catch (error) {
-                    return error.name;
-                }
-            })).toBe('RangeError');
-
-            expect(await page.evaluate(() => $.hasData('#table', 'table'))).toBe(false);
-            await expect(page.locator('.table-responsive')).toHaveCount(0);
         });
 
         test('accepts columns without a heading row', async ({ page }) => {
@@ -274,6 +212,70 @@ test.describe('Table supplied data', () => {
             });
 
             await expect(page.locator('th')).toHaveText(['Person', 'Points']);
+        });
+
+        test.describe('failed initialization', () => {
+            for (const { name, getNode } of [
+                { name: 'null', getNode: () => null },
+                { name: 'a selector', getNode: () => '#table' },
+                { name: 'a collection', getNode: () => [$.findOne('#table')] },
+                { name: 'a non-table element', getNode: () => $.create('div') },
+            ]) {
+                test(`rejects ${name} as the constructor node`, async ({ page }) => {
+                    const node = await page.evaluateHandle(getNode);
+
+                    const error = await node.evaluate((node) => {
+                        try {
+                            new UI.Table(node);
+                        } catch (error) {
+                            return error.name;
+                        }
+                    });
+
+                    expect(error).toBe('TypeError');
+                    expect(await page.evaluate(() => $.hasData('#table', 'table'))).toBe(false);
+                    await expect(page.locator('.table-responsive')).toHaveCount(0);
+                });
+            }
+
+            for (const { name, options, error } of [
+                { name: 'columns', options: { columns: [{}] }, error: 'RangeError' },
+                { name: 'rows', options: { data: [null] }, error: 'TypeError' },
+                { name: 'order', options: { order: [[4, 'asc']] }, error: 'RangeError' },
+                { name: 'orderData', options: { order: [], columns: [{ orderData: [4] }, {}] }, error: 'RangeError' },
+                { name: 'lengths', options: { lengths: [0] }, error: 'RangeError' },
+            ]) {
+                test(`rejects invalid ${name} without leaving an instance or wrapper`, async ({ page }) => {
+                    expect(await page.evaluate((options) => {
+                        try {
+                            window.createTable(options);
+                        } catch (error) {
+                            return error.name;
+                        }
+                    }, options)).toBe(error);
+                    expect(await page.evaluate(() => $.hasData('#table', 'table'))).toBe(false);
+                    await expect(page.locator('.table-responsive')).toHaveCount(0);
+                    await expect(page.locator('caption')).toHaveText('Scores');
+
+                    await page.evaluate(() => window.createTable());
+
+                    await expect(page.locator('tbody tr')).toHaveCount(2);
+                });
+            }
+
+            test('rejects spanning headings', async ({ page }) => {
+                expect(await page.evaluate(() => {
+                    $.setProperty($.findOne('th'), 'colSpan', 2);
+                    try {
+                        window.createTable();
+                    } catch (error) {
+                        return error.name;
+                    }
+                })).toBe('RangeError');
+
+                expect(await page.evaluate(() => $.hasData('#table', 'table'))).toBe(false);
+                await expect(page.locator('.table-responsive')).toHaveCount(0);
+            });
         });
     });
 

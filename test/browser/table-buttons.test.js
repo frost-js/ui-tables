@@ -108,6 +108,34 @@ test.describe('Table buttons', () => {
     });
 
     test.describe('excel', () => {
+        test('downloads a named workbook with valid XML and columns beyond Z', async ({ page }) => {
+            const values = Array.from({ length: 28 }, (_, index) => `Column ${index + 1}`);
+
+            await page.evaluate((values) => {
+                $.setHtml($.findOne('thead tr'), values.map((_, index) => `<th>Field ${index + 1}</th>`).join(''));
+                UI.Table.init($.findOne('#table'), {
+                    data: [values],
+                    order: [],
+                    buttons: [{ type: 'excel', title: 'Workbook' }],
+                });
+            }, values);
+
+            const pending = page.waitForEvent('download');
+            await page.getByRole('button', { name: 'Excel' }).click();
+            const download = await pending;
+
+            expect(download.suggestedFilename()).toBe('Workbook.xlsx');
+
+            const files = readZip(await readDownload(download));
+
+            const worksheet = await page.evaluate(readWorksheet, [...files]);
+
+            expect(worksheet.valid).toBe(true);
+            expect(worksheet.dimension).toBe('A1:AB2');
+            expect(worksheet.rows).toEqual([values]);
+            expect(files.get('xl/styles.xml').text).toContain('cellXfs count="9"');
+        });
+
         test('downloads and round-trips a large compressed workbook', async ({ page }) => {
             let seed = 123456;
             const rows = Array.from({ length: 96 }, (_, index) => {
@@ -140,34 +168,6 @@ test.describe('Table buttons', () => {
             expect(worksheet.valid).toBe(true);
             expect(files.get('xl/worksheets/sheet1.xml').method).toBe(8);
             expect(worksheet.rows).toEqual(rows.map(([value, index]) => [value, String(index)]));
-        });
-
-        test('downloads a named workbook with valid XML and columns beyond Z', async ({ page }) => {
-            const values = Array.from({ length: 28 }, (_, index) => `Column ${index + 1}`);
-
-            await page.evaluate((values) => {
-                $.setHtml($.findOne('thead tr'), values.map((_, index) => `<th>Field ${index + 1}</th>`).join(''));
-                UI.Table.init($.findOne('#table'), {
-                    data: [values],
-                    order: [],
-                    buttons: [{ type: 'excel', title: 'Workbook' }],
-                });
-            }, values);
-
-            const pending = page.waitForEvent('download');
-            await page.getByRole('button', { name: 'Excel' }).click();
-            const download = await pending;
-
-            expect(download.suggestedFilename()).toBe('Workbook.xlsx');
-
-            const files = readZip(await readDownload(download));
-
-            const worksheet = await page.evaluate(readWorksheet, [...files]);
-
-            expect(worksheet.valid).toBe(true);
-            expect(worksheet.dimension).toBe('A1:AB2');
-            expect(worksheet.rows).toEqual([values]);
-            expect(files.get('xl/styles.xml').text).toContain('cellXfs count="9"');
         });
     });
 
