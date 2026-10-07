@@ -244,17 +244,17 @@ export default class Table extends BaseComponent {
      * @param {TableOptions} [options] The component options.
      */
     constructor(node, options) {
-        if (!$._isElement(node) || $.tagName(node) !== 'table') {
-            throw new TypeError('Table requires a table element.');
+        if (!$._isElement(node) || !$.is(node, 'table')) {
+            throw new TypeError('Table must be created on a table element.');
         }
 
         super(node, options);
 
-        this.#originalClass = $.getAttribute(node, 'class');
-        this.#originalDescription = $.getAttribute(node, 'aria-describedby');
-        this.#originalBusy = $.getAttribute(node, 'aria-busy');
-
         try {
+            this.#originalClass = $.getAttribute(node, 'class');
+            this.#originalDescription = $.getAttribute(node, 'aria-describedby');
+            this.#originalBusy = $.getAttribute(node, 'aria-busy');
+
             this.#limit = this.options.paging ? normalizePageLength(this.options.length) : Infinity;
 
             for (const length of this.options.lengths) {
@@ -388,7 +388,11 @@ export default class Table extends BaseComponent {
             ['aria-describedby', this.#originalDescription],
             ['aria-busy', this.#originalBusy],
         ]) {
-            if (value === null || value === undefined) {
+            if (value === undefined) {
+                continue;
+            }
+
+            if (value === null) {
                 $.removeAttribute(node, attribute);
             } else {
                 $.setAttribute(node, { [attribute]: value });

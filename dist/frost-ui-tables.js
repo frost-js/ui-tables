@@ -1949,12 +1949,12 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		* @param {TableOptions} [options] The component options.
 		*/
 		constructor(node, options) {
-			if (!_fr0st_query.default._isElement(node) || _fr0st_query.default.tagName(node) !== "table") throw new TypeError("Table requires a table element.");
+			if (!_fr0st_query.default._isElement(node) || !_fr0st_query.default.is(node, "table")) throw new TypeError("Table must be created on a table element.");
 			super(node, options);
-			this.#originalClass = _fr0st_query.default.getAttribute(node, "class");
-			this.#originalDescription = _fr0st_query.default.getAttribute(node, "aria-describedby");
-			this.#originalBusy = _fr0st_query.default.getAttribute(node, "aria-busy");
 			try {
+				this.#originalClass = _fr0st_query.default.getAttribute(node, "class");
+				this.#originalDescription = _fr0st_query.default.getAttribute(node, "aria-describedby");
+				this.#originalBusy = _fr0st_query.default.getAttribute(node, "aria-busy");
 				this.#limit = this.options.paging ? normalizePageLength(this.options.length) : Infinity;
 				for (const length of this.options.lengths) normalizePageLength(length);
 				if (!this.options.getResults) {
@@ -2031,8 +2031,11 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 				["class", this.#originalClass],
 				["aria-describedby", this.#originalDescription],
 				["aria-busy", this.#originalBusy]
-			]) if (value === null || value === void 0) _fr0st_query.default.removeAttribute(node, attribute);
-			else _fr0st_query.default.setAttribute(node, { [attribute]: value });
+			]) {
+				if (value === void 0) continue;
+				if (value === null) _fr0st_query.default.removeAttribute(node, attribute);
+				else _fr0st_query.default.setAttribute(node, { [attribute]: value });
+			}
 			if (this.#container) {
 				_fr0st_query.default.before(this.#container, node);
 				_fr0st_query.default.remove(this.#container);

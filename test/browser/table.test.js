@@ -238,6 +238,93 @@ test.describe('Table supplied data', () => {
                 });
             }
 
+            test('rejects non-element arguments without disturbing an existing instance', async ({ page }) => {
+                const state = await page.evaluate(() => {
+                    const node = $.findOne('#table');
+                    const instance = UI.Table.init(node);
+                    const html = $.getHtml(document.body);
+                    const errors = [];
+
+                    for (const [name, argument] of [
+                        ['null', null],
+                        ['undefined', undefined],
+                        ['selector', '#table'],
+                        ['malformed selector', '['],
+                        ['array', [node]],
+                        ['QuerySet', $('#table')],
+                        ['document', document],
+                        ['text node', document.createTextNode('text')],
+                    ]) {
+                        for (const [method, init] of [
+                            ['constructor', (node) => new UI.Table(node)],
+                            ['init', (node) => UI.Table.init(node)],
+                        ]) {
+                            let message = null;
+
+                            try {
+                                init(argument);
+                            } catch (error) {
+                                message = `${error.name}: ${error.message}`;
+                            }
+
+                            errors.push({ name, method, message });
+                        }
+                    }
+
+                    return {
+                        errors,
+                        unchanged: $.getHtml(document.body) === html &&
+                            $.getData(node, UI.Table.DATA_KEY) === instance,
+                    };
+                });
+
+                for (const { name, method, message } of state.errors) {
+                    expect(message, `${name} (${method})`).toBe('TypeError: Table must be created on a table element.');
+                }
+                expect(state.unchanged).toBe(true);
+            });
+
+            test('preserves untouched attributes when capturing initial state throws', async ({ page }) => {
+                const state = await page.evaluate(() => {
+                    const node = $.findOne('#table');
+                    $.setAttribute(node, {
+                        'class': 'original',
+                        'aria-controls': 'original-controls',
+                        'aria-expanded': 'false',
+                        'aria-describedby': 'original-description',
+                        'aria-busy': 'false',
+                    });
+                    const html = node.outerHTML;
+                    const getAttribute = Element.prototype.getAttribute;
+                    const failure = new Error('Cannot capture attributes');
+                    let originalError = false;
+
+                    Element.prototype.getAttribute = function(name) {
+                        if (this === node && name === 'aria-describedby') {
+                            throw failure;
+                        }
+
+                        return getAttribute.call(this, name);
+                    };
+
+                    try {
+                        UI.Table.init(node);
+                    } catch (error) {
+                        originalError = error === failure;
+                    } finally {
+                        Element.prototype.getAttribute = getAttribute;
+                    }
+
+                    return {
+                        originalError,
+                        registered: $.hasData(node, UI.Table.DATA_KEY),
+                        unchanged: node.outerHTML === html,
+                    };
+                });
+
+                expect(state).toEqual({ originalError: true, registered: false, unchanged: true });
+            });
+
             for (const { name, options, error } of [
                 { name: 'columns', options: { columns: [{}] }, error: 'RangeError' },
                 { name: 'rows', options: { data: [null] }, error: 'TypeError' },
