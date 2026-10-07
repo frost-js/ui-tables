@@ -1,5 +1,5 @@
 import $ from '@fr0st/query';
-import { BaseComponent, generateId, getDataset } from '@fr0st/ui';
+import { BaseComponent, generateId } from '@fr0st/ui';
 import { csv, excel, print } from './buttons.js';
 import {
     buildTable, getDomData, getDomHeadings, normalizeColumns, normalizeOrder,
@@ -255,15 +255,6 @@ export default class Table extends BaseComponent {
         this.#originalBusy = $.getAttribute(node, 'aria-busy');
 
         try {
-            // BaseComponent merges arrays by index; table option arrays replace defaults.
-            const configured = { ...getDataset(node), ...options };
-
-            for (const key of ['order', 'lengths', 'buttons']) {
-                if (Object.hasOwn(configured, key)) {
-                    this.options[key].splice(0, this.options[key].length, ...configured[key]);
-                }
-            }
-
             this.#limit = this.options.paging ? normalizePageLength(this.options.length) : Infinity;
 
             for (const length of this.options.lengths) {

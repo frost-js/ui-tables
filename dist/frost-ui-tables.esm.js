@@ -1,4 +1,4 @@
-import { BaseComponent, generateId, getDataset, initComponent } from "@fr0st/ui";
+import { BaseComponent, generateId, initComponent } from "@fr0st/ui";
 import $ from "@fr0st/query";
 
 //#region src/js/helpers.js
@@ -1923,15 +1923,6 @@ var Table = class extends BaseComponent {
 		this.#originalDescription = $.getAttribute(node, "aria-describedby");
 		this.#originalBusy = $.getAttribute(node, "aria-busy");
 		try {
-			const configured = {
-				...getDataset(node),
-				...options
-			};
-			for (const key of [
-				"order",
-				"lengths",
-				"buttons"
-			]) if (Object.hasOwn(configured, key)) this.options[key].splice(0, this.options[key].length, ...configured[key]);
 			this.#limit = this.options.paging ? normalizePageLength(this.options.length) : Infinity;
 			for (const length of this.options.lengths) normalizePageLength(length);
 			if (!this.options.getResults) {

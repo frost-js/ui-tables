@@ -1955,15 +1955,6 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			this.#originalDescription = _fr0st_query.default.getAttribute(node, "aria-describedby");
 			this.#originalBusy = _fr0st_query.default.getAttribute(node, "aria-busy");
 			try {
-				const configured = {
-					...(0, _fr0st_ui.getDataset)(node),
-					...options
-				};
-				for (const key of [
-					"order",
-					"lengths",
-					"buttons"
-				]) if (Object.hasOwn(configured, key)) this.options[key].splice(0, this.options[key].length, ...configured[key]);
 				this.#limit = this.options.paging ? normalizePageLength(this.options.length) : Infinity;
 				for (const length of this.options.lengths) normalizePageLength(length);
 				if (!this.options.getResults) {
