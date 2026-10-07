@@ -127,6 +127,18 @@ test.describe('Table DOM data', () => {
             });
         }
 
+        test('removes a generated ID and preserves an existing ID', async ({ page }) => {
+            await page.evaluate(() => {
+                const node = $.findOne('#table2');
+                $.removeAttribute(node, 'id');
+                const instance = UI.Table.init(node);
+                instance.dispose();
+            });
+
+            await expect(page.locator('table').nth(1)).not.toHaveAttribute('id');
+            await expect(page.locator('#table1')).toHaveAttribute('id', 'table1');
+        });
+
         test('can be disposed twice and reinitialized', async ({ page }) => {
             const instance = await page.evaluateHandle(() => UI.Table.init($.findOne('#table1')));
             await instance.evaluate((value) => {
@@ -141,18 +153,6 @@ test.describe('Table DOM data', () => {
 
             await expect(page.locator('.table-responsive')).toHaveCount(1);
             await expect(page.locator('#table1 tbody td:first-child')).toHaveText(['Alice', 'Bob', 'Charlie']);
-        });
-
-        test('removes a generated ID and preserves an existing ID', async ({ page }) => {
-            await page.evaluate(() => {
-                const node = $.findOne('#table2');
-                $.removeAttribute(node, 'id');
-                const instance = UI.Table.init(node);
-                instance.dispose();
-            });
-
-            await expect(page.locator('table').nth(1)).not.toHaveAttribute('id');
-            await expect(page.locator('#table1')).toHaveAttribute('id', 'table1');
         });
 
         test('disposes when query removes the table', async ({ page }) => {
