@@ -26,6 +26,41 @@ test.describe('Table buttons', () => {
         });
     });
 
+    test.describe('export scopes', () => {
+        for (const { type, label } of [{ type: 'csv', label: 'CSV' }, { type: 'excel', label: 'Excel' }]) {
+            for (const { scope, expected } of [
+                { scope: 'page', expected: [['B', '2']] },
+                { scope: 'filtered', expected: [['C', '4'], ['A', '3'], ['B', '2']] },
+                { scope: 'all', expected: [['C', '4'], ['A', '3'], ['B', '2'], ['A', '1']] },
+            ]) {
+                test(`${type} exports the ${scope} scope without changing the page`, async ({ page }) => {
+                    await page.evaluate(({ type, scope }) => {
+                        const table = UI.Table.init($.findOne('#table'), {
+                            data: [['B', 2], ['A', 1], ['A', 3], ['C', 4]],
+                            columns: [{}, { type: 'number' }],
+                            order: [[1, 'desc']],
+                            length: 2,
+                            buttons: [{ type, scope }],
+                        });
+                        table.setFilters([{ column: 1, operator: 'gte', value: 2 }]);
+                        table.page(2);
+                    }, { type, scope });
+
+                    const pending = page.waitForEvent('download');
+                    await page.getByRole('button', { name: label, exact: true }).click();
+                    const data = await readDownload(await pending);
+                    const rows = type === 'csv' ?
+                        readCsv(data.toString()).slice(1) :
+                        (await page.evaluate(readWorksheet, [...readZip(data)])).rows;
+
+                    expect(rows).toEqual(expected);
+                    await expect(page.locator('tbody td')).toHaveText(['B', '2']);
+                    await expect(page.getByRole('status')).toHaveText('Showing results 3 to 3 of 3 (filtered from 4 total)');
+                });
+            }
+        }
+    });
+
     test.describe('csv', () => {
         test('exports resolved values with formula escaping and preserves zero and false', async ({ page }) => {
             await page.evaluate(() => UI.Table.init($.findOne('#table'), {
@@ -35,7 +70,8 @@ test.describe('Table buttons', () => {
                         return purpose === 'export' ? `=${value}:${rowIndex}` : value;
                     },
                 }, { format: () => 'Display only' }],
-                buttons: [{ type: 'csv' }],
+                buttons: [{ type: 'csv', scope: 'all' }],
+                length: 1,
                 order: [[0, 'desc']],
             }));
 
@@ -147,7 +183,8 @@ test.describe('Table buttons', () => {
                 columns: [{}, {
                     render: (value, { purpose }) => purpose === 'display' ? '<strong>Formatted</strong>' : value.amount,
                 }],
-                buttons: [{ type: 'excel' }],
+                buttons: [{ type: 'excel', scope: 'filtered' }],
+                length: 1,
             }));
 
             const pending = page.waitForEvent('download');
@@ -249,7 +286,8 @@ test.describe('Table buttons', () => {
                     render: (value, { purpose }) => purpose === 'export' && value === 'Alice' ? 'Export Alice' : value,
                 }, {}],
                 order: [],
-                buttons: [{ type: 'print', title: '<b>Literal title</b>' }],
+                buttons: [{ type: 'print', scope: 'all', title: '<b>Literal title</b>' }],
+                length: 1,
             }));
 
             const pending = page.waitForEvent('popup');

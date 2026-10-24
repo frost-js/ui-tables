@@ -43,6 +43,7 @@ import {
  * @property {string} [text] The button label.
  * @property {string} [title] The export title, defaulting to the document title.
  * @property {number[]} [columns] The columns to export; defaults to visible columns.
+ * @property {'page'|'filtered'|'all'} [scope='page'] The rows to export; remote data supports page only.
  * @property {boolean} [escapeFormulae=true] Prefixes formula-like CSV strings with an apostrophe.
  * @property {function(this: Table): void} [callback] Runs with the table as its receiver.
  */
@@ -98,21 +99,21 @@ export default class Table extends BaseComponent {
     // Table buttons
     static buttons = {
         csv(options) {
-            const data = this.#getExportData(options);
+            const data = this.getExportData(options);
 
             if (data) {
                 csv(options, data);
             }
         },
         excel(options) {
-            const data = this.#getExportData(options);
+            const data = this.getExportData(options);
 
             if (data) {
                 excel(options, data);
             }
         },
         print(options) {
-            const data = this.#getExportData(options);
+            const data = this.getExportData(options);
 
             if (!data) {
                 return;
@@ -532,6 +533,66 @@ export default class Table extends BaseComponent {
 
             return Array.isArray(row) ? [...row] : { ...row };
         });
+    }
+
+    /**
+     * Collects text headings and resolved export values without changing the view.
+     * @param {object} [options] Options for collecting export data.
+     * @param {'page'|'filtered'|'all'} [options.scope='page'] The row scope.
+     * @param {number[]|null} [options.columns=null] Column indexes; defaults to visible columns.
+     * @returns {{headings: string[], rows: Array<Array<*>>}|null} The export data, or null if interrupted.
+     */
+    getExportData({ scope = 'page', columns = null } = {}) {
+        if (!this.node) {
+            return null;
+        }
+
+        const version = this.#drawVersion;
+        columns ??= this.#getVisibleColumns();
+
+        if (!Array.isArray(columns)) {
+            throw new TypeError('Export columns must be an array.');
+        }
+
+        columns = [...columns];
+
+        for (const index of columns) {
+            validateColumnIndex(index, this.#columns.length);
+        }
+
+        const indexes = this.#getDataIndexes(scope);
+
+        if (!this.node || version !== this.#drawVersion) {
+            return null;
+        }
+
+        // Exports contain text, even when the displayed headings contain HTML.
+        const headings = columns.map((index) => {
+            const container = $.create('div');
+            $.setHtml(container, $.sanitize(String(this.#headings[index].text)));
+
+            return $.getText(container);
+        });
+
+        const rows = [];
+
+        for (const rowIndex of indexes) {
+            const row = [];
+
+            for (const index of columns) {
+                const value = this.#getValue(rowIndex, index, 'export');
+
+                if (!this.node || version !== this.#drawVersion) {
+                    return null;
+                }
+
+                row.push(value);
+            }
+
+            rows.push(row);
+        }
+
+        return { headings, rows };
     }
 
     /**
@@ -1130,48 +1191,6 @@ export default class Table extends BaseComponent {
             case 'all':
                 return this.#sortIndexes(this.#data.map((_, index) => index)) ?? [];
         }
-    }
-
-    /**
-     * Copies the headings and displayed rows required by an export button.
-     * @param {TableButton} options The export button options.
-     * @returns {{headings: string[], rows: Array<Array<*>>}|null} The export data, or null if interrupted.
-     */
-    #getExportData(options) {
-        const version = this.#drawVersion;
-        const columns = options.columns || this.#getVisibleColumns();
-
-        for (const index of columns) {
-            validateColumnIndex(index, this.#columns.length);
-        }
-
-        // Exports contain text, even when the displayed headings contain HTML.
-        const headings = columns.map((index) => {
-            const container = $.create('div');
-            $.setHtml(container, $.sanitize(String(this.#headings[index].text)));
-
-            return $.getText(container);
-        });
-
-        const rows = [];
-
-        for (const rowIndex of this.#rowIndexes) {
-            const row = [];
-
-            for (const index of columns) {
-                const value = this.#getValue(rowIndex, index, 'export');
-
-                if (!this.node || version !== this.#drawVersion) {
-                    return null;
-                }
-
-                row.push(value);
-            }
-
-            rows.push(row);
-        }
-
-        return { headings, rows };
     }
 
     /**

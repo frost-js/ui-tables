@@ -169,12 +169,9 @@ $.ready(() => {
     const exportsTable = init('export-table', {
         data: rows,
         buttons: [
-            { type: 'csv', title: 'Team scores' },
-            { type: 'excel', title: 'Team scores' },
-            { type: 'print', title: 'Team scores' },
-            { text: 'Show 25 rows', callback() {
-                this.length(25);
-            } },
+            { type: 'csv', scope: 'filtered', text: 'CSV matches', title: 'Matching team scores' },
+            { type: 'excel', scope: 'all', text: 'Excel all rows', title: 'All team scores' },
+            { type: 'print', scope: 'page', text: 'Print page', title: 'Team scores' },
         ],
     });
     $.addEvent(node('toggle-team'), 'click', (event) => {

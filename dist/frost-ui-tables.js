@@ -38,7 +38,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 	/**
 	* Builds a text-only table from export data.
 	* @param {string[]} headings The column headings.
-	* @param {Array<Array<*>>} rows The displayed rows.
+	* @param {Array<Array<*>>} rows The selected rows.
 	* @param {string} direction The table direction.
 	* @returns {HTMLTableElement} The table element.
 	*/
@@ -1763,13 +1763,13 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 //#endregion
 //#region src/js/buttons.js
 /**
-	* Downloads the displayed rows as CSV, escaping delimiters, quotes and line breaks.
+	* Downloads the selected rows as CSV, escaping delimiters, quotes and line breaks.
 	* @param {object} options The button options.
 	* @param {string} [options.title] The download title.
 	* @param {boolean} [options.escapeFormulae=true] Prefix spreadsheet formula-like strings with an apostrophe.
 	* @param {object} data The export data.
 	* @param {string[]} data.headings The headings.
-	* @param {Array<Array<*>>} data.rows The displayed rows.
+	* @param {Array<Array<*>>} data.rows The selected rows.
 	*/
 	function csv(options, { headings, rows }) {
 		const title = options.title || document.title;
@@ -1785,11 +1785,11 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		saveBlob(blob, `${title}.csv`);
 	}
 	/**
-	* Downloads the displayed rows as an Excel workbook.
+	* Downloads the selected rows as an Excel workbook.
 	* @param {object} options The button options.
 	* @param {object} data The export data.
 	* @param {string[]} data.headings The headings.
-	* @param {Array<Array<*>>} data.rows The displayed rows.
+	* @param {Array<Array<*>>} data.rows The selected rows.
 	*/
 	function excel(options, { headings, rows }) {
 		const workbook = new Workbook();
@@ -1878,6 +1878,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 	* @property {string} [text] The button label.
 	* @property {string} [title] The export title, defaulting to the document title.
 	* @property {number[]} [columns] The columns to export; defaults to visible columns.
+	* @property {'page'|'filtered'|'all'} [scope='page'] The rows to export; remote data supports page only.
 	* @property {boolean} [escapeFormulae=true] Prefixes formula-like CSV strings with an apostrophe.
 	* @property {function(this: Table): void} [callback] Runs with the table as its receiver.
 	*/
@@ -1931,15 +1932,15 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 	var Table = class extends _fr0st_ui.BaseComponent {
 		static buttons = {
 			csv(options) {
-				const data = this.#getExportData(options);
+				const data = this.getExportData(options);
 				if (data) csv(options, data);
 			},
 			excel(options) {
-				const data = this.#getExportData(options);
+				const data = this.getExportData(options);
 				if (data) excel(options, data);
 			},
 			print(options) {
-				const data = this.#getExportData(options);
+				const data = this.getExportData(options);
 				if (!data) return;
 				const { headings, rows } = data;
 				const table = buildTable(headings, rows, _fr0st_query.default.css(this.node, "direction"));
@@ -2261,6 +2262,42 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 				const row = this.#data[index];
 				return Array.isArray(row) ? [...row] : { ...row };
 			});
+		}
+		/**
+		* Collects text headings and resolved export values without changing the view.
+		* @param {object} [options] Options for collecting export data.
+		* @param {'page'|'filtered'|'all'} [options.scope='page'] The row scope.
+		* @param {number[]|null} [options.columns=null] Column indexes; defaults to visible columns.
+		* @returns {{headings: string[], rows: Array<Array<*>>}|null} The export data, or null if interrupted.
+		*/
+		getExportData({ scope = "page", columns = null } = {}) {
+			if (!this.node) return null;
+			const version = this.#drawVersion;
+			columns ??= this.#getVisibleColumns();
+			if (!Array.isArray(columns)) throw new TypeError("Export columns must be an array.");
+			columns = [...columns];
+			for (const index of columns) validateColumnIndex(index, this.#columns.length);
+			const indexes = this.#getDataIndexes(scope);
+			if (!this.node || version !== this.#drawVersion) return null;
+			const headings = columns.map((index) => {
+				const container = _fr0st_query.default.create("div");
+				_fr0st_query.default.setHtml(container, _fr0st_query.default.sanitize(String(this.#headings[index].text)));
+				return _fr0st_query.default.getText(container);
+			});
+			const rows = [];
+			for (const rowIndex of indexes) {
+				const row = [];
+				for (const index of columns) {
+					const value = this.#getValue(rowIndex, index, "export");
+					if (!this.node || version !== this.#drawVersion) return null;
+					row.push(value);
+				}
+				rows.push(row);
+			}
+			return {
+				headings,
+				rows
+			};
 		}
 		/**
 		* Gets values for a single row.
@@ -2648,35 +2685,6 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 				case "filtered": return this.#filteredIndexes;
 				case "all": return this.#sortIndexes(this.#data.map((_, index) => index)) ?? [];
 			}
-		}
-		/**
-		* Copies the headings and displayed rows required by an export button.
-		* @param {TableButton} options The export button options.
-		* @returns {{headings: string[], rows: Array<Array<*>>}|null} The export data, or null if interrupted.
-		*/
-		#getExportData(options) {
-			const version = this.#drawVersion;
-			const columns = options.columns || this.#getVisibleColumns();
-			for (const index of columns) validateColumnIndex(index, this.#columns.length);
-			const headings = columns.map((index) => {
-				const container = _fr0st_query.default.create("div");
-				_fr0st_query.default.setHtml(container, _fr0st_query.default.sanitize(String(this.#headings[index].text)));
-				return _fr0st_query.default.getText(container);
-			});
-			const rows = [];
-			for (const rowIndex of this.#rowIndexes) {
-				const row = [];
-				for (const index of columns) {
-					const value = this.#getValue(rowIndex, index, "export");
-					if (!this.node || version !== this.#drawVersion) return null;
-					row.push(value);
-				}
-				rows.push(row);
-			}
-			return {
-				headings,
-				rows
-			};
 		}
 		/**
 		* Gets an index (optionally modified).

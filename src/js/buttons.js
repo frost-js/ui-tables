@@ -3,13 +3,13 @@ import { saveBlob } from './helpers.js';
 import Workbook from './workbook/workbook.js';
 
 /**
- * Downloads the displayed rows as CSV, escaping delimiters, quotes and line breaks.
+ * Downloads the selected rows as CSV, escaping delimiters, quotes and line breaks.
  * @param {object} options The button options.
  * @param {string} [options.title] The download title.
  * @param {boolean} [options.escapeFormulae=true] Prefix spreadsheet formula-like strings with an apostrophe.
  * @param {object} data The export data.
  * @param {string[]} data.headings The headings.
- * @param {Array<Array<*>>} data.rows The displayed rows.
+ * @param {Array<Array<*>>} data.rows The selected rows.
  */
 export function csv(options, { headings, rows }) {
     const title = options.title || document.title;
@@ -40,11 +40,11 @@ export function csv(options, { headings, rows }) {
 }
 
 /**
- * Downloads the displayed rows as an Excel workbook.
+ * Downloads the selected rows as an Excel workbook.
  * @param {object} options The button options.
  * @param {object} data The export data.
  * @param {string[]} data.headings The headings.
- * @param {Array<Array<*>>} data.rows The displayed rows.
+ * @param {Array<Array<*>>} data.rows The selected rows.
  */
 export function excel(options, { headings, rows }) {
     const workbook = new Workbook();

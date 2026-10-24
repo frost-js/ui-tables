@@ -294,7 +294,7 @@ Invalid batches leave rows and the current view intact. Rows must be arrays or p
 
 Returned rows contain raw source values and include hidden columns. The result array and its row containers are fresh shallow copies. With no active ordering, scopes retain input order. Reading data does not change search, counts, page, length, or visibility and does not draw or fetch rows. The `all` scope invokes sort renderers and comparators as needed; keep those callbacks pure and avoid recursively requesting the same scope. If a callback disposes the table or starts a newer draw during collection, the interrupted read returns `[]`.
 
-Bulk mutators are local-only and throw `TypeError` when `getResults` is configured. Remote applications should save changes through their server and call `reload()`. Unsupported or unknown getter scopes throw `RangeError`; `getData()` never fetches other pages. Existing export buttons still export the current page.
+Bulk mutators are local-only and throw `TypeError` when `getResults` is configured. Remote applications should save changes through their server and call `reload()`. Unsupported or unknown getter scopes throw `RangeError`; `getData()` never fetches other pages. Export buttons use the same scope rules and default to the current page.
 
 ### Column filters and row predicates
 
@@ -420,17 +420,36 @@ Custom layout functions receive a destination container and the Table as `this`.
 ```js
 Table.init(document.querySelector('#scores'), {
     buttons: [
-        { type: 'csv', title: 'Scores', columns: [1, 0] },
-        { type: 'excel', title: 'Scores' },
-        { type: 'print', title: 'Team scores' },
+        { type: 'csv', scope: 'filtered', title: 'Matching scores', columns: [1, 0] },
+        { type: 'excel', scope: 'all', title: 'All scores' },
+        { type: 'print', scope: 'page', title: 'Team scores' },
         { text: 'Show all', callback() { this.length(100); } },
     ],
 });
 ```
 
-Button options are `type`, `text`, `title`, `columns`, `callback`, and CSV's `escapeFormulae`. `text` overrides the translated type label; `title` defaults to the document title. `callback()` overrides the registered handler and receives the Table as `this`. Register reusable handlers through `Table.buttons.yourType = function (options) { ... }`.
+Button options are `type`, `text`, `title`, `scope`, `columns`, `callback`, and CSV's `escapeFormulae`. `text` overrides the translated type label; `title` defaults to the document title. `callback()` overrides the registered handler and receives the Table as `this`. Register reusable handlers through `Table.buttons.yourType = function (options) { ... }`.
 
-Built-in exports include **current displayed rows**, resolved export values, and visible columns. `columns` explicitly selects/reorders columns, including hidden ones. Heading markup becomes text. Display formatters are not used, and remote exports never fetch other pages. JavaScript rows default to raw values; DOM rows default to text or `data-export`. A renderer can provide an export value independently of the display, and CSV formula escaping applies to resolved strings.
+Built-in exports use resolved export values and visible columns. `columns` explicitly selects/reorders columns, including hidden ones. Heading markup becomes text. Display formatters are not used. JavaScript rows default to raw values; DOM rows default to text or `data-export`. A renderer can provide an export value independently of the display, and CSV formula escaping applies to resolved strings. Internal sort conversions do not replace export values.
+
+| Export scope | Local rows | Remote rows |
+| --- | --- | --- |
+| `page` (default) | Current page | Current loaded page |
+| `filtered` | All rows matching global search, column filters, and the row predicate | Unsupported |
+| `all` | Entire dataset, ignoring filters | Unsupported |
+
+Each local scope uses active ordering; an empty order retains input order. Exports do not change pagination, search, filters, or visibility and do not redraw the table. Remote `filtered` and `all` scopes throw `RangeError` before downloading or opening a print view. Use a custom button callback to call your server's export endpoint when a remote export needs more than the loaded page.
+
+Collect the same values without starting an export using `getExportData()`:
+
+```js
+const data = table.getExportData({ scope: 'filtered', columns: [1, 0] });
+// { headings: ['Score', 'Name'], rows: [[90, 'Alice'], ...] }
+```
+
+The default scope is `page`, and omitted or null `columns` selects visible columns. The returned headings array, rows array, and each row array are fresh. Values are resolved with `purpose: 'export'`, and `rowIndex` addresses the loaded dataset even for rows outside the current page. Formula escaping and spreadsheet conversion happen later in the export handlers, so collected values remain available for other formats.
+
+Unknown scopes or out-of-range column indexes throw `RangeError`; a nonarray column selection throws `TypeError`. An empty match set returns headings and `rows: []`. If a renderer or comparator disposes the table or starts a newer draw during collection, `getExportData()` returns `null` and built-in buttons cancel that export. It also returns `null` when called after disposal.
 
 - CSV quotes commas, quotes and line breaks. Formula-like strings are prefixed with an apostrophe by default; `escapeFormulae: false` opts out. Numeric negatives remain numbers.
 - XLSX preserves zero, booleans, Unicode and string formulas as text. Recognized `YYYY-MM-DD`, `DD/MM/YYYY`, optional ` HH:mm:ss`, `HH:mm:ss`, numeric and percentage values receive spreadsheet values/styles. Dates use Excel's 1900 system. Invalid date-like strings remain text.
@@ -470,6 +489,7 @@ Data attributes configure options; they do not initialize Tables by themselves. 
 | `dispose()` | `void` | Restore the original DOM and attributes, cancel owned work, and remove registered state. |
 | `getColumn(key, { modified = true }?)` | `array` | Return column values for the displayed rows or loaded dataset. |
 | `getData({ scope = 'page' }?)` | `array` | Return shallow row copies for `page`, `filtered`, or `all`, in active order. |
+| `getExportData({ scope = 'page', columns = null }?)` | `object \| null` | Return text headings and resolved export rows; return `null` if collection is interrupted. |
 | `getRow(index, { modified = true }?)` | `array \| object` | Return a shallow copy of a row. |
 | `getValue(index, key, { modified = true }?)` | `any` | Read an array key or object dot path. |
 | `hideColumn(index)` | `void` | Hide a data column and redraw. |

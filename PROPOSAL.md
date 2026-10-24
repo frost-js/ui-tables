@@ -1,6 +1,6 @@
 # Proposal: Essential table functionality
 
-Status: Items 1–3 are implemented; the new bulk data tests await CI validation. Items 4–5 remain proposed. See the [README](./README.md#cell-values-and-sorting) for the implemented API.
+Status: Items 1–4 are implemented; the new export tests await CI validation. Item 5 remains proposed. See the [README](./README.md#cell-values-and-sorting) for the implemented API.
 
 ## Recommendation
 
@@ -159,7 +159,7 @@ Acceptance examples: inserting 1,000 rows causes one recalculation and draw; a m
 
 ## 4. Export scopes and reusable export data
 
-### Proposed API
+### Implemented API
 
 ```js
 buttons: [

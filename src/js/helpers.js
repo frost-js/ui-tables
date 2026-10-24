@@ -5,7 +5,7 @@ import $ from '@fr0st/query';
 /**
  * Builds a text-only table from export data.
  * @param {string[]} headings The column headings.
- * @param {Array<Array<*>>} rows The displayed rows.
+ * @param {Array<Array<*>>} rows The selected rows.
  * @param {string} direction The table direction.
  * @returns {HTMLTableElement} The table element.
  */
