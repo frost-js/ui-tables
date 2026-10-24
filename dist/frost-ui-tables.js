@@ -2063,11 +2063,11 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			}
 		};
 		static classes = {
-			bottomRow: "d-md-flex justify-content-between",
+			bottomRow: "d-md-flex align-items-center justify-content-between",
 			button: "btn btn-table btn-sm",
-			buttonGroup: "btn-group mt-1",
-			column: "d-md-flex",
-			columnContainer: "text-center px-2 mb-1",
+			buttonGroup: "btn-group",
+			column: "d-md-flex align-items-center",
+			columnContainer: "d-flex align-items-center justify-content-center text-center px-2 mb-1",
 			columnPicker: "dropdown-menu p-3",
 			columnPickerButton: "dropdown-toggle",
 			columnPickerGroup: "btn-group",
@@ -2080,12 +2080,12 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			detailList: "table-details-list",
 			detailRow: "table-details",
 			emptyCell: "text-center py-3",
-			infoContainer: "text-center text-md-start mb-2 mb-md-0 w-100",
-			lengthContainer: "d-flex justify-content-center justify-content-md-start w-100 mb-1",
-			lengthInputContainer: "form-input d-inline-block",
+			infoContainer: "text-center text-md-start w-100",
+			lengthContainer: "d-flex justify-content-center justify-content-md-start w-100",
+			lengthInputContainer: "form-input",
 			lengthInputFilled: "input-filled input-sm",
 			lengthInputOutline: "input-outline input-sm",
-			lengthLabel: "mb-1 mb-md-0",
+			lengthLabel: "d-inline-flex align-items-center mb-0",
 			lengthLabelText: "me-2",
 			loader: "position-absolute top-50 start-50 translate-middle z-1",
 			loaderIcon: "spinner-border text-primary",
@@ -2095,13 +2095,13 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			pageLink: "page-link ripple",
 			pagination: "pagination pagination-sm mx-auto me-md-0",
 			paginationContainer: "d-flex w-100",
-			searchContainer: "w-100 mb-1",
+			searchContainer: "w-100",
 			searchInputContainer: "form-input mx-auto me-md-0",
 			searchInputFilled: "input-filled input-sm",
 			searchInputOutline: "input-outline input-sm",
 			selectedRow: "table-active",
 			selectionCell: "text-center",
-			selectionContainer: "d-flex align-items-center gap-2 mb-1",
+			selectionContainer: "d-flex align-items-center gap-2",
 			selectionInput: "input-check",
 			table: "table table-bordered",
 			tableContainer: "table-responsive",
@@ -2109,7 +2109,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			tableSort: "table-sort",
 			tableSortAsc: "table-sort-asc",
 			tableSortDesc: "table-sort-desc",
-			topRow: "d-md-flex justify-content-between mb-2"
+			topRow: "d-md-flex align-items-center justify-content-between mb-2"
 		};
 		/** @type {TableOptions} */
 		static defaults = {
