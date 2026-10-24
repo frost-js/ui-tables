@@ -224,6 +224,7 @@ export function normalizeColumns(columns, headings) {
         orderData: null,
         orderable: true,
         render: null,
+        responsivePriority: 1000,
         searchable: true,
         type: 'auto',
         visible: true,
@@ -232,6 +233,11 @@ export function normalizeColumns(columns, headings) {
     }));
 
     for (const column of normalized) {
+        if (column.responsivePriority !== null &&
+            (!Number.isSafeInteger(column.responsivePriority) || column.responsivePriority < 0)) {
+            throw new TypeError('Responsive priority must be a nonnegative safe integer or null.');
+        }
+
         if (!['auto', 'string', 'number', 'date'].includes(column.type)) {
             throw new TypeError('Column type must be auto, string, number, or date.');
         }

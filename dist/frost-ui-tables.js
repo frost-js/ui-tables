@@ -196,6 +196,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			orderData: null,
 			orderable: true,
 			render: null,
+			responsivePriority: 1e3,
 			searchable: true,
 			type: "auto",
 			visible: true,
@@ -203,6 +204,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			...column
 		}));
 		for (const column of normalized) {
+			if (column.responsivePriority !== null && (!Number.isSafeInteger(column.responsivePriority) || column.responsivePriority < 0)) throw new TypeError("Responsive priority must be a nonnegative safe integer or null.");
 			if (![
 				"auto",
 				"string",
@@ -1970,6 +1972,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 	* @property {'asc'|'desc'} [dir='asc'] The first sort direction.
 	* @property {number[]|null} [orderData=null] Alternate sort column indexes.
 	* @property {boolean} [orderable=true] Whether the column can be sorted.
+	* @property {number|null} [responsivePriority=1000] Lower priorities remain visible longer; null prevents collapse.
 	* @property {boolean} [searchable=true] Whether local searches include the column.
 	* @property {boolean} [visible=true] Whether the column is displayed.
 	* @property {function(*): *} [format] Formats a cell value as HTML.
@@ -2024,6 +2027,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 	* @property {boolean} [lengthChange=true] Whether users can change the page length.
 	* @property {boolean} [ordering=true] Whether rows can be sorted.
 	* @property {boolean} [paging=true] Whether rows are paginated.
+	* @property {boolean} [responsive=false] Collapse columns into details when the container is too narrow.
 	* @property {boolean} [searching=true] Whether rows can be searched.
 	* @property {function(HTMLTableRowElement, TableRow, number): void} [createdRow] Receives an inserted row.
 	* @property {function(HTMLTableRowElement, TableRow, number, number, number): void} [rowCallback] Receives a rendered row and its indexes.
@@ -2071,6 +2075,10 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			columnPickerLabel: "form-check mb-1",
 			columnPickerText: "form-check-label",
 			container: "position-relative mb-2",
+			detailButton: "btn btn-outline-secondary btn-sm",
+			detailCell: "text-center",
+			detailList: "table-details-list",
+			detailRow: "table-details",
 			emptyCell: "text-center py-3",
 			infoContainer: "text-center text-md-start mb-2 mb-md-0 w-100",
 			lengthContainer: "d-flex justify-content-center justify-content-md-start w-100 mb-1",
@@ -2119,6 +2127,11 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 				page: "Page",
 				perPage: "Per Page",
 				search: "Search",
+				responsive: {
+					details: "Details",
+					hide: "Hide details for row {row}",
+					show: "Show details for row {row}"
+				},
 				selection: {
 					clear: "Clear selection",
 					count: "{count} selected",
@@ -2174,6 +2187,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			lengthChange: true,
 			ordering: true,
 			paging: true,
+			responsive: false,
 			searching: true
 		};
 		static layout = {
@@ -2196,12 +2210,15 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 				this.#renderPaginationContainer(container);
 			}
 		};
+		#collapsedColumns = /* @__PURE__ */ new Set();
 		#columnPickers = [];
 		#columns = [];
 		#container = null;
 		#data = [];
 		#domValues = /* @__PURE__ */ new WeakMap();
 		#drawVersion = 0;
+		#emptyCell = null;
+		#expandedRows = /* @__PURE__ */ new Set();
 		#filtered = 0;
 		#filteredIndexes = [];
 		#filters = [];
@@ -2224,6 +2241,12 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		#pagination = null;
 		#pending = null;
 		#requestVersion = 0;
+		#responsiveFooterCells = [];
+		#responsiveFrame = null;
+		#responsiveHeading = null;
+		#responsiveObserver = null;
+		#responsiveRows = [];
+		#responsiveWidth = null;
 		#results = [];
 		#rowFilter = null;
 		#rowIdIndexes = /* @__PURE__ */ new Map();
@@ -2238,6 +2261,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		#selectionInputs = /* @__PURE__ */ new WeakMap();
 		#selectionName = null;
 		#stateKey = null;
+		#tableContainer = null;
 		#tbody = null;
 		#term = "";
 		#tfoot = null;
@@ -2265,6 +2289,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 					"single",
 					"multiple"
 				].includes(this.options.selection) || this.options.selection && rowId === null) throw new TypeError("Selection must be false, single, or multiple and requires rowId.");
+				if (typeof this.options.responsive !== "boolean") throw new TypeError("Responsive must be a boolean.");
 				this.#selectionName = (0, _fr0st_ui.generateId)("table-selection");
 				if (!this.options.getResults) {
 					const data = this.options.data ?? getDomData(node, this.#domValues);
@@ -2362,12 +2387,24 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			this.#searchHandler?.cancel();
 			this.#requestVersion++;
 			this.#loadResults?.cancel();
+			this.#responsiveObserver?.disconnect();
+			if (this.#responsiveFrame !== null) cancelAnimationFrame(this.#responsiveFrame);
 			const pending = this.#pending;
 			this.#pending = null;
 			super.dispose();
 			for (const { dropdown } of this.#columnPickers) dropdown.dispose();
+			this.#collapsedColumns.clear();
 			this.#columnPickers = [];
+			this.#emptyCell = null;
+			this.#expandedRows.clear();
 			this.#footerCells = [];
+			this.#responsiveFooterCells = [];
+			this.#responsiveFrame = null;
+			this.#responsiveHeading = null;
+			this.#responsiveObserver = null;
+			this.#responsiveRows = [];
+			this.#responsiveWidth = null;
+			this.#tableContainer = null;
 			if (this.#id) _fr0st_query.default.removeAttribute(node, "id");
 			for (const [attribute, value] of [
 				["class", this.#originalClass],
@@ -2874,6 +2911,16 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 					}
 				});
 			}
+			if (this.options.responsive) {
+				this.#responsiveObserver = new ResizeObserver(([entry]) => {
+					if (entry.contentRect.width !== this.#responsiveWidth) {
+						this.#responsiveWidth = entry.contentRect.width;
+						this.#scheduleResponsive();
+					}
+				});
+				this.#responsiveObserver.observe(this.#tableContainer);
+				document.fonts.ready.then(() => this.#scheduleResponsive());
+			}
 			if (this.options.selection) {
 				_fr0st_query.default.addEventDelegate(this.#theadRow, "change.ui.table", "[data-ui-select-page]", (event) => {
 					if (_fr0st_query.default.getProperty(event.currentTarget, "checked")) this.selectRows();
@@ -2976,6 +3023,16 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			if (active()) this.#renderResults();
 		}
 		/**
+		* Restores focus when a disclosure control or its detail row is removed.
+		* @param {object} entry The rendered data row.
+		*/
+		#focusResponsiveRow(entry) {
+			const tabIndex = _fr0st_query.default.getAttribute(entry.row, "tabindex");
+			if (tabIndex === null) _fr0st_query.default.setAttribute(entry.row, { tabindex: -1 });
+			_fr0st_query.default.focus(entry.row);
+			if (tabIndex === null && _fr0st_query.default.getAttribute(entry.row, "tabindex") === "-1") _fr0st_query.default.removeAttribute(entry.row, "tabindex");
+		}
+		/**
 		* Selects ordered row indexes without changing the current view.
 		* @param {'page'|'filtered'|'all'} scope The row scope.
 		* @returns {number[]} The selected indexes.
@@ -3025,6 +3082,13 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			return this.#order.flatMap(([index, direction]) => {
 				return (this.#columns[index].orderData ?? [index]).map((column) => [column, direction]);
 			});
+		}
+		/**
+		* Counts rendered data and utility columns for spanning cells.
+		* @returns {number} The span, with a minimum of one for empty tables.
+		*/
+		#getRenderedColumnCount() {
+			return Math.max(1, this.#getVisibleColumns().length - this.#collapsedColumns.size + Number(Boolean(this.options.selection)) + Number(this.#collapsedColumns.size > 0));
 		}
 		/**
 		* Resolves and validates every identity before installing new data.
@@ -3216,6 +3280,22 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 				_fr0st_query.default.prepend(this.#theadRow, this.#selectionHeading);
 				for (const row of _fr0st_query.default.find("tr", this.#tfoot ?? [])) _fr0st_query.default.prepend(row, _fr0st_query.default.create("td", { class: this.constructor.classes.selectionCell }));
 			}
+			if (this.options.responsive) {
+				this.#responsiveHeading = _fr0st_query.default.create("th", {
+					class: this.constructor.classes.detailCell,
+					attributes: {
+						"aria-label": this.options.lang.responsive.details,
+						"hidden": true
+					}
+				});
+				_fr0st_query.default.append(this.#theadRow, this.#responsiveHeading);
+				for (const row of _fr0st_query.default.find("tr", this.#tfoot ?? [])) {
+					const cell = _fr0st_query.default.create("td", { attributes: { hidden: true } });
+					if (this.options.selection) _fr0st_query.default.insertAfter(cell, _fr0st_query.default.children(row)[0]);
+					else _fr0st_query.default.prepend(row, cell);
+					this.#responsiveFooterCells.push(cell);
+				}
+			}
 			_fr0st_query.default.hide(this.#loader);
 			_fr0st_query.default.after(this.node, this.#container);
 			_fr0st_query.default.append(this.#container, this.#loader);
@@ -3223,9 +3303,9 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 				this.#renderLayoutRow(this.options.layout.top, this.constructor.classes.topRow);
 				if (!this.node) return;
 			}
-			const tableContainer = _fr0st_query.default.create("div", { class: this.constructor.classes.tableContainer });
-			_fr0st_query.default.append(tableContainer, this.node);
-			_fr0st_query.default.append(this.#container, tableContainer);
+			this.#tableContainer = _fr0st_query.default.create("div", { class: this.constructor.classes.tableContainer });
+			_fr0st_query.default.append(this.#tableContainer, this.node);
+			_fr0st_query.default.append(this.#container, this.#tableContainer);
 			if (this.options.layout.bottom) {
 				this.#renderLayoutRow(this.options.layout.bottom, this.constructor.classes.bottomRow);
 				if (!this.node) return;
@@ -3347,7 +3427,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 				if (!this.#columns[index].visible) _fr0st_query.default.detach(child);
 				else headings[index] = child;
 			}
-			let lastCell = this.#selectionHeading;
+			let lastCell = this.#responsiveHeading ?? this.#selectionHeading;
 			for (const [index, heading] of this.#headings.entries()) {
 				if (!this.#columns[index].visible) continue;
 				let cell;
@@ -3610,6 +3690,78 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			_fr0st_query.default.append(paginationContainer, this.#pagination);
 		}
 		/**
+		* Creates the disclosure control without changing data column indexes.
+		* @param {object} entry The rendered data row.
+		*/
+		#renderResponsiveControl(entry) {
+			if (entry.button) return;
+			entry.detailId = (0, _fr0st_ui.generateId)("table-details");
+			entry.button = _fr0st_query.default.create("button", {
+				class: this.constructor.classes.detailButton,
+				text: this.options.lang.responsive.details,
+				attributes: {
+					"type": "button",
+					"aria-controls": entry.detailId,
+					"aria-expanded": false
+				}
+			});
+			_fr0st_query.default.addEvent(entry.button, "click.ui.table", () => {
+				if (this.#data[entry.index] !== entry.data) return;
+				if (this.#expandedRows.has(entry.key)) this.#expandedRows.delete(entry.key);
+				else this.#expandedRows.add(entry.key);
+				this.#renderResponsiveDetails(entry);
+			});
+			_fr0st_query.default.append(entry.control, entry.button);
+		}
+		/**
+		* Renders display values for collapsed fields without invoking data-row callbacks.
+		* @param {object} entry The rendered data row.
+		*/
+		#renderResponsiveDetails(entry) {
+			if (this.#data[entry.index] !== entry.data) {
+				_fr0st_query.default.setProperty(entry.button, "disabled", true);
+				return;
+			}
+			const version = this.#drawVersion;
+			const expanded = this.#expandedRows.has(entry.key);
+			const label = this.options.lang.responsive[expanded ? "hide" : "show"];
+			_fr0st_query.default.setAttribute(entry.button, {
+				"aria-expanded": expanded,
+				"aria-label": label.replace("{row}", String(this.options.rowId === null ? entry.pageIndex + 1 : entry.key))
+			});
+			if (!expanded) {
+				if (entry.detail) {
+					_fr0st_query.default.remove(entry.detail);
+					entry.detail = null;
+				}
+				return;
+			}
+			const list = _fr0st_query.default.create("dl", { class: this.constructor.classes.detailList });
+			for (const index of this.#getVisibleColumns()) {
+				if (!this.#collapsedColumns.has(index)) continue;
+				const heading = _fr0st_query.default.create("div");
+				_fr0st_query.default.setHtml(heading, _fr0st_query.default.sanitize(String(this.#headings[index].text)));
+				const text = _fr0st_query.default.getText(heading).trim() || this.options.lang.column.replace("{column}", index + 1);
+				const value = this.#getValue(entry.index, index, "display");
+				if (!this.node || version !== this.#drawVersion) return;
+				const html = this.options.sanitize(String(value ?? ""));
+				if (!this.node || version !== this.#drawVersion) return;
+				_fr0st_query.default.append(list, [_fr0st_query.default.create("dt", { text }), _fr0st_query.default.create("dd", { html })]);
+			}
+			const cell = _fr0st_query.default.create("td", { attributes: { colspan: this.#getRenderedColumnCount() } });
+			_fr0st_query.default.append(cell, list);
+			if (!entry.detail) {
+				entry.detail = _fr0st_query.default.create("tr", {
+					class: this.constructor.classes.detailRow,
+					attributes: { id: entry.detailId }
+				});
+				_fr0st_query.default.insertAfter(entry.detail, entry.row);
+			}
+			_fr0st_query.default.empty(entry.detail);
+			_fr0st_query.default.append(entry.detail, cell);
+			_fr0st_query.default.setProperty(entry.detail, "hidden", false);
+		}
+		/**
 		* Renders the table results.
 		*/
 		#renderResults() {
@@ -3627,7 +3779,16 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			const proceed = this.options.preDrawCallback?.call(this);
 			if (!active() || proceed === false) return;
 			_fr0st_query.default.empty(this.#tbody);
+			this.#emptyCell = null;
+			this.#responsiveRows = [];
+			this.#collapsedColumns.clear();
+			if (this.options.rowId === null) this.#expandedRows.clear();
+			else {
+				const ids = new Set(this.#rowIndexes.map((index) => this.#rowIds[index]));
+				this.#expandedRows = new Set([...this.#expandedRows].filter((id) => ids.has(id)));
+			}
 			this.#renderHeadings();
+			this.#syncResponsiveColumns();
 			this.#syncFooter();
 			if (!active()) return;
 			const end = this.#offset + this.#results.length;
@@ -3638,11 +3799,12 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			if (!active()) return;
 			if (!this.#results.length) {
 				const row = _fr0st_query.default.create("tr");
-				_fr0st_query.default.append(row, _fr0st_query.default.create("td", {
+				this.#emptyCell = _fr0st_query.default.create("td", {
 					class: this.constructor.classes.emptyCell,
 					text: this.#term || this.#filters.length || this.#rowFilter ? this.options.lang.noResults : this.options.lang.noData,
-					attributes: { colspan: Math.max(1, this.#getVisibleColumns().length + Number(Boolean(this.options.selection))) }
-				}));
+					attributes: { colspan: this.#getRenderedColumnCount() }
+				});
+				_fr0st_query.default.append(row, this.#emptyCell);
 				_fr0st_query.default.append(this.#tbody, row);
 			} else for (const [index, result] of this.#results.entries()) {
 				const row = this.#renderRow(result, index);
@@ -3657,6 +3819,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			this.options.drawCallback?.call(this);
 			if (!active()) return;
 			if (this.#tfoot) this.options.footerCallback?.call(this, this.#tfoot, this.#data, this.#offset, end, [...this.#rowIndexes]);
+			if (active()) this.#updateResponsive();
 			if (active()) _fr0st_query.default.triggerEvent(this.node, "draw.ui.table");
 		}
 		/**
@@ -3687,6 +3850,27 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 				_fr0st_query.default.append(row, cell);
 				if (this.#selectedIds.has(id)) _fr0st_query.default.addClass(row, this.constructor.classes.selectedRow);
 			}
+			let responsive;
+			if (this.options.responsive) {
+				const index = this.#rowIndexes[rowIndex];
+				const control = _fr0st_query.default.create("td", {
+					class: this.constructor.classes.detailCell,
+					attributes: { hidden: true }
+				});
+				_fr0st_query.default.append(row, control);
+				responsive = {
+					row,
+					control,
+					data,
+					index,
+					pageIndex: rowIndex,
+					key: this.options.rowId === null ? index : this.#rowIds[index],
+					cells: /* @__PURE__ */ new Map(),
+					button: null,
+					detail: null
+				};
+				this.#responsiveRows.push(responsive);
+			}
 			for (const [index, column] of this.#columns.entries()) {
 				if (!column.visible) continue;
 				const value = _fr0st_query.default._getDot(data, String(column.data));
@@ -3698,6 +3882,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 					html,
 					class: column.class || ""
 				});
+				responsive?.cells.set(index, cell);
 				column.createdCell?.call(this, cell, value, data, rowIndex, index);
 				if (!this.node || version !== this.#drawVersion) return row;
 				_fr0st_query.default.append(row, cell);
@@ -3747,6 +3932,16 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			_fr0st_query.default.addEvent(this.#selectionClear, "click.ui.table", () => this.setSelectedIds([]));
 			_fr0st_query.default.append(container, [this.#selectionCount, this.#selectionClear]);
 			this.#syncSelection();
+		}
+		/**
+		* Coalesces container and font changes without drawing or loading data.
+		*/
+		#scheduleResponsive() {
+			if (!this.node || !this.options.responsive || this.#responsiveFrame !== null) return;
+			this.#responsiveFrame = requestAnimationFrame(() => {
+				this.#responsiveFrame = null;
+				this.#updateResponsive();
+			});
 		}
 		/**
 		* Changes selection using the shared ordered data scopes.
@@ -3868,7 +4063,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		*/
 		#syncFooter() {
 			for (const { cell, columns, hidden } of this.#footerCells) {
-				const count = columns.filter((index) => this.#columns[index]?.visible).length;
+				const count = columns.filter((index) => this.#columns[index]?.visible && !this.#collapsedColumns.has(index)).length;
 				_fr0st_query.default.setProperty(cell, "hidden", hidden || !count);
 				_fr0st_query.default.setProperty(cell, "colSpan", Math.max(1, count));
 			}
@@ -3886,6 +4081,22 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 				_fr0st_query.default.append(this.#lengthSelect, option);
 			}
 			_fr0st_query.default.setValue(this.#lengthSelect, this.#limit);
+		}
+		/**
+		* Applies temporary collapse separately from configured column visibility.
+		*/
+		#syncResponsiveColumns() {
+			if (!this.options.responsive) return;
+			const collapsed = this.#collapsedColumns;
+			for (const cell of _fr0st_query.default.children(this.#theadRow, "[data-ui-index]")) _fr0st_query.default.setProperty(cell, "hidden", collapsed.has(Number(_fr0st_query.default.getDataset(cell, "uiIndex"))));
+			for (const entry of this.#responsiveRows) {
+				for (const [index, cell] of entry.cells) _fr0st_query.default.setProperty(cell, "hidden", collapsed.has(index));
+				_fr0st_query.default.setProperty(entry.control, "hidden", !collapsed.size);
+			}
+			_fr0st_query.default.setProperty(this.#responsiveHeading, "hidden", !collapsed.size);
+			for (const cell of this.#responsiveFooterCells) _fr0st_query.default.setProperty(cell, "hidden", !collapsed.size);
+			if (this.#emptyCell) _fr0st_query.default.setProperty(this.#emptyCell, "colSpan", this.#getRenderedColumnCount());
+			this.#syncFooter();
 		}
 		/**
 		* Synchronizes mounted selection controls without rebuilding rows or moving focus.
@@ -3965,6 +4176,60 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			} else this.#offset = 0;
 			this.#rowIndexes = indexes;
 			this.#refreshResults();
+		}
+		/**
+		* Measures visible columns and reconciles responsive details without a data redraw.
+		*/
+		#updateResponsive() {
+			if (!this.node || !this.options.responsive || !this.#tableContainer.clientWidth) return;
+			const version = this.#drawVersion;
+			const active = () => this.node && version === this.#drawVersion;
+			const width = this.#tableContainer.clientWidth;
+			const previous = this.#collapsedColumns;
+			const focused = document.activeElement;
+			const focusedEntry = this.#responsiveRows.find((entry) => _fr0st_query.default.isSame(entry.button, focused) || entry.detail && _fr0st_query.default.hasDescendent(entry.detail, focused));
+			const visible = this.#getVisibleColumns();
+			const candidates = visible.filter((index) => this.#columns[index].responsivePriority !== null).sort((a, b) => this.#columns[b].responsivePriority - this.#columns[a].responsivePriority || b - a);
+			const releases = [];
+			try {
+				for (const [property, value] of [
+					["width", "max-content"],
+					["max-width", "none"],
+					["table-layout", "auto"]
+				]) releases.push(_fr0st_query.default.setStyleLock(this.node, property, value, { important: true }));
+				for (const entry of this.#responsiveRows) if (entry.detail) _fr0st_query.default.setProperty(entry.detail, "hidden", true);
+				this.#collapsedColumns = /* @__PURE__ */ new Set();
+				this.#syncResponsiveColumns();
+				for (const index of candidates) {
+					if (!active()) return;
+					if (visible.length - this.#collapsedColumns.size <= 1 || this.node.getBoundingClientRect().width <= width + 1) break;
+					this.#collapsedColumns.add(index);
+					for (const entry of this.#responsiveRows) this.#renderResponsiveControl(entry);
+					this.#syncResponsiveColumns();
+				}
+			} finally {
+				for (const release of releases) release();
+			}
+			const changed = previous.size !== this.#collapsedColumns.size || [...previous].some((index) => !this.#collapsedColumns.has(index));
+			if (!this.#collapsedColumns.size) this.#expandedRows.clear();
+			for (const entry of this.#responsiveRows) {
+				if (!this.#collapsedColumns.size) {
+					if (entry === focusedEntry) {
+						this.#focusResponsiveRow(entry);
+						if (!active()) return;
+					}
+					_fr0st_query.default.remove(entry.button);
+					_fr0st_query.default.remove(entry.detail);
+					entry.button = null;
+					entry.detail = null;
+				} else if (changed || !entry.detail) this.#renderResponsiveDetails(entry);
+				else _fr0st_query.default.setProperty(entry.detail, "hidden", false);
+				if (!active()) return;
+				if (entry === focusedEntry && this.#collapsedColumns.size && !_fr0st_query.default.isSame(focused, document.activeElement)) {
+					_fr0st_query.default.focus(focused.isConnected ? focused : entry.button);
+					if (!active()) return;
+				}
+			}
 		}
 	};
 

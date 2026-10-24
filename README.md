@@ -18,6 +18,7 @@ Sortable, searchable tables for Frost UI, with pagination, remote data, and CSV,
 - Column filters, numeric/date ranges, and custom local row predicates
 - Bulk local updates and scoped access to page, filtered, or all rows
 - Stable row IDs, keyed row updates, and single/multiple selection
+- Responsive column priorities and accessible detail rows
 - Serializable view snapshots and atomic state restoration
 - Debounced remote requests, optional cancellation, and stale-response protection
 - Row/cell/header/footer callbacks and custom layouts/buttons
@@ -166,6 +167,7 @@ Use methods to update active instances. Set `Table.defaults` and `Table.classes`
 | `ordering` | `boolean` | `true` | Enable sorting. |
 | `paging` | `boolean` | `true` | Enable pagination; `false` displays all loaded rows. |
 | `preDrawCallback` | `function \| null` | `null` | Before drawing; return `false` to retain current DOM. |
+| `responsive` | `boolean` | `false` | Collapse lower-priority columns into detail rows when the container narrows. |
 | `rowCallback` | `function \| null` | `null` | Customize each row before insertion. |
 | `rowId` | `string \| number \| function \| null` | `null` | Stable identity accessor: a data key/dot path, array key, or pure callback. |
 | `sanitize` | `function` | `(html) => $.sanitize(html)` | Sanitize heading and cell HTML, including formatted values. |
@@ -180,6 +182,7 @@ Table.defaults.lang = {
     infoFiltered: 'Showing results {start} to {end} of {filtered} (filtered from {total} total)',
     noData: 'No data available', noResults: 'No results to show',
     page: 'Page', perPage: 'Per Page', search: 'Search', loading: 'Loading results',
+    responsive: { details: 'Details', show: 'Show details for row {row}', hide: 'Hide details for row {row}' },
     selection: { clear: 'Clear selection', count: '{count} selected', page: 'Select all rows on this page', row: 'Select row {id}' },
     column: 'Column {column}',
     paginate: { first: 'First', last: 'Last', next: 'Next', previous: 'Previous' },
@@ -217,6 +220,7 @@ Table.init(document.querySelector('#scores'), {
 | `dir` | `'asc'` | Initial sort direction when this heading is activated. |
 | `orderData` | `null` | Alternate array of column indexes used to sort this column. |
 | `orderable` | `true` | Allow sorting on this heading. |
+| `responsivePriority` | `1000` | Nonnegative safe integer; lower values remain visible longer. `null` prevents responsive collapse. |
 | `searchable` | `true` | Include this column in local search. |
 | `visible` | `true` | Display the column. Hidden columns can still participate in sorting/searching. |
 | `format(value)` | `null` | Return cell HTML; runs with the instance as `this`. |
@@ -381,6 +385,39 @@ $.addEvent(node, 'selectionchange.ui.table', (event) => {
 ```
 
 Selection is committed before notification. Listeners may change selection again, replace data, or dispose the table; older work stops when a newer data operation takes over. Data-driven pruning may notify before the new rows are drawn; use `draw.ui.table` for completed DOM updates.
+
+### Responsive detail rows
+
+Set `responsive: true` to collapse columns into an expandable detail row when the table's container is too narrow. It is disabled by default; horizontal scrolling remains available when retained columns cannot fit.
+
+```js
+const table = new Table(node, {
+    data: employees,
+    rowId: 'id',
+    responsive: true,
+    columns: [
+        { data: 'name', responsivePriority: null },
+        { data: 'team', responsivePriority: 1 },
+        { data: 'email', responsivePriority: 2 },
+        { data: 'notes', responsivePriority: 3 },
+    ],
+    buttons: [{ type: 'columns' }],
+});
+```
+
+`responsivePriority` defaults to `1000`. Higher numbers collapse first; ties collapse from right to left in original column order. `null` keeps a column in the main row. Priorities must be nonnegative safe integers or `null`; invalid values throw `TypeError`. At least one configured-visible data column remains in the main row. The `responsive` option must be boolean.
+
+The component measures existing headings, cells, and footer spans at their intrinsic width, including selection and disclosure controls. It observes container width, coalesces resize work, and remeasures after data draws and initial font loading. Tables initialized in hidden containers defer measurement until usable width is available. Layout-only updates do not recalculate results, emit draw/state events, or request remote data. Data-draw callbacks run before the responsive layout is finalized; `draw.ui.table` reports the completed draw including its detail rows.
+
+Responsive collapse is separate from configured visibility. A checked picker entry may be in details, while a user-hidden column remains absent from both the main row and details. Collapse does not change `getState()`, search/order behavior, or default export columns. Explicit getters and exports continue to address original data columns. Headers, footers, empty-result cells, and detail-row spans track the rendered columns.
+
+A native Details button appears in a separate utility cell when fields are collapsed. Enter/Space toggles a companion row with labels in original column order. Labels use heading text or the localized numbered fallback; values use the existing sanitized display renderer with the original source row and column context. Opening details does not rerun row/cell creation callbacks. Existing live controls are not cloned into details; stateful widgets and custom detail-renderer callbacks are outside this feature.
+
+The button exposes `aria-expanded` and a generated `aria-controls` ID. `lang.responsive.details` controls its visible text; `show` and `hide` accept `{row}`, using the stable ID when configured or the one-based page row number otherwise. When widening removes a focused disclosure or its detail content, focus moves to the owning data row. Selecting rows, clicking links, and toggling details remain separate interactions.
+
+With `rowId`, expansion survives redraws and remote reloads only for IDs still present on the displayed page. It is discarded when a row leaves that page. Without `rowId`, every data redraw clears expansion so a positional index cannot transfer it to another record. Revealing all columns clears expansion in either mode. Expansion is transient and excluded from view snapshots.
+
+Detail rows do not contribute to counts, pagination, selected IDs, data getters, exports, or data-row callback arguments. Callbacks that inspect the rendered DOM should account for the additional utility cells and companion rows. Disposal disconnects observation, cancels queued layout work, and restores the original table markup.
 
 ### Column filters and row predicates
 

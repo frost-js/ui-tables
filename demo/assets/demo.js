@@ -100,31 +100,66 @@ $.ready(() => {
         $.setAttribute(event.currentTarget, 'aria-pressed', String(rtl));
     });
 
+    const detailRows = rows.map(([name, team, score], index) => [
+        name, team, score, `member${index + 1}@example.com`, 'Available for project reviews',
+    ]);
     let dataTable;
     const initializeData = () => {
         dataTable?.dispose();
         const objects = $.getValue(node('data-source')) === 'objects';
         const options = objects ? {
-            data: rows.map(([name, team, score]) => ({ person: { name, team }, score })),
-            columns: [{ data: 'person.name' }, { data: 'person.team' }, { data: 'score', class: 'text-end' }],
-        } : { data: rows };
-        dataTable = init('data-table', { ...options, order: [[1, 'asc'], [2, 'desc']] });
+            data: detailRows.map(([name, team, score, email, notes]) => ({ person: { name, team, email }, score, notes })),
+            rowId: 'person.name',
+            columns: [
+                { data: 'person.name', responsivePriority: null },
+                { data: 'person.team', responsivePriority: 1 },
+                { data: 'score', class: 'text-end', responsivePriority: 2 },
+                { data: 'person.email', responsivePriority: 3 },
+                { data: 'notes', responsivePriority: 4 },
+            ],
+        } : {
+            data: detailRows,
+            rowId: 0,
+            columns: [
+                { responsivePriority: null }, { responsivePriority: 1 },
+                { class: 'text-end', responsivePriority: 2 }, { responsivePriority: 3 }, { responsivePriority: 4 },
+            ],
+        };
+        dataTable = init('data-table', { ...options, responsive: true, buttons: [{ type: 'columns' }], order: [[1, 'asc'], [2, 'desc']] });
         $.setText(node('data-config'), objects ?
             `Table.init(table, {
-    data: [{ person: { name: 'Alice', team: 'Design' }, score: 80 }],
+    data: [{ person: { name: 'Alice', team: 'Design', email: 'alice@example.com' }, score: 80, notes: 'Available for reviews' }],
+    rowId: 'person.name',
+    responsive: true,
     columns: [
-        { data: 'person.name' },
-        { data: 'person.team' },
-        { data: 'score', class: 'text-end' },
+        { data: 'person.name', responsivePriority: null },
+        { data: 'person.team', responsivePriority: 1 },
+        { data: 'score', class: 'text-end', responsivePriority: 2 },
+        { data: 'person.email', responsivePriority: 3 },
+        { data: 'notes', responsivePriority: 4 },
     ],
+    buttons: [{ type: 'columns' }],
     order: [[1, 'asc'], [2, 'desc']],
 });` :
             `Table.init(table, {
-    data: [['Alice', 'Design', 80]],
+    data: [['Alice', 'Design', 80, 'alice@example.com', 'Available for reviews']],
+    rowId: 0,
+    responsive: true,
+    columns: [
+        { responsivePriority: null },
+        { responsivePriority: 1 },
+        { class: 'text-end', responsivePriority: 2 },
+        { responsivePriority: 3 },
+        { responsivePriority: 4 },
+    ],
+    buttons: [{ type: 'columns' }],
     order: [[1, 'asc'], [2, 'desc']],
 });`);
     };
     $.addEvent(node('data-source'), 'change', initializeData);
+    $.addEvent(node('data-width'), 'change', () => {
+        $.setStyle(node('data-preview'), { 'max-width': $.getValue(node('data-width')) === 'narrow' ? '20rem' : 'none' });
+    });
     initializeData();
 
     const callbackTable = init('callback-table', {

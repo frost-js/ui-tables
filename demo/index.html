@@ -123,13 +123,18 @@
                 <div class="col-xl-6">
                     <div class="card card-body h-100 p-4">
                         <h3 class="h5">Arrays and nested objects</h3>
-                        <p class="text-body-secondary">Both sources produce the same columns. Switch the source to compare their configuration.</p>
+                        <p class="text-body-secondary">Switch data sources or narrow the preview. Details reveal collapsed fields; Columns controls which fields are included.</p>
                         <label class="mb-2" for="data-source">Data source</label>
                         <select class="input-outline mb-3" id="data-source" aria-controls="data-table data-config">
                             <option value="arrays">Arrays</option>
                             <option value="objects">Nested objects</option>
                         </select>
-                        <div class="demo-table">
+                        <label class="mb-2" for="data-width">Preview width</label>
+                        <select class="input-outline mb-3" id="data-width" aria-controls="data-preview">
+                            <option value="full">Available width</option>
+                            <option value="narrow">Narrow</option>
+                        </select>
+                        <div class="demo-table" id="data-preview">
                             <table id="data-table">
                                 <caption>Local team scores</caption>
                                 <thead>
@@ -137,6 +142,8 @@
                                         <th>Name</th>
                                         <th>Team</th>
                                         <th>Score</th>
+                                        <th>Email</th>
+                                        <th>Notes</th>
                                     </tr>
                                 </thead>
                                 <tbody></tbody>

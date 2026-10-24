@@ -1,6 +1,6 @@
 # Proposal: Row identity, selection, and table controls
 
-Status: Stable row IDs, row selection, and the column visibility picker (items 1–3) are implemented; the new picker tests await CI validation. Responsive detail rows (item 4) remain proposed. See the [README](./README.md#stable-row-identity) for the supported APIs.
+Status: Items 1–4 are implemented; the new responsive tests await CI validation. See the [README](./README.md#stable-row-identity) for the supported APIs.
 
 ## Recommendation
 
@@ -188,7 +188,7 @@ No additional persistence mechanism is needed: existing column visibility alread
 
 ## 4. Responsive detail rows
 
-### Proposed API
+### Implemented API
 
 Add `responsive: true`, defaulting to `false`, and a `columns.responsivePriority` option. Smaller numbers have higher priority to remain in the main row. Use a default priority of `1000`; `null` means the column must remain in the main row.
 

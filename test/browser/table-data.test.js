@@ -72,6 +72,43 @@ test.describe('Table remote results', () => {
         });
     });
 
+    test.describe('responsive details', () => {
+        test.use({ mockClock: false });
+
+        test('resizes and expands loaded records without requests, preserving expansion only for current IDs', async ({ page }) => {
+            await page.evaluate(() => {
+                $.append('thead tr', $.create('th', { text: 'Team' }));
+                const host = $.create('div', { attributes: { id: 'responsive-host' }, style: { width: '700px' } });
+                $.before('#table', host);
+                $.append(host, $.findOne('#table'));
+                $.append(document.head, $.create('style', {
+                    text: '#table th[data-ui-index], #table .test-cell { min-width: 200px; }',
+                }));
+                window.table = window.startRemote({
+                    rowId: 0,
+                    responsive: true,
+                    columns: [{ class: 'test-cell', responsivePriority: null }, { class: 'test-cell' }],
+                });
+            });
+            await expect.poll(() => page.evaluate(() => window.requests.length)).toBe(1);
+            await page.evaluate(() => window.requests[0].resolve({ results: [['One', 'Team A']], total: 1, filtered: 1 }));
+            await expect(page.locator('th[data-ui-index]:visible')).toHaveText(['Name', 'Team']);
+            await page.evaluate(() => $.setStyle('#responsive-host', { width: '240px' }));
+            await page.getByRole('button', { name: 'Show details for row One', exact: true }).click();
+            await expect(page.locator('.table-details dd')).toHaveText('Team A');
+            expect(await page.evaluate(() => window.requests.length)).toBe(1);
+            await page.evaluate(() => window.table.reload());
+            await expect.poll(() => page.evaluate(() => window.requests.length)).toBe(2);
+            await page.evaluate(() => window.requests[1].resolve({ results: [['One', 'Updated team']], total: 1, filtered: 1 }));
+            await expect(page.locator('.table-details dd')).toHaveText('Updated team');
+            await page.evaluate(() => window.table.reload());
+            await expect.poll(() => page.evaluate(() => window.requests.length)).toBe(3);
+            await page.evaluate(() => window.requests[2].resolve({ results: [['Another', 'Team B']], total: 1, filtered: 1 }));
+            await expect(page.locator('.table-details')).toHaveCount(0);
+            await expect(page.getByRole('button', { name: 'Show details for row Another', exact: true })).toBeVisible();
+        });
+    });
+
     test.describe('column picker', () => {
         test('toggles loaded columns without requesting data and synchronizes pending restored state', async ({ page }) => {
             await page.evaluate(() => window.table = window.startRemote({ buttons: [{ type: 'columns' }] }));

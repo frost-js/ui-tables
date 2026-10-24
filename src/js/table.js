@@ -40,6 +40,7 @@ import {
  * @property {'asc'|'desc'} [dir='asc'] The first sort direction.
  * @property {number[]|null} [orderData=null] Alternate sort column indexes.
  * @property {boolean} [orderable=true] Whether the column can be sorted.
+ * @property {number|null} [responsivePriority=1000] Lower priorities remain visible longer; null prevents collapse.
  * @property {boolean} [searchable=true] Whether local searches include the column.
  * @property {boolean} [visible=true] Whether the column is displayed.
  * @property {function(*): *} [format] Formats a cell value as HTML.
@@ -94,6 +95,7 @@ import {
  * @property {boolean} [lengthChange=true] Whether users can change the page length.
  * @property {boolean} [ordering=true] Whether rows can be sorted.
  * @property {boolean} [paging=true] Whether rows are paginated.
+ * @property {boolean} [responsive=false] Collapse columns into details when the container is too narrow.
  * @property {boolean} [searching=true] Whether rows can be searched.
  * @property {function(HTMLTableRowElement, TableRow, number): void} [createdRow] Receives an inserted row.
  * @property {function(HTMLTableRowElement, TableRow, number, number, number): void} [rowCallback] Receives a rendered row and its indexes.
@@ -154,6 +156,10 @@ export default class Table extends BaseComponent {
         columnPickerLabel: 'form-check mb-1',
         columnPickerText: 'form-check-label',
         container: 'position-relative mb-2',
+        detailButton: 'btn btn-outline-secondary btn-sm',
+        detailCell: 'text-center',
+        detailList: 'table-details-list',
+        detailRow: 'table-details',
         emptyCell: 'text-center py-3',
         infoContainer: 'text-center text-md-start mb-2 mb-md-0 w-100',
         lengthContainer: 'd-flex justify-content-center justify-content-md-start w-100 mb-1',
@@ -202,6 +208,11 @@ export default class Table extends BaseComponent {
             page: 'Page',
             perPage: 'Per Page',
             search: 'Search',
+            responsive: {
+                details: 'Details',
+                hide: 'Hide details for row {row}',
+                show: 'Show details for row {row}',
+            },
             selection: {
                 clear: 'Clear selection',
                 count: '{count} selected',
@@ -252,6 +263,7 @@ export default class Table extends BaseComponent {
         lengthChange: true,
         ordering: true,
         paging: true,
+        responsive: false,
         searching: true,
     };
     // Table layout
@@ -276,12 +288,15 @@ export default class Table extends BaseComponent {
         },
     };
 
+    #collapsedColumns = new Set();
     #columnPickers = [];
     #columns = [];
     #container = null;
     #data = [];
     #domValues = new WeakMap();
     #drawVersion = 0;
+    #emptyCell = null;
+    #expandedRows = new Set();
     #filtered = 0;
     #filteredIndexes = [];
     #filters = [];
@@ -304,6 +319,12 @@ export default class Table extends BaseComponent {
     #pagination = null;
     #pending = null;
     #requestVersion = 0;
+    #responsiveFooterCells = [];
+    #responsiveFrame = null;
+    #responsiveHeading = null;
+    #responsiveObserver = null;
+    #responsiveRows = [];
+    #responsiveWidth = null;
     #results = [];
     #rowFilter = null;
     #rowIdIndexes = new Map();
@@ -318,6 +339,7 @@ export default class Table extends BaseComponent {
     #selectionInputs = new WeakMap();
     #selectionName = null;
     #stateKey = null;
+    #tableContainer = null;
     #tbody = null;
     #term = '';
     #tfoot = null;
@@ -359,6 +381,10 @@ export default class Table extends BaseComponent {
             if (![false, 'single', 'multiple'].includes(this.options.selection) ||
                 (this.options.selection && rowId === null)) {
                 throw new TypeError('Selection must be false, single, or multiple and requires rowId.');
+            }
+
+            if (typeof this.options.responsive !== 'boolean') {
+                throw new TypeError('Responsive must be a boolean.');
             }
 
             this.#selectionName = generateId('table-selection');
@@ -526,6 +552,10 @@ export default class Table extends BaseComponent {
         this.#searchHandler?.cancel();
         this.#requestVersion++;
         this.#loadResults?.cancel();
+        this.#responsiveObserver?.disconnect();
+        if (this.#responsiveFrame !== null) {
+            cancelAnimationFrame(this.#responsiveFrame);
+        }
 
         const pending = this.#pending;
         this.#pending = null;
@@ -537,8 +567,18 @@ export default class Table extends BaseComponent {
             dropdown.dispose();
         }
 
+        this.#collapsedColumns.clear();
         this.#columnPickers = [];
+        this.#emptyCell = null;
+        this.#expandedRows.clear();
         this.#footerCells = [];
+        this.#responsiveFooterCells = [];
+        this.#responsiveFrame = null;
+        this.#responsiveHeading = null;
+        this.#responsiveObserver = null;
+        this.#responsiveRows = [];
+        this.#responsiveWidth = null;
+        this.#tableContainer = null;
 
         if (this.#id) {
             $.removeAttribute(node, 'id');
@@ -1300,6 +1340,17 @@ export default class Table extends BaseComponent {
             });
         }
 
+        if (this.options.responsive) {
+            this.#responsiveObserver = new ResizeObserver(([entry]) => {
+                if (entry.contentRect.width !== this.#responsiveWidth) {
+                    this.#responsiveWidth = entry.contentRect.width;
+                    this.#scheduleResponsive();
+                }
+            });
+            this.#responsiveObserver.observe(this.#tableContainer);
+            document.fonts.ready.then(() => this.#scheduleResponsive());
+        }
+
         if (this.options.selection) {
             $.addEventDelegate(this.#theadRow, 'change.ui.table', '[data-ui-select-page]', (event) => {
                 if ($.getProperty(event.currentTarget, 'checked')) {
@@ -1479,6 +1530,24 @@ export default class Table extends BaseComponent {
     }
 
     /**
+     * Restores focus when a disclosure control or its detail row is removed.
+     * @param {object} entry The rendered data row.
+     */
+    #focusResponsiveRow(entry) {
+        const tabIndex = $.getAttribute(entry.row, 'tabindex');
+
+        if (tabIndex === null) {
+            $.setAttribute(entry.row, { tabindex: -1 });
+        }
+
+        $.focus(entry.row);
+
+        if (tabIndex === null && $.getAttribute(entry.row, 'tabindex') === '-1') {
+            $.removeAttribute(entry.row, 'tabindex');
+        }
+    }
+
+    /**
      * Selects ordered row indexes without changing the current view.
      * @param {'page'|'filtered'|'all'} scope The row scope.
      * @returns {number[]} The selected indexes.
@@ -1552,6 +1621,15 @@ export default class Table extends BaseComponent {
 
             return columns.map((column) => [column, direction]);
         });
+    }
+
+    /**
+     * Counts rendered data and utility columns for spanning cells.
+     * @returns {number} The span, with a minimum of one for empty tables.
+     */
+    #getRenderedColumnCount() {
+        return Math.max(1, this.#getVisibleColumns().length - this.#collapsedColumns.size +
+            Number(Boolean(this.options.selection)) + Number(this.#collapsedColumns.size > 0));
     }
 
     /**
@@ -1867,6 +1945,26 @@ export default class Table extends BaseComponent {
             }
         }
 
+        if (this.options.responsive) {
+            this.#responsiveHeading = $.create('th', {
+                class: this.constructor.classes.detailCell,
+                attributes: { 'aria-label': this.options.lang.responsive.details, 'hidden': true },
+            });
+            $.append(this.#theadRow, this.#responsiveHeading);
+
+            for (const row of $.find('tr', this.#tfoot ?? [])) {
+                const cell = $.create('td', { attributes: { hidden: true } });
+
+                if (this.options.selection) {
+                    $.insertAfter(cell, $.children(row)[0]);
+                } else {
+                    $.prepend(row, cell);
+                }
+
+                this.#responsiveFooterCells.push(cell);
+            }
+        }
+
         $.hide(this.#loader);
         $.after(this.node, this.#container);
         $.append(this.#container, this.#loader);
@@ -1879,12 +1977,12 @@ export default class Table extends BaseComponent {
             }
         }
 
-        const tableContainer = $.create('div', {
+        this.#tableContainer = $.create('div', {
             class: this.constructor.classes.tableContainer,
         });
 
-        $.append(tableContainer, this.node);
-        $.append(this.#container, tableContainer);
+        $.append(this.#tableContainer, this.node);
+        $.append(this.#container, this.#tableContainer);
 
         if (this.options.layout.bottom) {
             this.#renderLayoutRow(this.options.layout.bottom, this.constructor.classes.bottomRow);
@@ -2051,7 +2149,7 @@ export default class Table extends BaseComponent {
             }
         }
 
-        let lastCell = this.#selectionHeading;
+        let lastCell = this.#responsiveHeading ?? this.#selectionHeading;
 
         for (const [index, heading] of this.#headings.entries()) {
             if (!this.#columns[index].visible) {
@@ -2466,6 +2564,106 @@ export default class Table extends BaseComponent {
     }
 
     /**
+     * Creates the disclosure control without changing data column indexes.
+     * @param {object} entry The rendered data row.
+     */
+    #renderResponsiveControl(entry) {
+        if (entry.button) {
+            return;
+        }
+
+        entry.detailId = generateId('table-details');
+        entry.button = $.create('button', {
+            class: this.constructor.classes.detailButton,
+            text: this.options.lang.responsive.details,
+            attributes: { 'type': 'button', 'aria-controls': entry.detailId, 'aria-expanded': false },
+        });
+        $.addEvent(entry.button, 'click.ui.table', () => {
+            if (this.#data[entry.index] !== entry.data) {
+                return;
+            }
+
+            if (this.#expandedRows.has(entry.key)) {
+                this.#expandedRows.delete(entry.key);
+            } else {
+                this.#expandedRows.add(entry.key);
+            }
+
+            this.#renderResponsiveDetails(entry);
+        });
+        $.append(entry.control, entry.button);
+    }
+
+    /**
+     * Renders display values for collapsed fields without invoking data-row callbacks.
+     * @param {object} entry The rendered data row.
+     */
+    #renderResponsiveDetails(entry) {
+        if (this.#data[entry.index] !== entry.data) {
+            $.setProperty(entry.button, 'disabled', true);
+
+            return;
+        }
+
+        const version = this.#drawVersion;
+        const expanded = this.#expandedRows.has(entry.key);
+        const label = this.options.lang.responsive[expanded ? 'hide' : 'show'];
+        $.setAttribute(entry.button, {
+            'aria-expanded': expanded,
+            'aria-label': label.replace('{row}', String(this.options.rowId === null ? entry.pageIndex + 1 : entry.key)),
+        });
+
+        if (!expanded) {
+            if (entry.detail) {
+                $.remove(entry.detail);
+                entry.detail = null;
+            }
+
+            return;
+        }
+
+        const list = $.create('dl', { class: this.constructor.classes.detailList });
+
+        for (const index of this.#getVisibleColumns()) {
+            if (!this.#collapsedColumns.has(index)) {
+                continue;
+            }
+
+            const heading = $.create('div');
+            $.setHtml(heading, $.sanitize(String(this.#headings[index].text)));
+            const text = $.getText(heading).trim() || this.options.lang.column.replace('{column}', index + 1);
+            const value = this.#getValue(entry.index, index, 'display');
+
+            if (!this.node || version !== this.#drawVersion) {
+                return;
+            }
+
+            const html = this.options.sanitize(String(value ?? ''));
+
+            if (!this.node || version !== this.#drawVersion) {
+                return;
+            }
+
+            $.append(list, [$.create('dt', { text }), $.create('dd', { html })]);
+        }
+
+        const cell = $.create('td', { attributes: { colspan: this.#getRenderedColumnCount() } });
+        $.append(cell, list);
+
+        if (!entry.detail) {
+            entry.detail = $.create('tr', {
+                class: this.constructor.classes.detailRow,
+                attributes: { id: entry.detailId },
+            });
+            $.insertAfter(entry.detail, entry.row);
+        }
+
+        $.empty(entry.detail);
+        $.append(entry.detail, cell);
+        $.setProperty(entry.detail, 'hidden', false);
+    }
+
+    /**
      * Renders the table results.
      */
     #renderResults() {
@@ -2503,7 +2701,19 @@ export default class Table extends BaseComponent {
         }
 
         $.empty(this.#tbody);
+        this.#emptyCell = null;
+        this.#responsiveRows = [];
+        this.#collapsedColumns.clear();
+
+        if (this.options.rowId === null) {
+            this.#expandedRows.clear();
+        } else {
+            const ids = new Set(this.#rowIndexes.map((index) => this.#rowIds[index]));
+            this.#expandedRows = new Set([...this.#expandedRows].filter((id) => ids.has(id)));
+        }
+
         this.#renderHeadings();
+        this.#syncResponsiveColumns();
         this.#syncFooter();
 
         if (!active()) {
@@ -2531,13 +2741,14 @@ export default class Table extends BaseComponent {
 
         if (!this.#results.length) {
             const row = $.create('tr');
-            $.append(row, $.create('td', {
+            this.#emptyCell = $.create('td', {
                 class: this.constructor.classes.emptyCell,
                 text: this.#term || this.#filters.length || this.#rowFilter ? this.options.lang.noResults : this.options.lang.noData,
                 attributes: {
-                    colspan: Math.max(1, this.#getVisibleColumns().length + Number(Boolean(this.options.selection))),
+                    colspan: this.#getRenderedColumnCount(),
                 },
-            }));
+            });
+            $.append(row, this.#emptyCell);
             $.append(this.#tbody, row);
         } else {
             for (const [index, result] of this.#results.entries()) {
@@ -2571,6 +2782,10 @@ export default class Table extends BaseComponent {
 
         if (this.#tfoot) {
             this.options.footerCallback?.call(this, this.#tfoot, this.#data, this.#offset, end, [...this.#rowIndexes]);
+        }
+
+        if (active()) {
+            this.#updateResponsive();
         }
 
         if (active()) {
@@ -2611,6 +2826,23 @@ export default class Table extends BaseComponent {
             }
         }
 
+        let responsive;
+
+        if (this.options.responsive) {
+            const index = this.#rowIndexes[rowIndex];
+            const control = $.create('td', {
+                class: this.constructor.classes.detailCell,
+                attributes: { hidden: true },
+            });
+            $.append(row, control);
+            responsive = {
+                row, control, data, index, pageIndex: rowIndex,
+                key: this.options.rowId === null ? index : this.#rowIds[index],
+                cells: new Map(), button: null, detail: null,
+            };
+            this.#responsiveRows.push(responsive);
+        }
+
         for (const [index, column] of this.#columns.entries()) {
             if (!column.visible) {
                 continue;
@@ -2633,6 +2865,7 @@ export default class Table extends BaseComponent {
                 html,
                 class: column.class || '',
             });
+            responsive?.cells.set(index, cell);
             column.createdCell?.call(this, cell, value, data, rowIndex, index);
 
             if (!this.node || version !== this.#drawVersion) {
@@ -2703,6 +2936,20 @@ export default class Table extends BaseComponent {
         $.addEvent(this.#selectionClear, 'click.ui.table', () => this.setSelectedIds([]));
         $.append(container, [this.#selectionCount, this.#selectionClear]);
         this.#syncSelection();
+    }
+
+    /**
+     * Coalesces container and font changes without drawing or loading data.
+     */
+    #scheduleResponsive() {
+        if (!this.node || !this.options.responsive || this.#responsiveFrame !== null) {
+            return;
+        }
+
+        this.#responsiveFrame = requestAnimationFrame(() => {
+            this.#responsiveFrame = null;
+            this.#updateResponsive();
+        });
     }
 
     /**
@@ -2908,7 +3155,7 @@ export default class Table extends BaseComponent {
      */
     #syncFooter() {
         for (const { cell, columns, hidden } of this.#footerCells) {
-            const count = columns.filter((index) => this.#columns[index]?.visible).length;
+            const count = columns.filter((index) => this.#columns[index]?.visible && !this.#collapsedColumns.has(index)).length;
             $.setProperty(cell, 'hidden', hidden || !count);
             $.setProperty(cell, 'colSpan', Math.max(1, count));
         }
@@ -2934,6 +3181,41 @@ export default class Table extends BaseComponent {
         }
 
         $.setValue(this.#lengthSelect, this.#limit);
+    }
+
+    /**
+     * Applies temporary collapse separately from configured column visibility.
+     */
+    #syncResponsiveColumns() {
+        if (!this.options.responsive) {
+            return;
+        }
+
+        const collapsed = this.#collapsedColumns;
+
+        for (const cell of $.children(this.#theadRow, '[data-ui-index]')) {
+            $.setProperty(cell, 'hidden', collapsed.has(Number($.getDataset(cell, 'uiIndex'))));
+        }
+
+        for (const entry of this.#responsiveRows) {
+            for (const [index, cell] of entry.cells) {
+                $.setProperty(cell, 'hidden', collapsed.has(index));
+            }
+
+            $.setProperty(entry.control, 'hidden', !collapsed.size);
+        }
+
+        $.setProperty(this.#responsiveHeading, 'hidden', !collapsed.size);
+
+        for (const cell of this.#responsiveFooterCells) {
+            $.setProperty(cell, 'hidden', !collapsed.size);
+        }
+
+        if (this.#emptyCell) {
+            $.setProperty(this.#emptyCell, 'colSpan', this.#getRenderedColumnCount());
+        }
+
+        this.#syncFooter();
     }
 
     /**
@@ -3067,5 +3349,104 @@ export default class Table extends BaseComponent {
 
         this.#rowIndexes = indexes;
         this.#refreshResults();
+    }
+
+    /**
+     * Measures visible columns and reconciles responsive details without a data redraw.
+     */
+    #updateResponsive() {
+        if (!this.node || !this.options.responsive || !this.#tableContainer.clientWidth) {
+            return;
+        }
+
+        const version = this.#drawVersion;
+        const active = () => this.node && version === this.#drawVersion;
+        const width = this.#tableContainer.clientWidth;
+        const previous = this.#collapsedColumns;
+        const focused = document.activeElement;
+        const focusedEntry = this.#responsiveRows.find((entry) => $.isSame(entry.button, focused) ||
+            (entry.detail && $.hasDescendent(entry.detail, focused)));
+        const visible = this.#getVisibleColumns();
+        const candidates = visible.filter((index) => this.#columns[index].responsivePriority !== null)
+            .sort((a, b) => this.#columns[b].responsivePriority - this.#columns[a].responsivePriority || b - a);
+        const releases = [];
+
+        try {
+            for (const [property, value] of [['width', 'max-content'], ['max-width', 'none'], ['table-layout', 'auto']]) {
+                releases.push($.setStyleLock(this.node, property, value, { important: true }));
+            }
+
+            // Measure the existing cells synchronously; details must not influence column widths.
+            for (const entry of this.#responsiveRows) {
+                if (entry.detail) {
+                    $.setProperty(entry.detail, 'hidden', true);
+                }
+            }
+
+            this.#collapsedColumns = new Set();
+            this.#syncResponsiveColumns();
+
+            for (const index of candidates) {
+                if (!active()) {
+                    return;
+                }
+
+                if (visible.length - this.#collapsedColumns.size <= 1 || this.node.getBoundingClientRect().width <= width + 1) {
+                    break;
+                }
+
+                this.#collapsedColumns.add(index);
+
+                for (const entry of this.#responsiveRows) {
+                    this.#renderResponsiveControl(entry);
+                }
+
+                this.#syncResponsiveColumns();
+            }
+        } finally {
+            for (const release of releases) {
+                release();
+            }
+        }
+
+        const changed = previous.size !== this.#collapsedColumns.size ||
+            [...previous].some((index) => !this.#collapsedColumns.has(index));
+
+        if (!this.#collapsedColumns.size) {
+            this.#expandedRows.clear();
+        }
+
+        for (const entry of this.#responsiveRows) {
+            if (!this.#collapsedColumns.size) {
+                if (entry === focusedEntry) {
+                    this.#focusResponsiveRow(entry);
+
+                    if (!active()) {
+                        return;
+                    }
+                }
+
+                $.remove(entry.button);
+                $.remove(entry.detail);
+                entry.button = null;
+                entry.detail = null;
+            } else if (changed || !entry.detail) {
+                this.#renderResponsiveDetails(entry);
+            } else {
+                $.setProperty(entry.detail, 'hidden', false);
+            }
+
+            if (!active()) {
+                return;
+            }
+
+            if (entry === focusedEntry && this.#collapsedColumns.size && !$.isSame(focused, document.activeElement)) {
+                $.focus(focused.isConnected ? focused : entry.button);
+
+                if (!active()) {
+                    return;
+                }
+            }
+        }
     }
 }
