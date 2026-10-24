@@ -48,14 +48,29 @@ export function buildTable(headings, rows, direction) {
 /**
  * Builds a data array from a DOM element.
  * @param {HTMLElement} element The element to parse.
+ * @param {WeakMap} values The cell metadata, keyed by source row.
  * @returns {Array} The parsed data.
  */
-export function getDomData(element) {
+export function getDomData(element, values) {
     const tbody = $.findOne('tbody', element);
 
-    return $.children(tbody, 'tr').map(
-        (row) => $.children(row, 'td').map((cell) => $.getHtml(cell)),
-    );
+    return $.children(tbody, 'tr').map((row) => {
+        const cells = $.children(row, 'td');
+        const data = cells.map((cell) => $.getHtml(cell));
+        const metadata = new Map(cells.map((cell, index) => {
+            const text = $.getText(cell);
+
+            return [String(index), {
+                value: data[index],
+                sort: $.getAttribute(cell, 'data-order') ?? text,
+                filter: $.getAttribute(cell, 'data-search') ?? text,
+                export: $.getAttribute(cell, 'data-export') ?? text,
+            }];
+        }));
+        values.set(data, metadata);
+
+        return data;
+    });
 }
 
 /**
@@ -88,7 +103,7 @@ export function getDomHeadings(element) {
 }
 
 /**
- * Applies column defaults and validates the indexes used for alternate ordering.
+ * Applies column defaults and validates value options and alternate ordering.
  * @param {TableColumn[]|null} columns The configured columns.
  * @param {{text: string, class: string|null}[]} headings The parsed headings.
  * @returns {TableColumn[]} The normalized columns.
@@ -102,19 +117,36 @@ export function normalizeColumns(columns, headings) {
 
     const normalized = columns.map((column, index) => ({
         class: null,
+        compare: null,
         data: index,
         dir: 'asc',
         format: null,
         name: null,
         orderData: null,
         orderable: true,
+        render: null,
         searchable: true,
+        type: 'auto',
         visible: true,
         createdCell: null,
         ...column,
     }));
 
     for (const column of normalized) {
+        if (!['auto', 'string', 'number', 'date'].includes(column.type)) {
+            throw new TypeError('Column type must be auto, string, number, or date.');
+        }
+
+        for (const callback of ['compare', 'format', 'render']) {
+            if (column[callback] !== null && column[callback] !== undefined && typeof column[callback] !== 'function') {
+                throw new TypeError(`Column ${callback} must be a function or null.`);
+            }
+        }
+
+        if (column.format && column.render) {
+            throw new TypeError('Columns cannot define both format and render.');
+        }
+
         if (column.orderData !== null) {
             for (const index of column.orderData) {
                 validateColumnIndex(index, normalized.length);
@@ -174,6 +206,65 @@ export function normalizePageLength(length) {
     }
 
     return length;
+}
+
+/**
+ * Converts an explicitly typed sort value, using null for missing values.
+ * @param {*} value The resolved value.
+ * @param {string} type The column type.
+ * @returns {*} The normalized value.
+ */
+export function normalizeSortValue(value, type) {
+    if (type === 'auto') {
+        return value;
+    }
+
+    if (value === null || value === undefined || (typeof value === 'string' && !value.trim())) {
+        return null;
+    }
+
+    switch (type) {
+        case 'string':
+            return String(value).toLocaleLowerCase();
+        case 'number':
+            value = typeof value === 'string' ? Number(value) : value;
+            break;
+        case 'date':
+            value = parseDate(value);
+            break;
+    }
+
+    return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+/**
+ * Parses a Date, epoch milliseconds, or an unambiguous ISO date string.
+ * @param {*} value The date value.
+ * @returns {number|null} The timestamp, or null for unsupported input.
+ */
+function parseDate(value) {
+    if (value instanceof Date) {
+        return value.getTime();
+    }
+
+    if (typeof value !== 'string') {
+        return typeof value === 'number' ? new Date(value).getTime() : null;
+    }
+
+    const match = /^(\d{4})-(\d{2})-(\d{2})(?:T(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d{1,3})?)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d))?$/.exec(value);
+
+    if (!match) {
+        return null;
+    }
+
+    // Date.parse accepts overflow days, so validate the calendar date first.
+    const date = new Date(`${match[1]}-${match[2]}-${match[3]}T00:00:00Z`);
+
+    if (date.getUTCMonth() + 1 !== Number(match[2]) || date.getUTCDate() !== Number(match[3])) {
+        return null;
+    }
+
+    return Date.parse(value);
 }
 
 /**

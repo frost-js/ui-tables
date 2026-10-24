@@ -13,7 +13,8 @@ Sortable, searchable tables for Frost UI, with pagination, remote data, and CSV,
 ## Highlights
 
 - Native table markup, array rows, or object rows with nested column paths
-- Case-insensitive searching, stable multi-column sorting, pagination, and column visibility
+- Case-insensitive searching, typed multi-column sorting, pagination, and column visibility
+- Separate display, sort, filter, and export values, with custom comparisons
 - Debounced remote requests, optional cancellation, and stale-response protection
 - Row/cell/header/footer callbacks and custom layouts/buttons
 - CSV, XLSX, and print exports of the displayed results
@@ -211,9 +212,57 @@ Table.init(document.querySelector('#scores'), {
 | `searchable` | `true` | Include this column in local search. |
 | `visible` | `true` | Display the column. Hidden columns can still participate in sorting/searching. |
 | `format(value)` | `null` | Return cell HTML; runs with the instance as `this`. |
+| `render(value, context)` | `null` | Resolve display, sort, filter, or export values; cannot be combined with `format`. |
+| `type` | `'auto'` | Local sorting type: `auto`, `string`, `number`, or `date`. |
+| `compare(a, b, context)` | `null` | Compare resolved sort values in ascending order; return a finite number. |
 | `createdCell(cell, value, row, rowIndex, columnIndex)` | `null` | Customize the created cell; `rowIndex` is page-relative. |
 
-Search matches a literal case-insensitive substring in raw searchable values, once per row. Sorting uses raw values too, compares numeric values numerically, and preserves source order for ties. Add keys to `order` for tie-breaking. Local changes rerun search, sorting, counts and page clamping. `search()` resets to page one.
+Search matches a literal case-insensitive substring in resolved filter values, once per row. Sorting preserves source order for ties. Add keys to `order` for tie-breaking. Local changes rerun search, sorting, counts and page clamping. `search()` resets to page one.
+
+### Cell values and sorting
+
+Use `render` when one source value needs different representations:
+
+```js
+columns: [{
+    data: 'salary',
+    type: 'number',
+    render(value, { purpose }) {
+        return purpose === 'display' ? `$${value.toFixed(2)}` : value;
+    },
+}]
+```
+
+The renderer receives the raw value and `{ purpose, row, column, rowIndex }`. `purpose` is `display`, `sort`, `filter`, or `export`; `row` is the source row; `column` is the original column index. `rowIndex` addresses the loaded dataset, including for paginated displays and exports. For remote data it addresses the loaded response. Renderers run with the Table as `this` and should be pure: they may run multiple times, without a guaranteed invocation order. Raw getters continue returning source values.
+
+Without a renderer, JavaScript data uses its raw values. Existing `format(value)` remains display-only. Display output is sanitized; filter values are converted to text; export values retain scalars such as `0` and `false`. Return strings, numbers, booleans, or nullish values for filtering and exports. Supplying both `format` and `render` throws `TypeError`.
+
+Local sorting supports these explicit types:
+
+| Type | Comparison |
+| --- | --- |
+| `auto` | Existing behavior: compare numerically when both values are numeric, otherwise as case-insensitive text. |
+| `string` | Case-insensitive text, including numeric-looking strings. |
+| `number` | Finite numbers and numeric strings. Currency symbols require an application renderer that returns a number. Booleans and objects are invalid. |
+| `date` | Valid `Date` objects, epoch milliseconds, `YYYY-MM-DD`, or ISO timestamps with `Z` or an explicit `±HH:MM` offset. Timestamps support optional seconds and up to three fractional digits. Ambiguous dates and timestamps without an offset are invalid. |
+
+For explicit types, nullish values, blank strings, and invalid conversions sort last in both directions. Equal keys retain source order unless another ordering key breaks the tie. `auto` keeps its existing empty-value behavior.
+
+`compare(a, b, { column })` receives the resolved sort values before type conversion, with the Table as `this`. Return a finite negative number, zero, or a positive number for ascending order; Tables applies the requested direction. Explicit type validation and missing-value placement still apply before calling the comparator. Custom comparisons work with multi-column ordering and `orderData`. Remote sorting remains the loader's responsibility; renderers and comparator functions are not sent to the server.
+
+### Values from HTML
+
+DOM-backed tables retain cell HTML for display and raw getters. **Sorting, search, and exports now default to the cell's text content**, with entities decoded. For example, `<strong>Alice</strong>` exports `Alice` and does not match a search for `strong`.
+
+Override individual operations with cell attributes:
+
+```html
+<td data-order="1234.5" data-search="Annual salary" data-export="1234.50">$1,234.50</td>
+```
+
+`data-order`, `data-search`, and `data-export` override sorting, filtering, and exports respectively. Missing attributes fall back to text content; empty attributes are explicit empty values. An explicit column renderer takes precedence over these inferred values.
+
+Editing a cell clears its original attribute overrides; replacing a row clears that row's metadata. Replacement values follow the JavaScript data rules, so use a renderer when inserting HTML that also needs separate text values. Removing a row preserves the other rows' metadata. Disposal restores the original DOM.
 
 ### Remote data
 
@@ -263,7 +312,7 @@ Remote mutation methods edit the loaded page and counts in memory; they do not s
 
 ### Rendering, callbacks, and sanitization
 
-Raw cell values and formatter results become strings and pass through `sanitize`; nullish cell values become empty strings. Headings are sanitized too. Use a suitable custom sanitizer when allowing additional safe markup. Returned DOM nodes are not a formatter contract. Direct callback DOM changes bypass sanitization; prefer `textContent` for untrusted text.
+Resolved display values and formatter results become strings and pass through `sanitize`; nullish cell values become empty strings. Headings are sanitized too. Use a suitable custom sanitizer when allowing additional safe markup. Returned DOM nodes are not a renderer or formatter contract. Direct callback DOM changes bypass sanitization; prefer `textContent` for untrusted text.
 
 Every callback below runs with the Table as `this`:
 
@@ -307,7 +356,7 @@ Table.init(document.querySelector('#scores'), {
 
 Button options are `type`, `text`, `title`, `columns`, `callback`, and CSV's `escapeFormulae`. `text` overrides the translated type label; `title` defaults to the document title. `callback()` overrides the registered handler and receives the Table as `this`. Register reusable handlers through `Table.buttons.yourType = function (options) { ... }`.
 
-Built-in exports include **current displayed rows**, raw values, and visible columns. `columns` explicitly selects/reorders columns, including hidden ones. Heading markup becomes text. Display formatters are not used, and remote exports never fetch other pages.
+Built-in exports include **current displayed rows**, resolved export values, and visible columns. `columns` explicitly selects/reorders columns, including hidden ones. Heading markup becomes text. Display formatters are not used, and remote exports never fetch other pages. JavaScript rows default to raw values; DOM rows default to text or `data-export`. A renderer can provide an export value independently of the display, and CSV formula escaping applies to resolved strings.
 
 - CSV quotes commas, quotes and line breaks. Formula-like strings are prefixed with an apostrophe by default; `escapeFormulae: false` opts out. Numeric negatives remain numbers.
 - XLSX preserves zero, booleans, Unicode and string formulas as text. Recognized `YYYY-MM-DD`, `DD/MM/YYYY`, optional ` HH:mm:ss`, `HH:mm:ss`, numeric and percentage values receive spreadsheet values/styles. Dates use Excel's 1900 system. Invalid date-like strings remain text.

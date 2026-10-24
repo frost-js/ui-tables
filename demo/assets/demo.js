@@ -131,7 +131,8 @@ $.ready(() => {
         data: rows,
         columns: [{}, {}, {
             class: 'text-end',
-            format: (value) => `<strong>${Number(value)}</strong>`,
+            type: 'number',
+            render: (value, { purpose }) => purpose === 'display' ? `<strong>${Number(value)}</strong>` : value,
             createdCell(cell, value) {
                 if (value >= 90) $.addClass(cell, 'text-success', 'fw-bold');
             },

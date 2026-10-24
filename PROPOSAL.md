@@ -1,6 +1,6 @@
 # Proposal: Essential table functionality
 
-Status: Proposed. The APIs below describe intended additions; they are not implemented.
+Status: Item 1 is implemented; its new tests await CI validation. Items 2–5 remain proposed. See the [README](./README.md#cell-values-and-sorting) for the implemented API.
 
 ## Recommendation
 
@@ -18,7 +18,7 @@ Keep the existing strengths: native table markup, nested object data, stable mul
 
 This proposal targets a capable table component. Spreadsheet editing, virtual scrolling, grouping, and a complete replication of DataTables are outside its initial scope.
 
-## Current limitations
+## Original limitations
 
 | Area | Current behavior | Consequence |
 | --- | --- | --- |
@@ -34,7 +34,7 @@ Relevant implementation: [table component](./src/js/table.js), [DOM and column h
 
 ## 1. Cell values and sorting
 
-### Proposed API
+### Implemented API
 
 Keep `columns.data` as the source accessor and retain `columns.format(value)` for existing configurations. Add an alternative renderer that can resolve a value for a particular operation:
 

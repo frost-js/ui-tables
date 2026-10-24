@@ -27,6 +27,39 @@ test.describe('Table buttons', () => {
     });
 
     test.describe('csv', () => {
+        test('exports resolved values with formula escaping and preserves zero and false', async ({ page }) => {
+            await page.evaluate(() => UI.Table.init($.findOne('#table'), {
+                data: [['Alice', 0], ['Bob', false]],
+                columns: [{
+                    render(value, { purpose, rowIndex }) {
+                        return purpose === 'export' ? `=${value}:${rowIndex}` : value;
+                    },
+                }, { format: () => 'Display only' }],
+                buttons: [{ type: 'csv' }],
+                order: [[0, 'desc']],
+            }));
+
+            const pending = page.waitForEvent('download');
+            await page.getByRole('button', { name: 'CSV' }).click();
+            const rows = readCsv((await readDownload(await pending)).toString());
+
+            expect(rows).toEqual([['Name', 'Value'], ['\'=Bob:1', 'false'], ['\'=Alice:0', '0']]);
+        });
+
+        test('exports DOM text and explicit empty attributes without markup', async ({ page }) => {
+            await page.evaluate(() => {
+                $.setHtml('tbody', '<tr><td><strong>Alice &amp; Co</strong></td><td data-export=""><em>Hidden</em></td></tr>' +
+                    '<tr><td data-export="Robert"><b>Bob</b></td><td>2</td></tr>');
+                UI.Table.init($.findOne('#table'), { buttons: [{ type: 'csv' }] });
+            });
+
+            const pending = page.waitForEvent('download');
+            await page.getByRole('button', { name: 'CSV' }).click();
+            const rows = readCsv((await readDownload(await pending)).toString());
+
+            expect(rows).toEqual([['Name', 'Value'], ['Alice & Co', ''], ['Robert', '2']]);
+        });
+
         for (const { name, visible, expected } of [
             { name: 'all columns', visible: true, expected: [['Name', 'Value'], ['Alice', '10'], ['Bob', '20'], ['Charlie', '30']] },
             { name: 'visible columns only', visible: false, expected: [['Name'], ['Alice'], ['Bob'], ['Charlie']] },
@@ -108,6 +141,24 @@ test.describe('Table buttons', () => {
     });
 
     test.describe('excel', () => {
+        test('exports renderer values instead of display markup', async ({ page }) => {
+            await page.evaluate(() => UI.Table.init($.findOne('#table'), {
+                data: [['Alice', { amount: 0 }], ['Bob', { amount: false }]],
+                columns: [{}, {
+                    render: (value, { purpose }) => purpose === 'display' ? '<strong>Formatted</strong>' : value.amount,
+                }],
+                buttons: [{ type: 'excel' }],
+            }));
+
+            const pending = page.waitForEvent('download');
+            await page.getByRole('button', { name: 'Excel' }).click();
+            const files = readZip(await readDownload(await pending));
+            const worksheet = await page.evaluate(readWorksheet, [...files]);
+
+            expect(worksheet.valid).toBe(true);
+            expect(worksheet.rows).toEqual([['Alice', '0'], ['Bob', 'false']]);
+        });
+
         test('downloads a named workbook with valid XML and columns beyond Z', async ({ page }) => {
             const values = Array.from({ length: 28 }, (_, index) => `Column ${index + 1}`);
 
@@ -194,6 +245,9 @@ test.describe('Table buttons', () => {
             });
             await page.evaluate(() => UI.Table.init($.findOne('#table'), {
                 data: [['Alice', 1], [0, false]],
+                columns: [{
+                    render: (value, { purpose }) => purpose === 'export' && value === 'Alice' ? 'Export Alice' : value,
+                }, {}],
                 order: [],
                 buttons: [{ type: 'print', title: '<b>Literal title</b>' }],
             }));
@@ -204,7 +258,7 @@ test.describe('Table buttons', () => {
 
             await expect(popup.getByRole('heading')).toHaveText('<b>Literal title</b>');
             await expect(popup.locator('h1 b')).toHaveCount(0);
-            await expect(popup.locator('tbody td')).toHaveText(['Alice', '1', '0', 'false']);
+            await expect(popup.locator('tbody td')).toHaveText(['Export Alice', '1', '0', 'false']);
             await expect(popup.locator('body')).toHaveAttribute('data-printed', 'true');
             await expect(popup.locator('body')).toHaveAttribute('data-styles-ready', 'true');
             await expect(popup.locator('body')).toHaveAttribute('data-fonts', 'loaded');
@@ -225,5 +279,40 @@ test.describe('Table buttons', () => {
 
             await expect(page.locator('#table')).toBeVisible();
         });
+    });
+
+    test.describe('interrupted exports', () => {
+        for (const type of ['csv', 'excel', 'print']) {
+            test(`does not open or download ${type} after renderer disposal`, async ({ page }) => {
+                const calls = await page.evaluate((type) => {
+                    let calls = 0;
+                    URL.createObjectURL = () => {
+                        calls++;
+                    };
+                    window.open = () => {
+                        calls++;
+                    };
+
+                    const table = UI.Table.init($.findOne('#table'), {
+                        data: [['Alice', 1]],
+                        columns: [{
+                            render(value, { purpose }) {
+                                if (purpose === 'export') {
+                                    this.dispose();
+                                }
+
+                                return value;
+                            },
+                        }, {}],
+                    });
+                    UI.Table.buttons[type].call(table, {});
+
+                    return calls;
+                }, type);
+
+                expect(calls).toBe(0);
+                await expect(page.locator('.table-responsive')).toHaveCount(0);
+            });
+        }
     });
 });

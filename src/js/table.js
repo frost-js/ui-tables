@@ -3,11 +3,18 @@ import { BaseComponent, generateId } from '@fr0st/ui';
 import { csv, excel, print } from './buttons.js';
 import {
     buildTable, getDomData, getDomHeadings, normalizeColumns, normalizeOrder,
-    normalizePageLength, validateColumnIndex, validateRows,
+    normalizePageLength, normalizeSortValue, validateColumnIndex, validateRows,
 } from './helpers.js';
 
 /** @typedef {Array<*>|Record<string, *>} TableRow */
 /** @typedef {[number, 'asc'|'desc']} TableOrder */
+/**
+ * @typedef {object} TableValueContext
+ * @property {'display'|'sort'|'filter'|'export'} purpose The operation requesting a value.
+ * @property {TableRow} row The source row.
+ * @property {number} column The original column index.
+ * @property {number} rowIndex The loaded-data index.
+ */
 /**
  * @typedef {object} TableColumn
  * @property {string|number} [data] The row key or dot path; defaults to the column index.
@@ -19,6 +26,9 @@ import {
  * @property {boolean} [searchable=true] Whether local searches include the column.
  * @property {boolean} [visible=true] Whether the column is displayed.
  * @property {function(*): *} [format] Formats a cell value as HTML.
+ * @property {function(*, TableValueContext): *} [render] Resolves a value for each operation; cannot accompany format.
+ * @property {'auto'|'string'|'number'|'date'} [type='auto'] The local sort value type.
+ * @property {function(*, *, {column: number}): number} [compare] Compares resolved sort values in ascending order.
  * @property {function(HTMLTableCellElement, *, TableRow, number, number): void} [createdCell] Receives a created cell.
  */
 /**
@@ -81,13 +91,27 @@ export default class Table extends BaseComponent {
     // Table buttons
     static buttons = {
         csv(options) {
-            csv(options, this.#getExportData(options));
+            const data = this.#getExportData(options);
+
+            if (data) {
+                csv(options, data);
+            }
         },
         excel(options) {
-            excel(options, this.#getExportData(options));
+            const data = this.#getExportData(options);
+
+            if (data) {
+                excel(options, data);
+            }
         },
         print(options) {
-            const { headings, rows } = this.#getExportData(options);
+            const data = this.#getExportData(options);
+
+            if (!data) {
+                return;
+            }
+
+            const { headings, rows } = data;
             const table = buildTable(headings, rows, $.css(this.node, 'direction'));
             print(options, table, $.getAttribute(this.node, 'class'));
         },
@@ -208,6 +232,7 @@ export default class Table extends BaseComponent {
     #columns = [];
     #container = null;
     #data = [];
+    #domValues = new WeakMap();
     #drawVersion = 0;
     #filtered = 0;
     #headings = [];
@@ -262,7 +287,7 @@ export default class Table extends BaseComponent {
             }
 
             if (!this.options.getResults) {
-                const data = this.options.data ?? getDomData(node);
+                const data = this.options.data ?? getDomData(node, this.#domValues);
                 validateRows(data);
 
                 this.#data = data.slice();
@@ -341,6 +366,7 @@ export default class Table extends BaseComponent {
 
         this.#searchHandler?.cancel();
         this.#data = [];
+        this.#domValues = new WeakMap();
         this.#results = [];
         this.#rowIndexes = [];
         this.#offset = 0;
@@ -423,6 +449,7 @@ export default class Table extends BaseComponent {
         this.#columns = [];
         this.#headings = [];
         this.#data = [];
+        this.#domValues = new WeakMap();
         this.#results = [];
         this.#rowIndexes = [];
 
@@ -661,6 +688,7 @@ export default class Table extends BaseComponent {
 
         for (const [index, rowIndex] of indexes.entries()) {
             $._setDot(this.#data[rowIndex], String(key), column[index]);
+            this.#domValues.get(this.#data[rowIndex])?.delete(String(key));
         }
 
         this.#mutated();
@@ -691,6 +719,7 @@ export default class Table extends BaseComponent {
     setValue(index, key, value, { modified = true } = {}) {
         const rowIndex = this.#getIndex(index, { modified });
         $._setDot(this.#data[rowIndex], String(key), value);
+        this.#domValues.get(this.#data[rowIndex])?.delete(String(key));
         this.#mutated();
     }
 
@@ -939,9 +968,10 @@ export default class Table extends BaseComponent {
     /**
      * Copies the headings and displayed rows required by an export button.
      * @param {TableButton} options The export button options.
-     * @returns {{headings: string[], rows: Array<Array<*>>}} The export data.
+     * @returns {{headings: string[], rows: Array<Array<*>>}|null} The export data, or null if interrupted.
      */
     #getExportData(options) {
+        const version = this.#drawVersion;
         const columns = options.columns || this.#getVisibleColumns();
 
         for (const index of columns) {
@@ -956,11 +986,23 @@ export default class Table extends BaseComponent {
             return $.getText(container);
         });
 
-        const rows = this.#results.map((row) => columns.map((index) => {
-            const key = String(this.#columns[index].data);
+        const rows = [];
 
-            return $._getDot(row, key);
-        }));
+        for (const rowIndex of this.#rowIndexes) {
+            const row = [];
+
+            for (const index of columns) {
+                const value = this.#getValue(rowIndex, index, 'export');
+
+                if (!this.node || version !== this.#drawVersion) {
+                    return null;
+                }
+
+                row.push(value);
+            }
+
+            rows.push(row);
+        }
 
         return { headings, rows };
     }
@@ -992,6 +1034,32 @@ export default class Table extends BaseComponent {
 
             return columns.map((column) => [column, direction]);
         });
+    }
+
+    /**
+     * Resolves a source value for one table operation.
+     * @param {number} rowIndex The loaded-data index.
+     * @param {number} index The original column index.
+     * @param {'display'|'sort'|'filter'|'export'} purpose The operation.
+     * @returns {*} The resolved value.
+     */
+    #getValue(rowIndex, index, purpose) {
+        const row = this.#data[rowIndex];
+        const column = this.#columns[index];
+        const key = String(column.data);
+        const value = $._getDot(row, key);
+
+        if (column.render) {
+            return column.render.call(this, value, { purpose, row, column: index, rowIndex });
+        }
+
+        if (purpose === 'display') {
+            return column.format ? column.format.call(this, value) : value;
+        }
+
+        const metadata = this.#domValues.get(row)?.get(key);
+
+        return metadata && metadata.value === value ? metadata[purpose] : value;
     }
 
     /**
@@ -1046,8 +1114,13 @@ export default class Table extends BaseComponent {
             return;
         }
 
-        this.#updateLocal();
-        this.loading({ show: false });
+        try {
+            this.#updateLocal();
+        } finally {
+            if (this.node && drawVersion === this.#drawVersion) {
+                this.loading({ show: false });
+            }
+        }
 
         if (this.node && drawVersion === this.#drawVersion) {
             this.#renderResults();
@@ -1778,7 +1851,7 @@ export default class Table extends BaseComponent {
             }
 
             const value = $._getDot(data, String(column.data));
-            const formatted = column.format ? column.format.call(this, value) : value;
+            const formatted = this.#getValue(this.#rowIndexes[rowIndex], index, 'display');
 
             if (!this.node || version !== this.#drawVersion) {
                 return row;
@@ -1869,38 +1942,93 @@ export default class Table extends BaseComponent {
      * Recomputes local matching, stable ordering, counts, and the current page.
      */
     #updateLocal() {
-        this.#total = this.#data.length;
+        const version = this.#drawVersion;
+        const active = () => this.node && version === this.#drawVersion;
         const term = this.#term.toLocaleLowerCase();
+        const order = this.options.ordering ? this.#getOrder() : [];
         let indexes = this.#data.map((_, index) => index);
 
         if (term) {
-            indexes = indexes.filter((index) => this.#columns.some((column) => {
-                if (!column.searchable) {
-                    return false;
+            const matches = [];
+
+            for (const rowIndex of indexes) {
+                for (const [index, column] of this.#columns.entries()) {
+                    if (!column.searchable) {
+                        continue;
+                    }
+
+                    const value = this.#getValue(rowIndex, index, 'filter');
+
+                    if (!active()) {
+                        return;
+                    }
+
+                    if (String(value ?? '').toLocaleLowerCase().includes(term)) {
+                        matches.push(rowIndex);
+                        break;
+                    }
                 }
+            }
 
-                const value = $._getDot(this.#data[index], String(column.data));
-
-                return String(value ?? '').toLocaleLowerCase().includes(term);
-            }));
+            indexes = matches;
         }
 
-        this.#filtered = indexes.length;
-        const order = this.options.ordering ? this.#getOrder() : [];
+        // Resolve keys once per row so sorting does not repeatedly invoke renderers.
+        const values = new Map();
+
+        for (const rowIndex of indexes) {
+            const row = [];
+
+            for (const [index] of order) {
+                const column = this.#columns[index];
+                const raw = this.#getValue(rowIndex, index, 'sort');
+
+                if (!active()) {
+                    return;
+                }
+
+                row.push({ raw, value: normalizeSortValue(raw, column.type) });
+            }
+
+            values.set(rowIndex, row);
+        }
 
         indexes.sort((a, b) => {
-            for (const [index, direction] of order) {
-                const key = String(this.#columns[index].data);
-                const aValue = $._getDot(this.#data[a], key);
-                const bValue = $._getDot(this.#data[b], key);
+            if (!active()) {
+                return 0;
+            }
+
+            for (const [key, [index, direction]] of order.entries()) {
+                const column = this.#columns[index];
+                const aValue = values.get(a)[key];
+                const bValue = values.get(b)[key];
+
+                if (column.type !== 'auto' && (aValue.value === null || bValue.value === null)) {
+                    if (aValue.value === bValue.value) {
+                        continue;
+                    }
+
+                    return aValue.value === null ? 1 : -1;
+                }
 
                 let difference;
 
-                if ($._isNumeric(aValue) && $._isNumeric(bValue)) {
-                    difference = Number(aValue) - Number(bValue);
+                if (column.compare) {
+                    difference = column.compare.call(this, aValue.raw, bValue.raw, { column: index });
+
+                    if (!active()) {
+                        return 0;
+                    }
+
+                    if (!Number.isFinite(difference)) {
+                        throw new TypeError('Column compare must return a finite number.');
+                    }
+                } else if (column.type === 'number' || column.type === 'date' ||
+                    (column.type === 'auto' && $._isNumeric(aValue.value) && $._isNumeric(bValue.value))) {
+                    difference = Number(aValue.value) - Number(bValue.value);
                 } else {
-                    const aText = String(aValue ?? '').toLocaleLowerCase();
-                    const bText = String(bValue ?? '').toLocaleLowerCase();
+                    const aText = String(aValue.value ?? '').toLocaleLowerCase();
+                    const bText = String(bValue.value ?? '').toLocaleLowerCase();
                     difference = aText.localeCompare(bText);
                 }
 
@@ -1912,6 +2040,13 @@ export default class Table extends BaseComponent {
             // Equal values retain their original data order across sorting and filtering.
             return a - b;
         });
+
+        if (!active()) {
+            return;
+        }
+
+        this.#total = this.#data.length;
+        this.#filtered = indexes.length;
 
         if (this.options.paging) {
             const lastOffset = Math.max(0, (Math.ceil(indexes.length / this.#limit) - 1) * this.#limit);

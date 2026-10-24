@@ -36,11 +36,26 @@ function buildTable(headings, rows, direction) {
 /**
 * Builds a data array from a DOM element.
 * @param {HTMLElement} element The element to parse.
+* @param {WeakMap} values The cell metadata, keyed by source row.
 * @returns {Array} The parsed data.
 */
-function getDomData(element) {
+function getDomData(element, values) {
 	const tbody = $.findOne("tbody", element);
-	return $.children(tbody, "tr").map((row) => $.children(row, "td").map((cell) => $.getHtml(cell)));
+	return $.children(tbody, "tr").map((row) => {
+		const cells = $.children(row, "td");
+		const data = cells.map((cell) => $.getHtml(cell));
+		const metadata = new Map(cells.map((cell, index) => {
+			const text = $.getText(cell);
+			return [String(index), {
+				value: data[index],
+				sort: $.getAttribute(cell, "data-order") ?? text,
+				filter: $.getAttribute(cell, "data-search") ?? text,
+				export: $.getAttribute(cell, "data-export") ?? text
+			}];
+		}));
+		values.set(data, metadata);
+		return data;
+	});
 }
 /**
 * Builds a heading array from a DOM element.
@@ -59,7 +74,7 @@ function getDomHeadings(element) {
 	}));
 }
 /**
-* Applies column defaults and validates the indexes used for alternate ordering.
+* Applies column defaults and validates value options and alternate ordering.
 * @param {TableColumn[]|null} columns The configured columns.
 * @param {{text: string, class: string|null}[]} headings The parsed headings.
 * @returns {TableColumn[]} The normalized columns.
@@ -69,18 +84,35 @@ function normalizeColumns(columns, headings) {
 	if (headings.length && columns.length !== headings.length) throw new RangeError("Column definitions must match the heading count.");
 	const normalized = columns.map((column, index) => ({
 		class: null,
+		compare: null,
 		data: index,
 		dir: "asc",
 		format: null,
 		name: null,
 		orderData: null,
 		orderable: true,
+		render: null,
 		searchable: true,
+		type: "auto",
 		visible: true,
 		createdCell: null,
 		...column
 	}));
-	for (const column of normalized) if (column.orderData !== null) for (const index of column.orderData) validateColumnIndex(index, normalized.length);
+	for (const column of normalized) {
+		if (![
+			"auto",
+			"string",
+			"number",
+			"date"
+		].includes(column.type)) throw new TypeError("Column type must be auto, string, number, or date.");
+		for (const callback of [
+			"compare",
+			"format",
+			"render"
+		]) if (column[callback] !== null && column[callback] !== void 0 && typeof column[callback] !== "function") throw new TypeError(`Column ${callback} must be a function or null.`);
+		if (column.format && column.render) throw new TypeError("Columns cannot define both format and render.");
+		if (column.orderData !== null) for (const index of column.orderData) validateColumnIndex(index, normalized.length);
+	}
 	return normalized;
 }
 /**
@@ -110,6 +142,38 @@ function normalizePageLength(length) {
 	length = Number(length);
 	if (!Number.isSafeInteger(length) || length <= 0) throw new RangeError("Page length must be a positive integer.");
 	return length;
+}
+/**
+* Converts an explicitly typed sort value, using null for missing values.
+* @param {*} value The resolved value.
+* @param {string} type The column type.
+* @returns {*} The normalized value.
+*/
+function normalizeSortValue(value, type) {
+	if (type === "auto") return value;
+	if (value === null || value === void 0 || typeof value === "string" && !value.trim()) return null;
+	switch (type) {
+		case "string": return String(value).toLocaleLowerCase();
+		case "number":
+			value = typeof value === "string" ? Number(value) : value;
+			break;
+		case "date": value = parseDate(value);
+	}
+	return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+/**
+* Parses a Date, epoch milliseconds, or an unambiguous ISO date string.
+* @param {*} value The date value.
+* @returns {number|null} The timestamp, or null for unsupported input.
+*/
+function parseDate(value) {
+	if (value instanceof Date) return value.getTime();
+	if (typeof value !== "string") return typeof value === "number" ? new Date(value).getTime() : null;
+	const match = /^(\d{4})-(\d{2})-(\d{2})(?:T(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d{1,3})?)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d))?$/.exec(value);
+	if (!match) return null;
+	const date = /* @__PURE__ */ new Date(`${match[1]}-${match[2]}-${match[3]}T00:00:00Z`);
+	if (date.getUTCMonth() + 1 !== Number(match[2]) || date.getUTCDate() !== Number(match[3])) return null;
+	return Date.parse(value);
 }
 /**
 * Downloads a blob.
@@ -1683,6 +1747,13 @@ async function print(options, table, classes) {
 /** @typedef {Array<*>|Record<string, *>} TableRow */
 /** @typedef {[number, 'asc'|'desc']} TableOrder */
 /**
+* @typedef {object} TableValueContext
+* @property {'display'|'sort'|'filter'|'export'} purpose The operation requesting a value.
+* @property {TableRow} row The source row.
+* @property {number} column The original column index.
+* @property {number} rowIndex The loaded-data index.
+*/
+/**
 * @typedef {object} TableColumn
 * @property {string|number} [data] The row key or dot path; defaults to the column index.
 * @property {string|null} [name=null] The remote column name.
@@ -1693,6 +1764,9 @@ async function print(options, table, classes) {
 * @property {boolean} [searchable=true] Whether local searches include the column.
 * @property {boolean} [visible=true] Whether the column is displayed.
 * @property {function(*): *} [format] Formats a cell value as HTML.
+* @property {function(*, TableValueContext): *} [render] Resolves a value for each operation; cannot accompany format.
+* @property {'auto'|'string'|'number'|'date'} [type='auto'] The local sort value type.
+* @property {function(*, *, {column: number}): number} [compare] Compares resolved sort values in ascending order.
 * @property {function(HTMLTableCellElement, *, TableRow, number, number): void} [createdCell] Receives a created cell.
 */
 /**
@@ -1753,13 +1827,17 @@ async function print(options, table, classes) {
 var Table = class extends BaseComponent {
 	static buttons = {
 		csv(options) {
-			csv(options, this.#getExportData(options));
+			const data = this.#getExportData(options);
+			if (data) csv(options, data);
 		},
 		excel(options) {
-			excel(options, this.#getExportData(options));
+			const data = this.#getExportData(options);
+			if (data) excel(options, data);
 		},
 		print(options) {
-			const { headings, rows } = this.#getExportData(options);
+			const data = this.#getExportData(options);
+			if (!data) return;
+			const { headings, rows } = data;
 			const table = buildTable(headings, rows, $.css(this.node, "direction"));
 			print(options, table, $.getAttribute(this.node, "class"));
 		}
@@ -1882,6 +1960,7 @@ var Table = class extends BaseComponent {
 	#columns = [];
 	#container = null;
 	#data = [];
+	#domValues = /* @__PURE__ */ new WeakMap();
 	#drawVersion = 0;
 	#filtered = 0;
 	#headings = [];
@@ -1926,7 +2005,7 @@ var Table = class extends BaseComponent {
 			this.#limit = this.options.paging ? normalizePageLength(this.options.length) : Infinity;
 			for (const length of this.options.lengths) normalizePageLength(length);
 			if (!this.options.getResults) {
-				const data = this.options.data ?? getDomData(node);
+				const data = this.options.data ?? getDomData(node, this.#domValues);
 				validateRows(data);
 				this.#data = data.slice();
 			}
@@ -1972,6 +2051,7 @@ var Table = class extends BaseComponent {
 		if (!this.node || requestVersion !== this.#requestVersion) return;
 		this.#searchHandler?.cancel();
 		this.#data = [];
+		this.#domValues = /* @__PURE__ */ new WeakMap();
 		this.#results = [];
 		this.#rowIndexes = [];
 		this.#offset = 0;
@@ -2025,6 +2105,7 @@ var Table = class extends BaseComponent {
 		this.#columns = [];
 		this.#headings = [];
 		this.#data = [];
+		this.#domValues = /* @__PURE__ */ new WeakMap();
 		this.#results = [];
 		this.#rowIndexes = [];
 		this.#loadResults = null;
@@ -2189,7 +2270,10 @@ var Table = class extends BaseComponent {
 	setColumn(key, column, { modified = true } = {}) {
 		const indexes = modified ? this.#rowIndexes : this.#data.map((_, index) => index);
 		if (!Array.isArray(column) || column.length !== indexes.length) throw new RangeError("Column values must match the selected row count.");
-		for (const [index, rowIndex] of indexes.entries()) $._setDot(this.#data[rowIndex], String(key), column[index]);
+		for (const [index, rowIndex] of indexes.entries()) {
+			$._setDot(this.#data[rowIndex], String(key), column[index]);
+			this.#domValues.get(this.#data[rowIndex])?.delete(String(key));
+		}
 		this.#mutated();
 	}
 	/**
@@ -2216,6 +2300,7 @@ var Table = class extends BaseComponent {
 	setValue(index, key, value, { modified = true } = {}) {
 		const rowIndex = this.#getIndex(index, { modified });
 		$._setDot(this.#data[rowIndex], String(key), value);
+		this.#domValues.get(this.#data[rowIndex])?.delete(String(key));
 		this.#mutated();
 	}
 	/**
@@ -2363,21 +2448,30 @@ var Table = class extends BaseComponent {
 	/**
 	* Copies the headings and displayed rows required by an export button.
 	* @param {TableButton} options The export button options.
-	* @returns {{headings: string[], rows: Array<Array<*>>}} The export data.
+	* @returns {{headings: string[], rows: Array<Array<*>>}|null} The export data, or null if interrupted.
 	*/
 	#getExportData(options) {
+		const version = this.#drawVersion;
 		const columns = options.columns || this.#getVisibleColumns();
 		for (const index of columns) validateColumnIndex(index, this.#columns.length);
+		const headings = columns.map((index) => {
+			const container = $.create("div");
+			$.setHtml(container, $.sanitize(String(this.#headings[index].text)));
+			return $.getText(container);
+		});
+		const rows = [];
+		for (const rowIndex of this.#rowIndexes) {
+			const row = [];
+			for (const index of columns) {
+				const value = this.#getValue(rowIndex, index, "export");
+				if (!this.node || version !== this.#drawVersion) return null;
+				row.push(value);
+			}
+			rows.push(row);
+		}
 		return {
-			headings: columns.map((index) => {
-				const container = $.create("div");
-				$.setHtml(container, $.sanitize(String(this.#headings[index].text)));
-				return $.getText(container);
-			}),
-			rows: this.#results.map((row) => columns.map((index) => {
-				const key = String(this.#columns[index].data);
-				return $._getDot(row, key);
-			}))
+			headings,
+			rows
 		};
 	}
 	/**
@@ -2400,6 +2494,28 @@ var Table = class extends BaseComponent {
 		return this.#order.flatMap(([index, direction]) => {
 			return (this.#columns[index].orderData ?? [index]).map((column) => [column, direction]);
 		});
+	}
+	/**
+	* Resolves a source value for one table operation.
+	* @param {number} rowIndex The loaded-data index.
+	* @param {number} index The original column index.
+	* @param {'display'|'sort'|'filter'|'export'} purpose The operation.
+	* @returns {*} The resolved value.
+	*/
+	#getValue(rowIndex, index, purpose) {
+		const row = this.#data[rowIndex];
+		const column = this.#columns[index];
+		const key = String(column.data);
+		const value = $._getDot(row, key);
+		if (column.render) return column.render.call(this, value, {
+			purpose,
+			row,
+			column: index,
+			rowIndex
+		});
+		if (purpose === "display") return column.format ? column.format.call(this, value) : value;
+		const metadata = this.#domValues.get(row)?.get(key);
+		return metadata && metadata.value === value ? metadata[purpose] : value;
 	}
 	/**
 	* Gets the visible columns.
@@ -2428,8 +2544,11 @@ var Table = class extends BaseComponent {
 		}
 		this.loading();
 		if (!this.node || drawVersion !== this.#drawVersion) return;
-		this.#updateLocal();
-		this.loading({ show: false });
+		try {
+			this.#updateLocal();
+		} finally {
+			if (this.node && drawVersion === this.#drawVersion) this.loading({ show: false });
+		}
 		if (this.node && drawVersion === this.#drawVersion) this.#renderResults();
 	}
 	/**
@@ -2865,7 +2984,7 @@ var Table = class extends BaseComponent {
 		for (const [index, column] of this.#columns.entries()) {
 			if (!column.visible) continue;
 			const value = $._getDot(data, String(column.data));
-			const formatted = column.format ? column.format.call(this, value) : value;
+			const formatted = this.#getValue(this.#rowIndexes[rowIndex], index, "display");
 			if (!this.node || version !== this.#drawVersion) return row;
 			const html = this.options.sanitize(String(formatted ?? ""));
 			if (!this.node || version !== this.#drawVersion) return row;
@@ -2921,32 +3040,66 @@ var Table = class extends BaseComponent {
 	* Recomputes local matching, stable ordering, counts, and the current page.
 	*/
 	#updateLocal() {
-		this.#total = this.#data.length;
+		const version = this.#drawVersion;
+		const active = () => this.node && version === this.#drawVersion;
 		const term = this.#term.toLocaleLowerCase();
-		let indexes = this.#data.map((_, index) => index);
-		if (term) indexes = indexes.filter((index) => this.#columns.some((column) => {
-			if (!column.searchable) return false;
-			const value = $._getDot(this.#data[index], String(column.data));
-			return String(value ?? "").toLocaleLowerCase().includes(term);
-		}));
-		this.#filtered = indexes.length;
 		const order = this.options.ordering ? this.#getOrder() : [];
+		let indexes = this.#data.map((_, index) => index);
+		if (term) {
+			const matches = [];
+			for (const rowIndex of indexes) for (const [index, column] of this.#columns.entries()) {
+				if (!column.searchable) continue;
+				const value = this.#getValue(rowIndex, index, "filter");
+				if (!active()) return;
+				if (String(value ?? "").toLocaleLowerCase().includes(term)) {
+					matches.push(rowIndex);
+					break;
+				}
+			}
+			indexes = matches;
+		}
+		const values = /* @__PURE__ */ new Map();
+		for (const rowIndex of indexes) {
+			const row = [];
+			for (const [index] of order) {
+				const column = this.#columns[index];
+				const raw = this.#getValue(rowIndex, index, "sort");
+				if (!active()) return;
+				row.push({
+					raw,
+					value: normalizeSortValue(raw, column.type)
+				});
+			}
+			values.set(rowIndex, row);
+		}
 		indexes.sort((a, b) => {
-			for (const [index, direction] of order) {
-				const key = String(this.#columns[index].data);
-				const aValue = $._getDot(this.#data[a], key);
-				const bValue = $._getDot(this.#data[b], key);
+			if (!active()) return 0;
+			for (const [key, [index, direction]] of order.entries()) {
+				const column = this.#columns[index];
+				const aValue = values.get(a)[key];
+				const bValue = values.get(b)[key];
+				if (column.type !== "auto" && (aValue.value === null || bValue.value === null)) {
+					if (aValue.value === bValue.value) continue;
+					return aValue.value === null ? 1 : -1;
+				}
 				let difference;
-				if ($._isNumeric(aValue) && $._isNumeric(bValue)) difference = Number(aValue) - Number(bValue);
+				if (column.compare) {
+					difference = column.compare.call(this, aValue.raw, bValue.raw, { column: index });
+					if (!active()) return 0;
+					if (!Number.isFinite(difference)) throw new TypeError("Column compare must return a finite number.");
+				} else if (column.type === "number" || column.type === "date" || column.type === "auto" && $._isNumeric(aValue.value) && $._isNumeric(bValue.value)) difference = Number(aValue.value) - Number(bValue.value);
 				else {
-					const aText = String(aValue ?? "").toLocaleLowerCase();
-					const bText = String(bValue ?? "").toLocaleLowerCase();
+					const aText = String(aValue.value ?? "").toLocaleLowerCase();
+					const bText = String(bValue.value ?? "").toLocaleLowerCase();
 					difference = aText.localeCompare(bText);
 				}
 				if (difference) return direction === "desc" ? -difference : difference;
 			}
 			return a - b;
 		});
+		if (!active()) return;
+		this.#total = this.#data.length;
+		this.#filtered = indexes.length;
 		if (this.options.paging) {
 			const lastOffset = Math.max(0, (Math.ceil(indexes.length / this.#limit) - 1) * this.#limit);
 			this.#offset = Math.min(this.#offset, lastOffset);
