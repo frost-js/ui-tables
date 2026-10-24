@@ -3,7 +3,7 @@ let lengthCodeTable = null;
 /**
  * Gets the DEFLATE symbol, extra-bit value, and bit count for a match length.
  * @param {number} length The length.
- * @returns {Array} The LZ77 length codes.
+ * @returns {[number, number, number]} The length symbol, extra-bit value, and bit count.
  */
 function generateLengthCodes(length) {
     switch (true) {
@@ -70,7 +70,7 @@ function generateLengthCodes(length) {
 
 /**
  * Gets the cached length codes for DEFLATE matches of 3 to 258 bytes.
- * @returns {Array} The length code table.
+ * @returns {number[]} The packed length code table.
  */
 function getLengthCodeTable() {
     if (!lengthCodeTable) {
@@ -90,7 +90,7 @@ function getLengthCodeTable() {
 /**
  * Gets the distance code.
  * @param {number} distance The distance.
- * @returns {Array} The distance code.
+ * @returns {[number, number, number]} The distance symbol, extra-bit value, and bit count.
  */
 export function getDistanceCode(distance) {
     switch (true) {

@@ -597,7 +597,7 @@ var lengthCodeTable = null;
 /**
 * Gets the DEFLATE symbol, extra-bit value, and bit count for a match length.
 * @param {number} length The length.
-* @returns {Array} The LZ77 length codes.
+* @returns {[number, number, number]} The length symbol, extra-bit value, and bit count.
 */
 function generateLengthCodes(length) {
 	switch (true) {
@@ -750,7 +750,7 @@ function generateLengthCodes(length) {
 }
 /**
 * Gets the cached length codes for DEFLATE matches of 3 to 258 bytes.
-* @returns {Array} The length code table.
+* @returns {number[]} The packed length code table.
 */
 function getLengthCodeTable() {
 	if (!lengthCodeTable) {
@@ -765,7 +765,7 @@ function getLengthCodeTable() {
 /**
 * Gets the distance code.
 * @param {number} distance The distance.
-* @returns {Array} The distance code.
+* @returns {[number, number, number]} The distance symbol, extra-bit value, and bit count.
 */
 function getDistanceCode(distance) {
 	switch (true) {
@@ -957,7 +957,7 @@ var Lz77Match = class {
 	}
 	/**
 	* Gets the LZ77 coded array.
-	* @returns {Array} The LZ77 Array.
+	* @returns {number[]} The encoded length and distance symbols with their extra-bit values and bit counts.
 	*/
 	toLz77Array() {
 		const lengthCode = getLengthCode(this.#length);
@@ -1918,6 +1918,13 @@ var window = $.getWindow();
 /** @typedef {string|number} TableRowId */
 /** @typedef {[number, 'asc'|'desc']} TableOrder */
 /**
+* @typedef {object} TableInfo
+* @property {number} end The exclusive end offset of the displayed rows.
+* @property {number} filtered The total number of rows after filtering.
+* @property {number} start The zero-based start offset of the displayed rows.
+* @property {number} total The total number of rows before filtering.
+*/
+/**
 * @typedef {object} TableState
 * @property {1} version The snapshot schema version.
 * @property {string} search The global search term.
@@ -2028,7 +2035,7 @@ var window = $.getWindow();
 * @property {string} [selection.page] The select page label.
 * @property {string} [selection.row] The row selection label, containing {id}.
 */
-/** @typedef {(TableResults|PromiseLike<TableResults>) & {cancel?: Function}} TablePendingResults */
+/** @typedef {(TableResults|PromiseLike<TableResults>) & {cancel?: () => void}} TablePendingResults */
 /**
 * @callback TableGetResultsCallback
 * @this {Table}
@@ -2075,7 +2082,7 @@ var window = $.getWindow();
 * @param {TableRow} row The source row.
 * @param {number} rowIndex The zero-based page row index.
 * @param {number} columnIndex The original column index.
-* @returns {void}
+* @returns {void} Nothing.
 */
 /**
 * @callback TableDetailRenderer
@@ -2087,7 +2094,7 @@ var window = $.getWindow();
 /**
 * @callback TableButtonCallback
 * @this {Table}
-* @returns {void}
+* @returns {void} Nothing.
 */
 /**
 * @callback TableCreatedRowCallback
@@ -2095,7 +2102,7 @@ var window = $.getWindow();
 * @param {HTMLTableRowElement} row The inserted row element.
 * @param {TableRow} data The source row.
 * @param {number} rowIndex The zero-based page row index.
-* @returns {void}
+* @returns {void} Nothing.
 */
 /**
 * @callback TableRowCallback
@@ -2105,7 +2112,7 @@ var window = $.getWindow();
 * @param {number} pageRowIndex The zero-based page row index.
 * @param {number} offsetRowIndex The row index including the page offset.
 * @param {number} dataRowIndex The loaded-data index.
-* @returns {void}
+* @returns {void} Nothing.
 */
 /**
 * @callback TableHeaderCallback
@@ -2115,7 +2122,7 @@ var window = $.getWindow();
 * @param {number} start The zero-based display offset.
 * @param {number} end The exclusive end offset.
 * @param {number[]} indexes The loaded-data indexes of the displayed rows.
-* @returns {void}
+* @returns {void} Nothing.
 */
 /**
 * @callback TableFooterCallback
@@ -2125,7 +2132,7 @@ var window = $.getWindow();
 * @param {number} start The zero-based display offset.
 * @param {number} end The exclusive end offset.
 * @param {number[]} indexes The loaded-data indexes of the displayed rows.
-* @returns {void}
+* @returns {void} Nothing.
 */
 /**
 * @callback TableInfoCallback
@@ -2145,7 +2152,7 @@ var window = $.getWindow();
 /**
 * @callback TableDrawCallback
 * @this {Table}
-* @returns {void}
+* @returns {void} Nothing.
 */
 /**
 * @typedef {object} TableOptions
@@ -2746,7 +2753,7 @@ var Table = class extends BaseComponent {
 	}
 	/**
 	* Gets the Table information.
-	* @returns {object} The Table information.
+	* @returns {TableInfo} The Table information.
 	*/
 	info() {
 		return {
@@ -3989,7 +3996,7 @@ var Table = class extends BaseComponent {
 	}
 	/**
 	* Renders a result row.
-	* @param {Array|object} data The row data.
+	* @param {TableRow} data The row data.
 	* @param {number} rowIndex The row index.
 	* @returns {HTMLElement} The table row.
 	*/

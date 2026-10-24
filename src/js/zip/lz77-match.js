@@ -28,7 +28,7 @@ export default class Lz77Match {
 
     /**
      * Gets the LZ77 coded array.
-     * @returns {Array} The LZ77 Array.
+     * @returns {number[]} The encoded length and distance symbols with their extra-bit values and bit counts.
      */
     toLz77Array() {
         const lengthCode = getLengthCode(this.#length);

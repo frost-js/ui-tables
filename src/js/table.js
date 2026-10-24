@@ -17,6 +17,14 @@ const window = $.getWindow();
 /** @typedef {[number, 'asc'|'desc']} TableOrder */
 
 /**
+ * @typedef {object} TableInfo
+ * @property {number} end The exclusive end offset of the displayed rows.
+ * @property {number} filtered The total number of rows after filtering.
+ * @property {number} start The zero-based start offset of the displayed rows.
+ * @property {number} total The total number of rows before filtering.
+ */
+
+/**
  * @typedef {object} TableState
  * @property {1} version The snapshot schema version.
  * @property {string} search The global search term.
@@ -137,7 +145,7 @@ const window = $.getWindow();
  * @property {string} [selection.row] The row selection label, containing {id}.
  */
 
-/** @typedef {(TableResults|PromiseLike<TableResults>) & {cancel?: Function}} TablePendingResults */
+/** @typedef {(TableResults|PromiseLike<TableResults>) & {cancel?: () => void}} TablePendingResults */
 
 /**
  * @callback TableGetResultsCallback
@@ -191,7 +199,7 @@ const window = $.getWindow();
  * @param {TableRow} row The source row.
  * @param {number} rowIndex The zero-based page row index.
  * @param {number} columnIndex The original column index.
- * @returns {void}
+ * @returns {void} Nothing.
  */
 
 /**
@@ -205,7 +213,7 @@ const window = $.getWindow();
 /**
  * @callback TableButtonCallback
  * @this {Table}
- * @returns {void}
+ * @returns {void} Nothing.
  */
 
 /**
@@ -214,7 +222,7 @@ const window = $.getWindow();
  * @param {HTMLTableRowElement} row The inserted row element.
  * @param {TableRow} data The source row.
  * @param {number} rowIndex The zero-based page row index.
- * @returns {void}
+ * @returns {void} Nothing.
  */
 
 /**
@@ -225,7 +233,7 @@ const window = $.getWindow();
  * @param {number} pageRowIndex The zero-based page row index.
  * @param {number} offsetRowIndex The row index including the page offset.
  * @param {number} dataRowIndex The loaded-data index.
- * @returns {void}
+ * @returns {void} Nothing.
  */
 
 /**
@@ -236,7 +244,7 @@ const window = $.getWindow();
  * @param {number} start The zero-based display offset.
  * @param {number} end The exclusive end offset.
  * @param {number[]} indexes The loaded-data indexes of the displayed rows.
- * @returns {void}
+ * @returns {void} Nothing.
  */
 
 /**
@@ -247,7 +255,7 @@ const window = $.getWindow();
  * @param {number} start The zero-based display offset.
  * @param {number} end The exclusive end offset.
  * @param {number[]} indexes The loaded-data indexes of the displayed rows.
- * @returns {void}
+ * @returns {void} Nothing.
  */
 
 /**
@@ -270,7 +278,7 @@ const window = $.getWindow();
 /**
  * @callback TableDrawCallback
  * @this {Table}
- * @returns {void}
+ * @returns {void} Nothing.
  */
 
 /**
@@ -1069,7 +1077,7 @@ export default class Table extends BaseComponent {
 
     /**
      * Gets the Table information.
-     * @returns {object} The Table information.
+     * @returns {TableInfo} The Table information.
      */
     info() {
         return {
@@ -3095,7 +3103,7 @@ export default class Table extends BaseComponent {
 
     /**
      * Renders a result row.
-     * @param {Array|object} data The row data.
+     * @param {TableRow} data The row data.
      * @param {number} rowIndex The row index.
      * @returns {HTMLElement} The table row.
      */
