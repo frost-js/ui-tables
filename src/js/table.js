@@ -44,11 +44,11 @@ import { buildTable, getDomData, getDomHeadings, getFooterCells } from './dom.js
  * @property {number|null} [responsivePriority=1000] Lower priorities remain visible longer; null prevents collapse.
  * @property {boolean} [searchable=true] Whether local searches include the column.
  * @property {boolean} [visible=true] Whether the column is displayed.
- * @property {function(*): *} [format] Formats a cell value as HTML.
- * @property {function(*, TableValueContext): *} [render] Resolves a value for each operation; cannot accompany format.
+ * @property {TableFormatter} [format] Formats a cell value as HTML.
+ * @property {TableRenderer} [render] Resolves a value for each operation; cannot accompany format.
  * @property {'auto'|'string'|'number'|'date'} [type='auto'] The local sort value type.
- * @property {function(*, *, {column: number}): number} [compare] Compares resolved sort values in ascending order.
- * @property {function(HTMLTableCellElement, *, TableRow, number, number): void} [createdCell] Receives a created cell.
+ * @property {TableCompareCallback} [compare] Compares resolved sort values in ascending order.
+ * @property {TableCreatedCellCallback} [createdCell] Receives a created cell.
  */
 /**
  * @typedef {object} TableDetailColumn
@@ -70,7 +70,7 @@ import { buildTable, getDomData, getDomHeadings, getFooterCells } from './dom.js
  * @property {number[]} [columns] Export columns (visible by default), or picker entries (all by default).
  * @property {'page'|'filtered'|'all'} [scope='page'] The rows to export; remote data supports page only.
  * @property {boolean} [escapeFormulae=true] Prefixes formula-like CSV strings with an apostrophe.
- * @property {function(this: Table): void} [callback] Runs with the table as its receiver.
+ * @property {TableButtonCallback} [callback] Runs with the table as its receiver.
  */
 /**
  * @typedef {object} TableRequest
@@ -88,16 +88,169 @@ import { buildTable, getDomData, getDomHeadings, getFooterCells } from './dom.js
  * @property {number} filtered The total number of matching rows.
  */
 /**
+ * @typedef {object} TableLanguage
+ * @property {string} [column] The fallback heading label, containing {column}.
+ * @property {string} [info] The result count, containing {start}, {end}, and {total}.
+ * @property {string} [infoFiltered] The filtered result count, also containing {filtered}.
+ * @property {string} [loading] The loading message.
+ * @property {string} [noData] The empty dataset message.
+ * @property {string} [noResults] The empty filtered results message.
+ * @property {string} [page] The page label.
+ * @property {string} [perPage] The page length label.
+ * @property {string} [search] The search input label.
+ * @property {object} [aria] The sorting accessibility labels.
+ * @property {string} [aria.sortAscending] The ascending sort instruction.
+ * @property {string} [aria.sortDescending] The descending sort instruction.
+ * @property {object} [buttons] The built-in button labels.
+ * @property {string} [buttons.columns] The column visibility picker label.
+ * @property {string} [buttons.csv] The CSV export label.
+ * @property {string} [buttons.excel] The Excel export label.
+ * @property {string} [buttons.print] The print label.
+ * @property {object} [paginate] The pagination labels.
+ * @property {string} [paginate.first] The first page label.
+ * @property {string} [paginate.last] The last page label.
+ * @property {string} [paginate.next] The next page label.
+ * @property {string} [paginate.previous] The previous page label.
+ * @property {object} [responsive] The responsive detail labels.
+ * @property {string} [responsive.details] The detail control heading.
+ * @property {string} [responsive.hide] The collapse label, containing {row}.
+ * @property {string} [responsive.show] The expand label, containing {row}.
+ * @property {object} [selection] The row selection labels.
+ * @property {string} [selection.clear] The clear selection label.
+ * @property {string} [selection.count] The selection count, containing {count}.
+ * @property {string} [selection.page] The select page label.
+ * @property {string} [selection.row] The row selection label, containing {id}.
+ */
+/** @typedef {(TableResults|PromiseLike<TableResults>) & {cancel?: Function}} TablePendingResults */
+/**
+ * @callback TableGetResultsCallback
+ * @this {Table}
+ * @param {TableRequest} request The search, filter, ordering, and pagination state.
+ * @returns {TablePendingResults} Results or a promise, optionally exposing a cancel method.
+ */
+/**
+ * @callback TableRowIdCallback
+ * @this {Table}
+ * @param {TableRow} row The source row.
+ * @returns {TableRowId} A stable, unique row ID.
+ */
+/**
+ * @callback TableSanitizeCallback
+ * @param {string} html The heading, cell, or custom detail HTML.
+ * @returns {string} The sanitized HTML.
+ */
+/**
+ * @callback TableFormatter
+ * @this {Table}
+ * @param {*} value The raw cell value.
+ * @returns {*} The display value, converted to a string and sanitized.
+ */
+/**
+ * @callback TableRenderer
+ * @this {Table}
+ * @param {*} value The raw cell value.
+ * @param {TableValueContext} context The operation and source row information.
+ * @returns {*} The operation-specific value; display values are converted to strings and sanitized.
+ */
+/**
+ * @callback TableCompareCallback
+ * @this {Table}
+ * @param {*} a The first resolved sort value.
+ * @param {*} b The second resolved sort value.
+ * @param {{column: number}} context The original column index.
+ * @returns {number} A negative number, zero, or a positive number for ascending ordering.
+ */
+/**
+ * @callback TableCreatedCellCallback
+ * @this {Table}
+ * @param {HTMLTableCellElement} cell The created cell.
+ * @param {*} value The raw cell value.
+ * @param {TableRow} row The source row.
+ * @param {number} rowIndex The zero-based page row index.
+ * @param {number} columnIndex The original column index.
+ * @returns {void}
+ */
+/**
+ * @callback TableDetailRenderer
+ * @this {Table}
+ * @param {TableRow} row The source row.
+ * @param {TableDetailContext} context The collapsed columns and loaded-data index.
+ * @returns {string} Synchronous detail HTML, sanitized before insertion.
+ */
+/**
+ * @callback TableButtonCallback
+ * @this {Table}
+ * @returns {void}
+ */
+/**
+ * @callback TableCreatedRowCallback
+ * @this {Table}
+ * @param {HTMLTableRowElement} row The inserted row element.
+ * @param {TableRow} data The source row.
+ * @param {number} rowIndex The zero-based page row index.
+ * @returns {void}
+ */
+/**
+ * @callback TableRowCallback
+ * @this {Table}
+ * @param {HTMLTableRowElement} row The rendered row element.
+ * @param {TableRow} data The source row.
+ * @param {number} pageRowIndex The zero-based page row index.
+ * @param {number} offsetRowIndex The row index including the page offset.
+ * @param {number} dataRowIndex The loaded-data index.
+ * @returns {void}
+ */
+/**
+ * @callback TableHeaderCallback
+ * @this {Table}
+ * @param {HTMLTableRowElement} row The heading row.
+ * @param {TableRow[]} data The loaded dataset.
+ * @param {number} start The zero-based display offset.
+ * @param {number} end The exclusive end offset.
+ * @param {number[]} indexes The loaded-data indexes of the displayed rows.
+ * @returns {void}
+ */
+/**
+ * @callback TableFooterCallback
+ * @this {Table}
+ * @param {HTMLTableSectionElement} footer The cloned original footer.
+ * @param {TableRow[]} data The loaded dataset.
+ * @param {number} start The zero-based display offset.
+ * @param {number} end The exclusive end offset.
+ * @param {number[]} indexes The loaded-data indexes of the displayed rows.
+ * @returns {void}
+ */
+/**
+ * @callback TableInfoCallback
+ * @this {Table}
+ * @param {number} start The one-based display start, or zero when empty.
+ * @param {number} end The exclusive end offset.
+ * @param {number} total The unfiltered row count.
+ * @param {number} filtered The filtered row count.
+ * @param {string} text The default result count text.
+ * @returns {string} The result count text.
+ */
+/**
+ * @callback TablePreDrawCallback
+ * @this {Table}
+ * @returns {boolean|void} False to retain the current DOM; otherwise continue drawing.
+ */
+/**
+ * @callback TableDrawCallback
+ * @this {Table}
+ * @returns {void}
+ */
+/**
  * @typedef {object} TableOptions
  * @property {TableRow[]} [data] Local data; otherwise read the table body.
- * @property {function(TableRequest): (TableResults|PromiseLike<TableResults>)} [getResults] Loads remote rows.
- * @property {string|number|function(TableRow): TableRowId|null} [rowId=null] The stable row identity accessor.
+ * @property {TableGetResultsCallback} [getResults] Loads remote rows.
+ * @property {string|number|TableRowIdCallback|null} [rowId=null] The stable row identity accessor.
  * @property {false|'single'|'multiple'} [selection=false] The row selection mode; requires rowId.
  * @property {TableColumn[]|null} [columns=null] The column definitions.
- * @property {function(string): string} [sanitize] Sanitizes HTML cells, headings, and custom details; defaults to query sanitization.
+ * @property {TableSanitizeCallback} [sanitize] Sanitizes HTML cells, headings, and custom details; defaults to query sanitization.
  * @property {TableButton[]} [buttons=[]] The export and custom buttons.
  * @property {{top?: string, bottom?: string}} [layout] Comma-separated columns containing pipe-separated controls.
- * @property {Record<string, string|Record<string, string>>} [lang] The interface labels.
+ * @property {TableLanguage} [lang] The interface labels.
  * @property {Record<string, string>} [icons] The pagination icons.
  * @property {'filled'|'outline'} [inputStyle='filled'] The generated input style.
  * @property {TableOrder[]} [order] The initial ordering; defaults to column zero ascending.
@@ -108,16 +261,16 @@ import { buildTable, getDomData, getDomHeadings, getFooterCells } from './dom.js
  * @property {boolean} [lengthChange=true] Whether users can change the page length.
  * @property {boolean} [ordering=true] Whether rows can be sorted.
  * @property {boolean} [paging=true] Whether rows are paginated.
- * @property {function(this: Table, TableRow, TableDetailContext): string} [renderDetails=null] Returns custom detail HTML synchronously.
+ * @property {TableDetailRenderer|null} [renderDetails=null] Returns custom detail HTML synchronously.
  * @property {boolean} [responsive=false] Collapse columns into details when the container is too narrow.
  * @property {boolean} [searching=true] Whether rows can be searched.
- * @property {function(HTMLTableRowElement, TableRow, number): void} [createdRow] Receives an inserted row.
- * @property {function(HTMLTableRowElement, TableRow, number, number, number): void} [rowCallback] Receives a rendered row and its indexes.
- * @property {function(HTMLTableRowElement, TableRow[], number, number, number[]): void} [headerCallback] Receives the heading row and data range.
- * @property {function(HTMLTableSectionElement, TableRow[], number, number, number[]): void} [footerCallback] Receives the footer and data range.
- * @property {function(number, number, number, number, string): string} [infoCallback] Formats the result count text.
- * @property {function(): (boolean|void)} [preDrawCallback] Runs before drawing; return false to keep the existing DOM.
- * @property {function(): void} [drawCallback] Runs after drawing rows.
+ * @property {TableCreatedRowCallback|null} [createdRow=null] Receives an inserted row.
+ * @property {TableRowCallback|null} [rowCallback=null] Receives a rendered row and its indexes.
+ * @property {TableHeaderCallback|null} [headerCallback=null] Receives the heading row and data range.
+ * @property {TableFooterCallback|null} [footerCallback=null] Receives the footer and data range.
+ * @property {TableInfoCallback|null} [infoCallback=null] Formats the result count text.
+ * @property {TablePreDrawCallback|null} [preDrawCallback=null] Runs before drawing; return false to keep the existing DOM.
+ * @property {TableDrawCallback|null} [drawCallback=null] Runs after drawing rows.
  */
 
 /**

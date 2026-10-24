@@ -57,11 +57,15 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Run tests
+      - name: Run unit tests
+        if: matrix.browser == 'chromium'
+        run: npm run test:unit
+
+      - name: Run browser tests
         if: matrix.node-version != 24 || matrix.browser != 'chromium'
         run: npm run test:browser -- --project=${{ matrix.browser }} --workers=4
 
-      - name: Run tests with coverage
+      - name: Run browser tests with coverage
         if: matrix.node-version == 24 && matrix.browser == 'chromium'
         run: npm run test:coverage -- --workers=4
 

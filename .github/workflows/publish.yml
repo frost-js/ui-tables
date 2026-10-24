@@ -50,7 +50,10 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Run tests
+      - name: Run unit tests
+        run: npm run test:unit
+
+      - name: Run browser tests
         run: npm run test:browser -- --project=chromium --workers=4
 
       - name: Verify generated bundles are current

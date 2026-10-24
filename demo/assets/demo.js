@@ -39,10 +39,12 @@ $.ready(() => {
 
     const requestedTheme = new URLSearchParams(location.search).get('theme');
     const initialTheme = requestedTheme || storedTheme;
+
     setTheme(['light', 'dark'].includes(initialTheme) ? initialTheme : 'system');
 
     $('[data-demo-theme]').addEvent('change', (event) => {
         const theme = $.getValue(event.currentTarget);
+
         setTheme(theme);
 
         try {
@@ -65,7 +67,9 @@ $.ready(() => {
     const rows = names.map((name, index) => [name, teams[index % teams.length], 80 + index]);
     const node = (id) => $.findOneById(id);
     const init = (id, options = {}) => Table.init(node(id), {
-        length: 5, lengths: [5, 10, 25], ...options,
+        length: 5,
+        lengths: [5, 10, 25],
+        ...options,
     });
 
     Table.layout.demoSummary = function(container) {
@@ -76,6 +80,7 @@ $.ready(() => {
     let controls;
     const initializeControls = () => {
         controls?.dispose();
+
         const options = {
             length: 5,
             lengths: [5, 10, 25],
@@ -84,18 +89,24 @@ $.ready(() => {
             paging: $.getProperty(node('allow-page'), 'checked'),
             inputStyle: $.getValue(node('input-style')),
         };
+
         if ($.getProperty(node('custom-layout'), 'checked')) {
             options.layout = { top: 'demoSummary,search', bottom: 'length,info|pagination' };
         }
+
         // The plugin and class share instances and public methods.
         controls = $('#basic-table').table(options);
     };
+
     for (const id of ['allow-search', 'allow-order', 'allow-page', 'input-style', 'custom-layout']) {
         $.addEvent(node(id), 'change', initializeControls);
     }
+
     initializeControls();
+
     $.addEvent(node('toggle-direction'), 'click', (event) => {
         const rtl = $.getProperty(node('direction-host'), 'dir') !== 'rtl';
+
         $.setProperty(node('direction-host'), 'dir', rtl ? 'rtl' : 'ltr');
         $.setAttribute(event.currentTarget, 'aria-pressed', String(rtl));
     });
@@ -115,10 +126,15 @@ $.ready(() => {
     let dataTable;
     const initializeData = () => {
         dataTable?.dispose();
+
         const objects = $.getValue(node('data-source')) === 'objects';
         const customDetails = $.getProperty(node('data-details'), 'checked');
         const options = objects ? {
-            data: detailRows.map(([name, team, score, email, notes]) => ({ person: { name, team, email }, score, notes })),
+            data: detailRows.map(([name, team, score, email, notes]) => ({
+                person: { name, team, email },
+                score,
+                notes,
+            })),
             rowId: 'person.name',
             columns: [
                 { data: 'person.name', responsivePriority: null },
@@ -131,14 +147,22 @@ $.ready(() => {
             data: detailRows,
             rowId: 0,
             columns: [
-                { responsivePriority: null }, { responsivePriority: 1 },
-                { class: 'text-end', responsivePriority: 2 }, { responsivePriority: 3 }, { responsivePriority: 4 },
+                { responsivePriority: null },
+                { responsivePriority: 1 },
+                { class: 'text-end', responsivePriority: 2 },
+                { responsivePriority: 3 },
+                { responsivePriority: 4 },
             ],
         };
+
         dataTable = init('data-table', {
-            ...options, responsive: true, renderDetails: customDetails ? renderDetails : null,
-            buttons: [{ type: 'columns' }], order: [[1, 'asc'], [2, 'desc']],
+            ...options,
+            responsive: true,
+            renderDetails: customDetails ? renderDetails : null,
+            buttons: [{ type: 'columns' }],
+            order: [[1, 'asc'], [2, 'desc']],
         });
+
         $.setText(node('data-config'), objects ?
             `Table.init(table, {
     data: [{ person: { name: 'Alice', team: 'Design', email: 'alice@example.com' }, score: 80, notes: 'Available for reviews' }],
@@ -169,23 +193,33 @@ $.ready(() => {
     order: [[1, 'asc'], [2, 'desc']],
 });`);
     };
+
     $.addEvent(node('data-source'), 'change', initializeData);
     $.addEvent(node('data-details'), 'change', initializeData);
     $.addEvent(node('data-width'), 'change', () => {
-        $.setStyle(node('data-preview'), { 'max-width': $.getValue(node('data-width')) === 'narrow' ? '20rem' : 'none' });
+        $.setStyle(node('data-preview'), {
+            'max-width': $.getValue(node('data-width')) === 'narrow' ? '20rem' : 'none',
+        });
     });
+
     initializeData();
 
     const callbackTable = init('callback-table', {
         data: rows,
-        columns: [{}, {}, {
-            class: 'text-end',
-            type: 'number',
-            render: (value, { purpose }) => purpose === 'display' ? `<strong>${Number(value)}</strong>` : value,
-            createdCell(cell, value) {
-                if (value >= 90) $.addClass(cell, 'text-success', 'fw-bold');
+        columns: [
+            {},
+            {},
+            {
+                class: 'text-end',
+                type: 'number',
+                render: (value, { purpose }) => purpose === 'display' ? `<strong>${Number(value)}</strong>` : value,
+                createdCell(cell, value) {
+                    if (value >= 90) {
+                        $.addClass(cell, 'text-success', 'fw-bold');
+                    }
+                },
             },
-        }],
+        ],
         rowCallback(row, data) {
             $[data[2] >= 90 ? 'addClass' : 'removeClass'](row, 'table-active');
         },
@@ -212,6 +246,7 @@ $.ready(() => {
 
         callbackTable.setFilters(filters);
     };
+
     $.addEvent(node('callback-team'), 'change', filterScores);
     $.addEvent(node('callback-score'), 'change', filterScores);
 
@@ -232,10 +267,15 @@ $.ready(() => {
     ]);
     const logRequest = (message) => {
         const item = $.create('li');
+
         $.setText(item, message);
         $.prepend(node('request-log'), item);
-        if ($.children(node('request-log')).length > 30) $.remove($.children(node('request-log')).at(-1));
+
+        if ($.children(node('request-log')).length > 30) {
+            $.remove($.children(node('request-log')).at(-1));
+        }
     };
+
     /**
      * Simulates a service that filters, sorts and pages a complete dataset.
      * @param {object} request The table request.
@@ -244,8 +284,10 @@ $.ready(() => {
     const getResults = (request) => {
         const id = ++requestId;
         const shouldFail = failNext;
+
         failNext = false;
         logRequest(`#${id}: search "${request.term || ''}", offset ${request.offset || 0}`);
+
         let timer;
         let rejectPending;
         const pending = new Promise((resolve, reject) => {
@@ -256,26 +298,40 @@ $.ready(() => {
                     reject(new Error('Simulated request failure. Press Retry to try again.'));
                     return;
                 }
+
                 const term = (request.term || '').toLowerCase();
                 const results = remoteRows.filter((row) => row.some((value) => String(value).toLowerCase().includes(term)));
+
                 results.sort((a, b) => {
                     for (const { column, dir } of Object.values(request.order || {})) {
                         const diff = column === 2 ? a[column] - b[column] : String(a[column]).localeCompare(String(b[column]));
-                        if (diff) return dir === 'desc' ? -diff : diff;
+
+                        if (diff) {
+                            return dir === 'desc' ? -diff : diff;
+                        }
                     }
+
                     return 0;
                 });
+
                 logRequest(`#${id}: completed, ${results.length} matches`);
-                resolve({ results: results.slice(request.offset || 0, (request.offset || 0) + (request.limit || results.length)), total: remoteRows.length, filtered: results.length });
+                resolve({
+                    results: results.slice(request.offset || 0, (request.offset || 0) + (request.limit || results.length)),
+                    total: remoteRows.length,
+                    filtered: results.length,
+                });
             }, 600);
         });
+
         pending.cancel = () => {
             clearTimeout(timer);
             logRequest(`#${id}: cancelled`);
             rejectPending(new DOMException('Request cancelled', 'AbortError'));
         };
+
         return pending;
     };
+
     $.addEvent('#remote-table', 'processing.ui.table', () => {
         $.setText(node('remote-message'), 'Loading results…');
     });
@@ -285,9 +341,12 @@ $.ready(() => {
     $.addEvent('#remote-table', 'error.ui.table', (event) => {
         $.setText(node('remote-message'), event.detail.error.message);
     });
+
     const remote = init('remote-table', { getResults, debounce: 100 });
+
     $.addEvent(node('fail-request'), 'click', () => {
-        failNext = true; remote.reload();
+        failNext = true;
+        remote.reload();
     });
     $.addEvent(node('retry-request'), 'click', () => {
         remote.search('');
@@ -311,10 +370,15 @@ $.ready(() => {
         setRowById: ['Alice', ['Alice', 'Design', 99]],
         setValue: [0, 2, 99],
     };
-    const eventNames = ['init', 'length', 'order', 'page', 'search', 'filter', 'selectionchange', 'statechange', 'processing', 'processed', 'preDraw', 'draw', 'error'];
+    const eventNames = [
+        'init', 'length', 'order', 'page', 'search', 'filter', 'selectionchange', 'statechange',
+        'processing', 'processed', 'preDraw', 'draw', 'error',
+    ];
+
     $.addEvent('#method-table', eventNames.map((name) => `${name}.ui.table`).join(' '), (event) => {
         logEvent(`${event.type}.ui.table`);
     });
+
     let savedState = null;
     const initMethods = () => init('method-table', {
         rowId: 0,
@@ -322,15 +386,21 @@ $.ready(() => {
         layout: { top: 'selection,search|length', bottom: 'info,pagination' },
     });
     let methodTable = initMethods();
+
     $('[data-demo-method]').addEvent('click', (event) => {
         try {
             const method = $.getAttribute(event.currentTarget, 'data-demo-method');
+
             if (method === 'init') {
                 methodTable = initMethods();
                 $.setText(node('method-output'), 'Initialized.');
                 return;
             }
-            if (!methodTable.node) throw new Error('Choose Init to initialize the table again.');
+
+            if (!methodTable.node) {
+                throw new Error('Choose Init to initialize the table again.');
+            }
+
             const args = method === 'setState' ? [savedState] : methods[method];
             const result = methodTable[method](...args);
 
