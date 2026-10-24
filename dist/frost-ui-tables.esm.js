@@ -2561,7 +2561,7 @@ var Table = class extends BaseComponent {
 		if (this.#id) $.removeAttribute(node, "id");
 		$.removeClass(node, this.#addedClasses);
 		this.#addedClasses = [];
-		if (this.#originalClass === null && !node.getAttribute("class")) $.removeAttribute(node, "class");
+		if (this.#originalClass === null && !$.getAttribute(node, "class")) $.removeAttribute(node, "class");
 		for (const [attribute, value] of [["aria-describedby", this.#originalDescription], ["aria-busy", this.#originalBusy]]) {
 			if (value === void 0) continue;
 			if (value === null) $.removeAttribute(node, attribute);
@@ -4380,7 +4380,7 @@ var Table = class extends BaseComponent {
 			this.#syncResponsiveColumns();
 			for (const index of candidates) {
 				if (!active()) return;
-				if (visible.length - this.#collapsedColumns.size <= 1 || this.node.getBoundingClientRect().width <= width + 1) break;
+				if (visible.length - this.#collapsedColumns.size <= 1 || $.rect(this.node).width <= width + 1) break;
 				this.#collapsedColumns.add(index);
 				for (const entry of this.#responsiveRows) this.#renderResponsiveControl(entry);
 				this.#syncResponsiveColumns();

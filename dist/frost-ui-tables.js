@@ -2593,7 +2593,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			if (this.#id) _fr0st_query.default.removeAttribute(node, "id");
 			_fr0st_query.default.removeClass(node, this.#addedClasses);
 			this.#addedClasses = [];
-			if (this.#originalClass === null && !node.getAttribute("class")) _fr0st_query.default.removeAttribute(node, "class");
+			if (this.#originalClass === null && !_fr0st_query.default.getAttribute(node, "class")) _fr0st_query.default.removeAttribute(node, "class");
 			for (const [attribute, value] of [["aria-describedby", this.#originalDescription], ["aria-busy", this.#originalBusy]]) {
 				if (value === void 0) continue;
 				if (value === null) _fr0st_query.default.removeAttribute(node, attribute);
@@ -4412,7 +4412,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 				this.#syncResponsiveColumns();
 				for (const index of candidates) {
 					if (!active()) return;
-					if (visible.length - this.#collapsedColumns.size <= 1 || this.node.getBoundingClientRect().width <= width + 1) break;
+					if (visible.length - this.#collapsedColumns.size <= 1 || _fr0st_query.default.rect(this.node).width <= width + 1) break;
 					this.#collapsedColumns.add(index);
 					for (const entry of this.#responsiveRows) this.#renderResponsiveControl(entry);
 					this.#syncResponsiveColumns();

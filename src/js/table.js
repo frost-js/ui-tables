@@ -808,7 +808,7 @@ export default class Table extends BaseComponent {
         $.removeClass(node, this.#addedClasses);
         this.#addedClasses = [];
 
-        if (this.#originalClass === null && !node.getAttribute('class')) {
+        if (this.#originalClass === null && !$.getAttribute(node, 'class')) {
             $.removeAttribute(node, 'class');
         }
 
@@ -3728,7 +3728,7 @@ export default class Table extends BaseComponent {
                     return;
                 }
 
-                if (visible.length - this.#collapsedColumns.size <= 1 || this.node.getBoundingClientRect().width <= width + 1) {
+                if (visible.length - this.#collapsedColumns.size <= 1 || $.rect(this.node).width <= width + 1) {
                     break;
                 }
 
