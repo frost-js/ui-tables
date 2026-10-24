@@ -147,6 +147,110 @@ test.describe('Table remote results', () => {
         }
     });
 
+    test.describe('state restoration', () => {
+        test('requests restored state once and publishes it before the response', async ({ page }) => {
+            await page.evaluate(() => {
+                window.states = [];
+                $.addEvent('#table', 'statechange.ui.table', (event) => window.states.push(event.detail.state));
+                window.startRemote();
+            });
+
+            await page.clock.runFor(25);
+
+            const state = await page.evaluate(() => {
+                const table = UI.Table.init($.findOne('#table'));
+                const state = table.getState();
+                state.search = 'Wanted';
+                state.filters = [{ column: 0, operator: 'contains', value: 'Wanted' }];
+                state.order = [[0, 'desc']];
+                state.length = 1;
+                state.page = 3;
+                table.setState(state);
+
+                return state;
+            });
+
+            expect(await page.evaluate(() => window.states)).toEqual([state]);
+
+            await page.clock.runFor(25);
+
+            const requests = await page.evaluate(() => window.requests.map((entry) => entry.request));
+
+            expect(requests).toHaveLength(2);
+            expect(requests[1]).toMatchObject({ term: 'Wanted', filters: state.filters, order: { 0: { column: 0, dir: 'desc' } }, offset: 2, limit: 1 });
+            await expect(page.locator('body')).toHaveAttribute('data-cancelled', '1');
+
+            await page.evaluate(() => window.requests[1].resolve({ results: [['Wanted']], total: 10, filtered: 4 }));
+
+            await expect(page.locator('tbody td')).toHaveText('Wanted');
+
+            await page.evaluate(() => window.requests[0].resolve({ results: [['Old']], total: 10, filtered: 10 }));
+
+            await expect(page.locator('tbody td')).toHaveText('Wanted');
+            expect(await page.evaluate(() => window.states)).toEqual([state]);
+        });
+
+        test('publishes a corrected page when restored state exceeds the remote results', async ({ page }) => {
+            await page.evaluate(() => {
+                const table = window.startRemote();
+                window.pages = [];
+                $.addEvent('#table', 'statechange.ui.table', (event) => window.pages.push(event.detail.state.page));
+                table.setState({ ...table.getState(), page: 5 });
+            });
+
+            await page.clock.runFor(25);
+
+            expect(await page.evaluate(() => window.requests[0].request.offset)).toBe(8);
+
+            await page.evaluate(() => window.requests[0].resolve({ results: [], total: 3, filtered: 3 }));
+            await page.clock.runFor(25);
+
+            expect(await page.evaluate(() => window.requests[1].request.offset)).toBe(2);
+            expect(await page.evaluate(() => window.pages)).toEqual([5, 2]);
+
+            await page.evaluate(() => window.requests[1].resolve({ results: [['Last']], total: 3, filtered: 3 }));
+
+            await expect(page.locator('tbody td')).toHaveText('Last');
+            expect(await page.evaluate(() => window.pages)).toEqual([5, 2]);
+        });
+
+        test('keeps a pending response valid when a snapshot is rejected', async ({ page }) => {
+            await page.evaluate(() => window.startRemote());
+            await page.clock.runFor(25);
+
+            const error = await page.evaluate(() => {
+                const table = UI.Table.init($.findOne('#table'));
+
+                try {
+                    table.setState({ ...table.getState(), search: 'Changed', columns: [] });
+                } catch (error) {
+                    return error.name;
+                }
+            });
+
+            expect(error).toBe('TypeError');
+
+            await page.evaluate(() => window.requests[0].resolve({ results: [['Original request']], total: 1, filtered: 1 }));
+
+            await expect(page.locator('tbody td')).toHaveText('Original request');
+            await expect(page.getByRole('searchbox')).toHaveValue('');
+            expect(await page.evaluate(() => window.requests.length)).toBe(1);
+        });
+
+        test('stops scheduling when a state listener disposes the table', async ({ page }) => {
+            await page.evaluate(() => {
+                const table = window.startRemote();
+                $.addEvent('#table', 'statechange.ui.table', () => table.dispose());
+                table.setState({ ...table.getState(), search: 'Changed' });
+            });
+
+            await page.clock.runFor(25);
+
+            expect(await page.evaluate(() => window.requests.length)).toBe(0);
+            await expect(page.locator('tbody td')).toHaveText('Original');
+        });
+    });
+
     test.describe('filters', () => {
         test('sends copied descriptors with existing request fields and omits cleared filters', async ({ page }) => {
             await page.evaluate(() => {

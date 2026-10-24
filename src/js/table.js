@@ -3,11 +3,21 @@ import { BaseComponent, generateId } from '@fr0st/ui';
 import { csv, excel, print } from './buttons.js';
 import {
     buildTable, getDomData, getDomHeadings, matchesFilter, normalizeColumns, normalizeFilters, normalizeOrder,
-    normalizePageLength, normalizeSortValue, validateColumnIndex, validateRows,
+    normalizePageLength, normalizeSortValue, normalizeState, validateColumnIndex, validateRows,
 } from './helpers.js';
 
 /** @typedef {Array<*>|Record<string, *>} TableRow */
 /** @typedef {[number, 'asc'|'desc']} TableOrder */
+/**
+ * @typedef {object} TableState
+ * @property {1} version The snapshot schema version.
+ * @property {string} search The global search term.
+ * @property {TableFilter[]} filters The structured column filters.
+ * @property {TableOrder[]} order The active order, empty when ordering is disabled.
+ * @property {number|null} length The page length, or null when paging is disabled.
+ * @property {number} page The one-based page, or one when paging is disabled.
+ * @property {Array<{data: string|number, name: string|null, visible: boolean}>} columns Column identity and visibility.
+ */
 /**
  * @typedef {object} TableFilter
  * @property {number} column The original column index.
@@ -267,6 +277,7 @@ export default class Table extends BaseComponent {
     #rowIndexes = [];
     #searchHandler = null;
     #searchInput = null;
+    #stateKey = null;
     #tbody = null;
     #term = '';
     #tfoot = null;
@@ -316,6 +327,7 @@ export default class Table extends BaseComponent {
             }
 
             this.#order = normalizeOrder(this.options.order, this.#columns);
+            this.#stateKey = JSON.stringify(this.getState());
 
             if (!$.getProperty(node, 'id')) {
                 $.setProperty(node, 'id', generateId('table'));
@@ -497,6 +509,7 @@ export default class Table extends BaseComponent {
 
         this.#loadResults = null;
         this.#searchHandler = null;
+        this.#stateKey = null;
 
         // Restore the DOM before a user cancellation hook can initialize a new instance.
         try {
@@ -608,6 +621,33 @@ export default class Table extends BaseComponent {
         return $._isPlainObject(this.#data[rowIndex]) ?
             { ...this.#data[rowIndex] } :
             [...this.#data[rowIndex]];
+    }
+
+    /**
+     * Gets an independent, serializable snapshot of the current view.
+     * @returns {TableState|null} The snapshot, or null after disposal.
+     */
+    getState() {
+        if (!this.node) {
+            return null;
+        }
+
+        return {
+            version: 1,
+            search: this.#term,
+            filters: this.#filters.map((filter) => ({
+                ...filter,
+                value: Array.isArray(filter.value) ? [...filter.value] : filter.value,
+            })),
+            order: this.options.ordering ? this.#order.map((entry) => [...entry]) : [],
+            length: this.options.paging ? this.#limit : null,
+            page: this.options.paging ? 1 + this.#offset / this.#limit : 1,
+            columns: this.#columns.map((column) => ({
+                data: column.data,
+                name: column.name ?? null,
+                visible: Boolean(column.visible),
+            })),
+        };
     }
 
     /**
@@ -899,6 +939,36 @@ export default class Table extends BaseComponent {
         if (this.node) {
             this.#load();
         }
+    }
+
+    /**
+     * Restores a validated view with one recalculation or remote load.
+     * @param {TableState} state The complete snapshot to restore.
+     */
+    setState(state) {
+        if (!this.node) {
+            return;
+        }
+
+        const normalized = normalizeState(state, this.#columns, this.options);
+        this.#searchHandler?.cancel();
+
+        this.#term = normalized.search;
+        this.#filters = normalized.filters;
+        this.#order = normalized.order;
+        this.#limit = normalized.length ?? Infinity;
+        this.#offset = this.options.paging ? (normalized.page - 1) * this.#limit : 0;
+
+        for (const [index, column] of normalized.columns.entries()) {
+            this.#columns[index].visible = column.visible;
+        }
+
+        if (this.#searchInput) {
+            $.setValue(this.#searchInput, this.#term);
+        }
+
+        this.#syncLength();
+        this.#load();
     }
 
     /**
@@ -1285,6 +1355,12 @@ export default class Table extends BaseComponent {
                 return;
             }
 
+            this.#notifyStateChange();
+
+            if (!this.node || requestVersion !== this.#requestVersion) {
+                return;
+            }
+
             this.loading();
 
             if (this.node && requestVersion === this.#requestVersion) {
@@ -1302,6 +1378,10 @@ export default class Table extends BaseComponent {
 
         try {
             this.#updateLocal();
+
+            if (this.node && drawVersion === this.#drawVersion) {
+                this.#notifyStateChange();
+            }
         } finally {
             if (this.node && drawVersion === this.#drawVersion) {
                 this.loading({ show: false });
@@ -1351,6 +1431,25 @@ export default class Table extends BaseComponent {
         if (this.node) {
             this.#renderResults();
         }
+    }
+
+    /**
+     * Publishes changed view configuration independently of request completion.
+     */
+    #notifyStateChange() {
+        if (!this.node) {
+            return;
+        }
+
+        const state = this.getState();
+        const key = JSON.stringify(state);
+
+        if (key === this.#stateKey) {
+            return;
+        }
+
+        this.#stateKey = key;
+        $.triggerEvent(this.node, 'statechange.ui.table', { detail: { state } });
     }
 
     /**
@@ -1935,6 +2034,12 @@ export default class Table extends BaseComponent {
         // User callbacks may dispose the table or draw again. Stop an older draw after each callback.
         const version = ++this.#drawVersion;
         const active = () => this.node && version === this.#drawVersion;
+        this.#notifyStateChange();
+
+        if (!active()) {
+            return;
+        }
+
         $.triggerEvent(this.node, 'preDraw.ui.table');
 
         if (!active()) {

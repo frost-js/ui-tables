@@ -257,7 +257,7 @@
         <section class="mb-5" id="methods-events" aria-labelledby="methods-events-title">
             <header class="border-bottom pb-3 mb-4">
                 <h2 class="h3 mb-1" id="methods-events-title">Methods and lifecycle events</h2>
-                <p class="text-body-secondary mb-0">Add or replace rows in one update, inspect all matching rows, and explore the events. Dispose restores the original HTML; Init starts it again.</p>
+                <p class="text-body-secondary mb-0">Edit rows, inspect matches, or save a view and restore it after searching or sorting. Dispose restores the original HTML; Init starts it again.</p>
             </header>
             <div class="row g-4">
                 <div class="col-xl-7">
@@ -270,6 +270,8 @@
                             <button class="btn btn-outline-primary ripple" data-demo-method="setValue" type="button">Set first score</button>
                             <button class="btn btn-secondary ripple" data-demo-method="getData" type="button">Get matching rows</button>
                             <button class="btn btn-secondary ripple" data-demo-method="info" type="button">Get info</button>
+                            <button class="btn btn-secondary ripple" data-demo-method="getState" type="button">Save view</button>
+                            <button class="btn btn-outline-primary ripple" data-demo-method="setState" id="restore-state" type="button" disabled>Restore view</button>
                             <button class="btn btn-outline-primary ripple" data-demo-method="clear" type="button">Clear rows</button>
                             <button class="btn btn-outline-danger ripple" data-demo-method="dispose" type="button">Dispose</button>
                         </div>

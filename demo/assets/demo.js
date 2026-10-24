@@ -258,14 +258,16 @@ $.ready(() => {
         clear: [],
         dispose: [],
         getData: [{ scope: 'filtered' }],
+        getState: [],
         info: [],
         setData: [rows],
         setValue: [0, 2, 99],
     };
-    const eventNames = ['init', 'length', 'order', 'page', 'search', 'processing', 'processed', 'preDraw', 'draw', 'error'];
+    const eventNames = ['init', 'length', 'order', 'page', 'search', 'filter', 'statechange', 'processing', 'processed', 'preDraw', 'draw', 'error'];
     $.addEvent('#method-table', eventNames.map((name) => `${name}.ui.table`).join(' '), (event) => {
         logEvent(`${event.type}.ui.table`);
     });
+    let savedState = null;
     let methodTable = init('method-table');
     $('[data-demo-method]').addEvent('click', (event) => {
         try {
@@ -276,7 +278,14 @@ $.ready(() => {
                 return;
             }
             if (!methodTable.node) throw new Error('Choose Init to initialize the table again.');
-            const result = methodTable[method](...methods[method]);
+            const args = method === 'setState' ? [savedState] : methods[method];
+            const result = methodTable[method](...args);
+
+            if (method === 'getState') {
+                savedState = result;
+                $.setProperty(node('restore-state'), 'disabled', false);
+            }
+
             $.setText(node('method-output'), result === undefined ? `${method}() completed.` : JSON.stringify(result, null, 2));
         } catch (error) {
             $.setText(node('method-output'), error.message);

@@ -34,7 +34,7 @@ Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' });
 _fr0st_query = __toESM(_fr0st_query, 1);
 
 //#region src/js/helpers.js
-/** @import { TableColumn, TableFilter, TableOrder } from './table.js'; */
+/** @import { TableColumn, TableFilter, TableOptions, TableOrder, TableState } from './table.js'; */
 	/**
 	* Builds a text-only table from export data.
 	* @param {string[]} headings The column headings.
@@ -256,6 +256,44 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			case "date": value = parseDate(value);
 		}
 		return typeof value === "number" && Number.isFinite(value) ? value : null;
+	}
+	/**
+	* Validates and copies a complete state snapshot before restoration.
+	* @param {TableState} state The supplied snapshot.
+	* @param {TableColumn[]} columns The current column schema.
+	* @param {TableOptions} options The enabled table features.
+	* @returns {TableState} The normalized snapshot.
+	*/
+	function normalizeState(state, columns, options) {
+		if (!_fr0st_query.default._isPlainObject(state) || state.version !== 1 || typeof state.search !== "string") throw new TypeError("State requires version 1 and a search string.");
+		if (!Array.isArray(state.columns) || state.columns.length !== columns.length) throw new TypeError("State columns must match the table schema.");
+		const schema = [];
+		for (const [index, column] of state.columns.entries()) {
+			if (!_fr0st_query.default._isPlainObject(column) || column.data !== columns[index].data || column.name !== (columns[index].name ?? null) || typeof column.visible !== "boolean") throw new TypeError("State column identity and visibility must match the table schema.");
+			schema.push({
+				data: column.data,
+				name: column.name,
+				visible: column.visible
+			});
+		}
+		const filters = normalizeFilters(state.filters, columns);
+		const order = normalizeOrder(state.order, columns);
+		if (order.length !== state.order.length) throw new TypeError("State cannot order nonorderable columns.");
+		if (!options.searching && (state.search || filters.length)) throw new TypeError("State requires searching to be enabled.");
+		if (!options.ordering && order.length) throw new TypeError("State requires ordering to be enabled.");
+		if (!Number.isSafeInteger(state.page) || state.page < 1) throw new RangeError("State page must be a positive safe integer.");
+		if (options.paging) {
+			if (!Number.isSafeInteger(state.length) || state.length < 1 || !Number.isSafeInteger((state.page - 1) * state.length)) throw new RangeError("State page length or offset is out of range.");
+		} else if (state.length !== null || state.page !== 1) throw new TypeError("State requires paging to be enabled.");
+		return {
+			version: 1,
+			search: state.search,
+			filters,
+			order,
+			length: state.length,
+			page: state.page,
+			columns: schema
+		};
 	}
 	/**
 	* Parses a Date, epoch milliseconds, or an unambiguous ISO date string.
@@ -1844,6 +1882,16 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 /** @typedef {Array<*>|Record<string, *>} TableRow */
 	/** @typedef {[number, 'asc'|'desc']} TableOrder */
 	/**
+	* @typedef {object} TableState
+	* @property {1} version The snapshot schema version.
+	* @property {string} search The global search term.
+	* @property {TableFilter[]} filters The structured column filters.
+	* @property {TableOrder[]} order The active order, empty when ordering is disabled.
+	* @property {number|null} length The page length, or null when paging is disabled.
+	* @property {number} page The one-based page, or one when paging is disabled.
+	* @property {Array<{data: string|number, name: string|null, visible: boolean}>} columns Column identity and visibility.
+	*/
+	/**
 	* @typedef {object} TableFilter
 	* @property {number} column The original column index.
 	* @property {'contains'|'equals'|'gt'|'gte'|'lt'|'lte'|'between'} operator The comparison.
@@ -2092,6 +2140,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		#rowIndexes = [];
 		#searchHandler = null;
 		#searchInput = null;
+		#stateKey = null;
 		#tbody = null;
 		#term = "";
 		#tfoot = null;
@@ -2125,6 +2174,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 					class: null
 				}));
 				this.#order = normalizeOrder(this.options.order, this.#columns);
+				this.#stateKey = JSON.stringify(this.getState());
 				if (!_fr0st_query.default.getProperty(node, "id")) {
 					_fr0st_query.default.setProperty(node, "id", (0, _fr0st_ui.generateId)("table"));
 					this.#id = true;
@@ -2237,6 +2287,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			this.#rowFilter = null;
 			this.#loadResults = null;
 			this.#searchHandler = null;
+			this.#stateKey = null;
 			try {
 				pending?.cancel?.();
 			} catch {}
@@ -2309,6 +2360,29 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		getRow(index, { modified = true } = {}) {
 			const rowIndex = this.#getIndex(index, { modified });
 			return _fr0st_query.default._isPlainObject(this.#data[rowIndex]) ? { ...this.#data[rowIndex] } : [...this.#data[rowIndex]];
+		}
+		/**
+		* Gets an independent, serializable snapshot of the current view.
+		* @returns {TableState|null} The snapshot, or null after disposal.
+		*/
+		getState() {
+			if (!this.node) return null;
+			return {
+				version: 1,
+				search: this.#term,
+				filters: this.#filters.map((filter) => ({
+					...filter,
+					value: Array.isArray(filter.value) ? [...filter.value] : filter.value
+				})),
+				order: this.options.ordering ? this.#order.map((entry) => [...entry]) : [],
+				length: this.options.paging ? this.#limit : null,
+				page: this.options.paging ? 1 + this.#offset / this.#limit : 1,
+				columns: this.#columns.map((column) => ({
+					data: column.data,
+					name: column.name ?? null,
+					visible: Boolean(column.visible)
+				}))
+			};
 		}
 		/**
 		* Gets a single value from a row.
@@ -2506,6 +2580,24 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			this.#offset = 0;
 			_fr0st_query.default.triggerEvent(this.node, "filter.ui.table");
 			if (this.node) this.#load();
+		}
+		/**
+		* Restores a validated view with one recalculation or remote load.
+		* @param {TableState} state The complete snapshot to restore.
+		*/
+		setState(state) {
+			if (!this.node) return;
+			const normalized = normalizeState(state, this.#columns, this.options);
+			this.#searchHandler?.cancel();
+			this.#term = normalized.search;
+			this.#filters = normalized.filters;
+			this.#order = normalized.order;
+			this.#limit = normalized.length ?? Infinity;
+			this.#offset = this.options.paging ? (normalized.page - 1) * this.#limit : 0;
+			for (const [index, column] of normalized.columns.entries()) this.#columns[index].visible = column.visible;
+			if (this.#searchInput) _fr0st_query.default.setValue(this.#searchInput, this.#term);
+			this.#syncLength();
+			this.#load();
 		}
 		/**
 		* Sets a single value for a row.
@@ -2750,6 +2842,8 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			if (this.options.getResults) {
 				const requestVersion = this.#cancelRequest();
 				if (!this.node || requestVersion !== this.#requestVersion) return;
+				this.#notifyStateChange();
+				if (!this.node || requestVersion !== this.#requestVersion) return;
 				this.loading();
 				if (this.node && requestVersion === this.#requestVersion) this.#loadResults(requestVersion);
 				return;
@@ -2758,6 +2852,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			if (!this.node || drawVersion !== this.#drawVersion) return;
 			try {
 				this.#updateLocal();
+				if (this.node && drawVersion === this.#drawVersion) this.#notifyStateChange();
 			} finally {
 				if (this.node && drawVersion === this.#drawVersion) this.loading({ show: false });
 			}
@@ -2785,6 +2880,17 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			this.#refreshResults();
 			this.loading({ show: false });
 			if (this.node) this.#renderResults();
+		}
+		/**
+		* Publishes changed view configuration independently of request completion.
+		*/
+		#notifyStateChange() {
+			if (!this.node) return;
+			const state = this.getState();
+			const key = JSON.stringify(state);
+			if (key === this.#stateKey) return;
+			this.#stateKey = key;
+			_fr0st_query.default.triggerEvent(this.node, "statechange.ui.table", { detail: { state } });
 		}
 		/**
 		* Refreshes the results.
@@ -3149,6 +3255,8 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			if (!this.node) return;
 			const version = ++this.#drawVersion;
 			const active = () => this.node && version === this.#drawVersion;
+			this.#notifyStateChange();
+			if (!active()) return;
 			_fr0st_query.default.triggerEvent(this.node, "preDraw.ui.table");
 			if (!active()) return;
 			const proceed = this.options.preDrawCallback?.call(this);

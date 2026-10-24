@@ -17,6 +17,7 @@ Sortable, searchable tables for Frost UI, with pagination, remote data, and CSV,
 - Separate display, sort, filter, and export values, with custom comparisons
 - Column filters, numeric/date ranges, and custom local row predicates
 - Bulk local updates and scoped access to page, filtered, or all rows
+- Serializable view snapshots and atomic state restoration
 - Debounced remote requests, optional cancellation, and stale-response protection
 - Row/cell/header/footer callbacks and custom layouts/buttons
 - CSV, XLSX, and print exports of the displayed results
@@ -336,6 +337,52 @@ Row predicates run with the Table as `this`, receive the original source row, an
 
 Each successful setter resets to page one, emits `filter.ui.table`, and recalculates/draws once locally or schedules one remote request. Other search state remains active. `clear()` removes all rows and clears global search, column filters, and the predicate. Empty filtered results use `lang.noResults`, including when the global search is empty. Both setters do nothing when `searching` is disabled; hiding the search control does not disable filtering.
 
+### Table state
+
+Use `getState()` to capture a view and `setState()` to restore it:
+
+```js
+const saved = table.getState();
+// Store or encode this snapshot using your application's preferred mechanism.
+table.setState(JSON.parse(JSON.stringify(saved)));
+```
+
+A snapshot contains only view configuration:
+
+```js
+{
+    version: 1,
+    search: 'Engineering',
+    filters: [{ column: 1, operator: 'gte', value: 90 }],
+    order: [[1, 'desc']],
+    length: 25,
+    page: 2,
+    columns: [
+        { data: 'team', name: null, visible: true },
+        { data: 'score', name: null, visible: true },
+    ],
+}
+```
+
+`getState()` returns fresh objects and nested arrays, including filter bounds. It excludes rows, renderers, comparators, the local row predicate, DOM nodes, requests, loading state, and errors. With paging disabled, `length` is `null` and `page` is `1`; with ordering disabled, `order` is empty. It returns `null` after disposal.
+
+`setState()` requires a complete version-1 snapshot. Column count, order, data accessors, and names must match the current schema exactly; visibility must be boolean. Search must be a string, filters and ordering must be valid, and page/length must be positive safe integers with a safely representable offset. Numeric strings are not accepted for these state fields. Restoring ordering on a nonorderable column or state requiring disabled search, ordering, or paging is rejected. Hiding a control or disabling `lengthChange` does not disable the underlying feature.
+
+Validation and copying finish before any state or pending work changes. Invalid snapshots throw `TypeError` or `RangeError` and leave the current view intact. Valid snapshots are applied together, synchronize the search and length controls, and perform one local recalculation/draw or one debounced remote load. The existing local predicate remains active. Local pages clamp against the resulting filtered data. Remote restoration requests the saved page without clamping against old counts; the response may trigger one corrective request under the usual paging rules. Callback errors during recalculation do not roll back an accepted snapshot.
+
+`statechange.ui.table` exposes a fresh snapshot as `event.detail.state`. It reports changes to the serialized view, including visibility and page clamping after data edits. Equivalent normalized snapshots do not emit duplicate notifications; `setState()` still recalculates or reloads. Initial setup does not emit a notification unless an initialization callback changes the view. Changes only to rows, counts, or the excluded predicate do not notify unless a serialized field also changes.
+
+For local data, the event reflects the final page after filtering and clamping. For remote data, it fires when the view is requested, before the response; a corrective page request emits the corrected state. Use `draw.ui.table` and `error.ui.table` to observe request completion. State restoration emits one aggregate notification when the view changes, without individual search/order/page/filter events. Listeners may dispose the table or restore another view; interrupted work stops.
+
+```js
+$.addEvent('#scores', 'statechange.ui.table', (event) => {
+    const snapshot = event.detail.state;
+    // Persist the snapshot or synchronize your application's URL here.
+});
+```
+
+Automatic browser storage and URL updates are not included. Applications own storage keys, expiration, schema migrations, and any predicate functions they need to reattach.
+
 ### Remote data
 
 The loader handles filtering, sorting, and paging. Return a result object, promise, or thenable:
@@ -491,6 +538,7 @@ Data attributes configure options; they do not initialize Tables by themselves. 
 | `getData({ scope = 'page' }?)` | `array` | Return shallow row copies for `page`, `filtered`, or `all`, in active order. |
 | `getExportData({ scope = 'page', columns = null }?)` | `object \| null` | Return text headings and resolved export rows; return `null` if collection is interrupted. |
 | `getRow(index, { modified = true }?)` | `array \| object` | Return a shallow copy of a row. |
+| `getState()` | `object \| null` | Return an independent versioned view snapshot, or `null` after disposal. |
 | `getValue(index, key, { modified = true }?)` | `any` | Read an array key or object dot path. |
 | `hideColumn(index)` | `void` | Hide a data column and redraw. |
 | `info()` | `object` | Return `{ start, end, total, filtered }` with a zero-based start and exclusive end. |
@@ -507,6 +555,7 @@ Data attributes configure options; they do not initialize Tables by themselves. 
 | `setFilters(filters)` | `void` | Replace structured column filters and reset to page one. Pass `[]` to clear them. |
 | `setRow(index, row, { modified = true }?)` | `void` | Replace a row with a shallow copy. |
 | `setRowFilter(predicate)` | `void` | Set a local row predicate and reset to page one. Pass `null` to clear it. |
+| `setState(state)` | `void` | Validate and restore a complete view in one recalculation or remote load. |
 | `setValue(index, key, value, { modified = true }?)` | `void` | Update one array key or object dot path. |
 | `showColumn(index)` | `void` | Reveal a data column and redraw. |
 
@@ -534,6 +583,7 @@ Events originate on the original table:
 | `page.ui.table` | After setting offset, before loading results. |
 | `search.ui.table` | After setting the search, before loading results. |
 | `filter.ui.table` | After setting column filters or the row predicate, before loading results. |
+| `statechange.ui.table` | Serialized view changed; the snapshot is in `event.detail.state`. Remote results may still be pending. |
 | `processing.ui.table` | Loading shown. |
 | `processed.ui.table` | Loading hidden; also emitted for request errors. |
 | `preDraw.ui.table` | Before `preDrawCallback` and DOM rendering. |

@@ -1,4 +1,4 @@
-/** @import { TableColumn, TableFilter, TableOrder } from './table.js'; */
+/** @import { TableColumn, TableFilter, TableOptions, TableOrder, TableState } from './table.js'; */
 
 import $ from '@fr0st/query';
 
@@ -337,6 +337,72 @@ export function normalizeSortValue(value, type) {
     }
 
     return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+/**
+ * Validates and copies a complete state snapshot before restoration.
+ * @param {TableState} state The supplied snapshot.
+ * @param {TableColumn[]} columns The current column schema.
+ * @param {TableOptions} options The enabled table features.
+ * @returns {TableState} The normalized snapshot.
+ */
+export function normalizeState(state, columns, options) {
+    if (!$._isPlainObject(state) || state.version !== 1 || typeof state.search !== 'string') {
+        throw new TypeError('State requires version 1 and a search string.');
+    }
+
+    if (!Array.isArray(state.columns) || state.columns.length !== columns.length) {
+        throw new TypeError('State columns must match the table schema.');
+    }
+
+    const schema = [];
+
+    for (const [index, column] of state.columns.entries()) {
+        if (!$._isPlainObject(column) || column.data !== columns[index].data ||
+            column.name !== (columns[index].name ?? null) || typeof column.visible !== 'boolean') {
+            throw new TypeError('State column identity and visibility must match the table schema.');
+        }
+
+        schema.push({ data: column.data, name: column.name, visible: column.visible });
+    }
+
+    const filters = normalizeFilters(state.filters, columns);
+    const order = normalizeOrder(state.order, columns);
+
+    if (order.length !== state.order.length) {
+        throw new TypeError('State cannot order nonorderable columns.');
+    }
+
+    if (!options.searching && (state.search || filters.length)) {
+        throw new TypeError('State requires searching to be enabled.');
+    }
+
+    if (!options.ordering && order.length) {
+        throw new TypeError('State requires ordering to be enabled.');
+    }
+
+    if (!Number.isSafeInteger(state.page) || state.page < 1) {
+        throw new RangeError('State page must be a positive safe integer.');
+    }
+
+    if (options.paging) {
+        if (!Number.isSafeInteger(state.length) || state.length < 1 ||
+            !Number.isSafeInteger((state.page - 1) * state.length)) {
+            throw new RangeError('State page length or offset is out of range.');
+        }
+    } else if (state.length !== null || state.page !== 1) {
+        throw new TypeError('State requires paging to be enabled.');
+    }
+
+    return {
+        version: 1,
+        search: state.search,
+        filters,
+        order,
+        length: state.length,
+        page: state.page,
+        columns: schema,
+    };
 }
 
 /**

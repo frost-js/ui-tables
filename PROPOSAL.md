@@ -1,6 +1,6 @@
 # Proposal: Essential table functionality
 
-Status: Items 1–4 are implemented; the new export tests await CI validation. Item 5 remains proposed. See the [README](./README.md#cell-values-and-sorting) for the implemented API.
+Status: Items 1–5 are implemented; the new state tests await CI validation. See the [README](./README.md#cell-values-and-sorting) for the implemented API. Follow-up features remain outside this implementation.
 
 ## Recommendation
 
@@ -192,7 +192,7 @@ Acceptance examples: export all 37 matches from a five-row page without altering
 
 ## 5. Readable and restorable state
 
-### Proposed API
+### Implemented API
 
 ```js
 const state = table.getState();
@@ -241,7 +241,7 @@ The intentional compatibility change is DOM-backed non-display values becoming t
 
 For each phase, update JSDoc, the README, and the existing relevant demo. Keep examples consolidated rather than adding a separate table for each option. Update generated bundles and maps with implementation changes.
 
-Add focused component coverage to the existing local-data, rendering, remote-data, and export suites. Use deterministic assertions such as draw counts and unchanged state instead of timing-based performance thresholds. Do not recreate a demo-specific test suite. The current request is documentation-only, and the instruction not to run tests locally remains in effect; implementation validation can run in CI.
+Add focused component coverage to the existing local-data, rendering, remote-data, and export suites. Use deterministic assertions such as draw counts and unchanged state instead of timing-based performance thresholds. Do not recreate a demo-specific test suite. The instruction not to run tests locally remains in effect; implementation validation can run in CI.
 
 ## Follow-up features
 
