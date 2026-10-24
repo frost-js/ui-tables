@@ -16,13 +16,19 @@ test.describe('Table demo', () => {
     });
 
     test('initializes each showcase, formats the footer, and exports visible rows', async ({ page }) => {
-        await expect(page.locator('.table-responsive')).toHaveCount(10);
-        await expect(page.locator('#object-table tbody td:first-child').first()).toHaveText('Alice');
+        await expect(page.locator('.table-responsive')).toHaveCount(6);
+        await expect(page.locator('#data-table tbody td:first-child').first()).toHaveText('Jules');
+
+        await page.getByLabel('Data source', { exact: true }).selectOption('objects');
+
+        await expect(page.locator('#data-table tbody td:first-child').first()).toHaveText('Jules');
+        await expect(page.locator('#data-config')).toContainText('data: \'person.name\'');
+
+        await page.getByLabel('Data source', { exact: true }).selectOption('arrays');
+
+        await expect(page.locator('#data-table tbody td:first-child').first()).toHaveText('Jules');
+        await expect(page.locator('#data-config')).toContainText('data: [[\'Alice\', \'Design\', 80]]');
         await expect(page.locator('#callback-table tfoot td:last-child')).toHaveText('410');
-
-        await page.getByRole('button', { name: 'Add the first row' }).click();
-
-        await expect(page.locator('#empty-table tbody td')).toHaveText(['New teammate', 'Design', '0']);
 
         await page.getByRole('button', { name: 'Hide Team column' }).click();
 
@@ -37,28 +43,37 @@ test.describe('Table demo', () => {
     test('applies controls and direction, then disposes and initializes through the API playground', async ({ page }) => {
         await page.getByLabel('Pagination', { exact: true }).uncheck();
 
-        await expect(page.locator('#control-table tbody tr')).toHaveCount(12);
+        await expect(page.locator('#basic-table tbody tr')).toHaveCount(6);
 
         await page.getByLabel('Searching', { exact: true }).uncheck();
 
-        await expect(page.locator('#controls').getByRole('searchbox')).toHaveCount(0);
+        await expect(page.locator('#basic').getByRole('searchbox')).toHaveCount(0);
+
+        await page.getByLabel('Custom layout', { exact: true }).check();
+
+        await expect(page.locator('#basic')).toContainText('Team leaderboard');
 
         await page.getByRole('button', { name: 'Right-to-left layout' }).click();
 
-        await expect(page.locator('#layout-table')).toHaveCSS('direction', 'rtl');
+        await expect(page.locator('#basic-table')).toHaveCSS('direction', 'rtl');
 
-        await page.getByLabel('Method', { exact: true }).selectOption('getValue');
-        await page.getByRole('button', { name: 'Run method' }).click();
+        await page.getByRole('button', { name: 'Get first score', exact: true }).click();
 
         await expect(page.locator('#method-output')).toHaveText('"93"');
 
-        await page.getByLabel('Method', { exact: true }).selectOption('dispose');
-        await page.getByRole('button', { name: 'Run method' }).click();
+        await page.getByRole('button', { name: 'Clear rows', exact: true }).click();
+
+        await expect(page.locator('#method-table tbody td')).toHaveText('No data available');
+
+        await page.getByRole('button', { name: 'Add row', exact: true }).click();
+
+        await expect(page.locator('#method-table tbody td')).toHaveText(['Morgan', 'Support', '97']);
+
+        await page.getByRole('button', { name: 'Dispose', exact: true }).click();
 
         await expect(page.locator('#methods-events .table-responsive')).toHaveCount(0);
 
-        await page.getByLabel('Method', { exact: true }).selectOption('init');
-        await page.getByRole('button', { name: 'Run method' }).click();
+        await page.getByRole('button', { name: 'Init', exact: true }).click();
 
         await expect(page.locator('#methods-events .table-responsive')).toHaveCount(1);
         await expect(page.getByRole('log')).toContainText('init.ui.table');

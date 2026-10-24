@@ -1,4 +1,5 @@
 section[id],
+.row > [id],
 .demo-anchor {
     scroll-margin-top: 6rem;
 }
@@ -19,6 +20,10 @@ section[id],
 .card-body,
 .row > * {
     min-width: 0;
+}
+
+.demo-table .d-md-flex {
+    flex-wrap: wrap;
 }
 
 pre {

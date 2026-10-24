@@ -470,18 +470,6 @@ Frost UI follows the user's preferred color scheme by default. Set `data-ui-them
 
 Load UI CSS first, then Tables CSS. UI supplies table and control styling. Set `dir="rtl"` on the document or a containing element so both the table and generated controls inherit direction. Sort arrows use logical positioning.
 
-## Migrating from 2.x
-
-- Install the UI 4/query 5 peers. Import the compiled default ESM entry or load the UMD bundle after UI's bundle.
-- Old underscore fields/prototype modules are private. Extend `Table.layout`, `Table.buttons`, callbacks, or public methods instead.
-- Configuration arrays replace defaults. Empty ordering is supported. Validation rejects malformed indexes, lengths, orders and remote responses.
-- Formatted HTML is sanitized by default. Configure `sanitize` deliberately if additional markup is required.
-- CSV formula-like strings are escaped by default. Export scope stays the displayed page and raw values.
-- Sass uses `@use`/`@forward`, UI 4 tokens, and `_vars.scss`. Remove obsolete ripple-line styling.
-- Search and edits now recalculate results/counts correctly; disposal restores the original table nodes, including their listeners.
-
-The former light/dark demo pages are consolidated into [one showcase](./demo/index.html). Its theme selector covers both modes. Old `default.html` and `query.html` map to `#basic`; `data.html`/`objects.html` to `#data`; `empty.html` to `#empty`; all `disable-*.html` pages to `#controls`; `column-format.html`, `created-cell.html`, `row-callback.html`, and `footer-callback.html` to `#callbacks`; `layout.html` to `#layout`; `buttons.html`/`buttons-custom.html` to `#exports`; `demo/methods.html` and `demo/events.html` to `#methods-events`. Remote examples are at `#remote`.
-
 ## Development
 
 Install dependencies with `npm ci`, then install Playwright browsers with `npx playwright install --with-deps`.

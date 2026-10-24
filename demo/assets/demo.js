@@ -68,32 +68,64 @@ $.ready(() => {
         length: 5, lengths: [5, 10, 25], ...options,
     });
 
-    // The plugin and class share instances and public methods.
-    $('#basic-table').table({ length: 5, lengths: [5, 10, 25] });
-    init('array-table', { data: rows, order: [[1, 'asc'], [2, 'desc']] });
-    init('object-table', {
-        data: rows.map(([name, team, score]) => ({ person: { name, team }, score })),
-        columns: [{ data: 'person.name' }, { data: 'person.team' }, { data: 'score', class: 'text-end' }],
-        inputStyle: 'outline',
-    });
-    const empty = init('empty-table');
-    $.addEvent(node('add-empty'), 'click', () => empty.addRow(['New teammate', 'Design', 0]));
+    Table.layout.demoSummary = function(container) {
+        $.addClass(container, 'd-flex', 'align-items-center', 'fw-bold');
+        $.setText(container, 'Team leaderboard');
+    };
 
     let controls;
     const initializeControls = () => {
         controls?.dispose();
-        controls = init('control-table', {
-            data: rows,
+        const options = {
+            length: 5,
+            lengths: [5, 10, 25],
             searching: $.getProperty(node('allow-search'), 'checked'),
             ordering: $.getProperty(node('allow-order'), 'checked'),
             paging: $.getProperty(node('allow-page'), 'checked'),
             inputStyle: $.getValue(node('input-style')),
-        });
+        };
+        if ($.getProperty(node('custom-layout'), 'checked')) {
+            options.layout = { top: 'demoSummary,search', bottom: 'length,info|pagination' };
+        }
+        // The plugin and class share instances and public methods.
+        controls = $('#basic-table').table(options);
     };
-    for (const id of ['allow-search', 'allow-order', 'allow-page', 'input-style']) {
+    for (const id of ['allow-search', 'allow-order', 'allow-page', 'input-style', 'custom-layout']) {
         $.addEvent(node(id), 'change', initializeControls);
     }
     initializeControls();
+    $.addEvent(node('toggle-direction'), 'click', (event) => {
+        const rtl = $.getProperty(node('direction-host'), 'dir') !== 'rtl';
+        $.setProperty(node('direction-host'), 'dir', rtl ? 'rtl' : 'ltr');
+        $.setAttribute(event.currentTarget, 'aria-pressed', String(rtl));
+    });
+
+    let dataTable;
+    const initializeData = () => {
+        dataTable?.dispose();
+        const objects = $.getValue(node('data-source')) === 'objects';
+        const options = objects ? {
+            data: rows.map(([name, team, score]) => ({ person: { name, team }, score })),
+            columns: [{ data: 'person.name' }, { data: 'person.team' }, { data: 'score', class: 'text-end' }],
+        } : { data: rows };
+        dataTable = init('data-table', { ...options, order: [[1, 'asc'], [2, 'desc']] });
+        $.setText(node('data-config'), objects ?
+            `Table.init(table, {
+    data: [{ person: { name: 'Alice', team: 'Design' }, score: 80 }],
+    columns: [
+        { data: 'person.name' },
+        { data: 'person.team' },
+        { data: 'score', class: 'text-end' },
+    ],
+    order: [[1, 'asc'], [2, 'desc']],
+});` :
+            `Table.init(table, {
+    data: [['Alice', 'Design', 80]],
+    order: [[1, 'asc'], [2, 'desc']],
+});`);
+    };
+    $.addEvent(node('data-source'), 'change', initializeData);
+    initializeData();
 
     init('callback-table', {
         data: rows,
@@ -113,17 +145,6 @@ $.ready(() => {
         drawCallback() {
             $.setText(node('callback-summary'), `${this.info().filtered} matching rows. Scores of 90 or more are highlighted.`);
         },
-    });
-
-    Table.layout.demoSummary = function(container) {
-        $.addClass(container, 'd-flex', 'align-items-center', 'fw-bold');
-        $.setText(container, 'Team leaderboard');
-    };
-    init('layout-table', { data: rows, layout: { top: 'demoSummary,search', bottom: 'length,info|pagination' } });
-    $.addEvent(node('toggle-direction'), 'click', (event) => {
-        const rtl = $.getProperty(node('direction-host'), 'dir') !== 'rtl';
-        $.setProperty(node('direction-host'), 'dir', rtl ? 'rtl' : 'ltr');
-        $.setAttribute(event.currentTarget, 'aria-pressed', String(rtl));
     });
 
     const exportsTable = init('export-table', {
@@ -217,39 +238,24 @@ $.ready(() => {
     });
 
     const methods = {
-        init: [], addRow: [['Morgan', 'Support', 97]], clear: [], dispose: [],
-        getColumn: [2], getRow: [0], getValue: [0, 2], hideColumn: [1], info: [],
-        length: [10], loading: [{ show: true }], order: [[[2, 'desc']]], page: [2],
-        refresh: [], reload: [{ reset: true }], removeRow: [0], search: ['Alice'],
-        setColumn: [2, [10, 20, 30, 40, 50]], setRow: [0, ['Morgan', 'Support', 97]],
-        setValue: [0, 2, 99], showColumn: [1],
+        addRow: [['Morgan', 'Support', 97]], clear: [], dispose: [],
+        getValue: [0, 2], info: [], setValue: [0, 2, 99],
     };
-    for (const method of Object.keys(methods)) {
-        const option = $.create('option');
-        $.setValue(option, method);
-        $.setText(option, `${method}()`);
-        $.append(node('method'), option);
-    }
     const eventNames = ['init', 'length', 'order', 'page', 'search', 'processing', 'processed', 'preDraw', 'draw', 'error'];
     $.addEvent('#method-table', eventNames.map((name) => `${name}.ui.table`).join(' '), (event) => {
         logEvent(`${event.type}.ui.table`);
     });
     let methodTable = init('method-table');
-    $.addEvent(node('method'), 'change', () => {
-        $.setValue(node('method-args'), JSON.stringify(methods[$.getValue(node('method'))]));
-    });
-    $.addEvent(node('run-method'), 'click', () => {
+    $('[data-demo-method]').addEvent('click', (event) => {
         try {
-            const method = $.getValue(node('method'));
-            const args = JSON.parse($.getValue(node('method-args')));
-            if (!Array.isArray(args)) throw new TypeError('Arguments must be a JSON array.');
+            const method = $.getAttribute(event.currentTarget, 'data-demo-method');
             if (method === 'init') {
-                methodTable = init('method-table', args[0]);
+                methodTable = init('method-table');
                 $.setText(node('method-output'), 'Initialized.');
                 return;
             }
-            if (!methodTable.node) throw new Error('Choose init() to initialize the table again.');
-            const result = methodTable[method](...args);
+            if (!methodTable.node) throw new Error('Choose Init to initialize the table again.');
+            const result = methodTable[method](...methods[method]);
             $.setText(node('method-output'), result === undefined ? `${method}() completed.` : JSON.stringify(result, null, 2));
         } catch (error) {
             $.setText(node('method-output'), error.message);
