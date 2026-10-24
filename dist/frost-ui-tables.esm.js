@@ -3624,10 +3624,8 @@ var Table = class extends BaseComponent {
 		setDisabled(prevPage, this.#page === 1);
 		setDisabled(nextPage, this.#page === this.#totalPages);
 		setDisabled(lastPage, this.#page === this.#totalPages);
-		let startPage = Math.max(this.#page - 5, 1);
-		let endPage = Math.min(this.#page + 5, this.#totalPages);
-		while (endPage - startPage > 4) if (this.#page - startPage > endPage - this.#page) startPage++;
-		else endPage--;
+		const startPage = Math.max(1, Math.min(this.#page - 2, this.#totalPages - 4));
+		const endPage = Math.min(this.#totalPages, startPage + 4);
 		const pageLinks = {};
 		for (const child of children) {
 			const link = $.findOne(":scope > [data-ui-page]", child);
@@ -3788,7 +3786,6 @@ var Table = class extends BaseComponent {
 		}
 		this.#renderHeadings();
 		this.#syncResponsiveColumns();
-		this.#syncFooter();
 		if (!active()) return;
 		const end = this.#offset + this.#results.length;
 		this.options.headerCallback?.call(this, this.#theadRow, this.#data, this.#offset, end, [...this.#rowIndexes]);
@@ -4082,9 +4079,10 @@ var Table = class extends BaseComponent {
 		$.setValue(this.#lengthSelect, this.#limit);
 	}
 	/**
-	* Applies temporary collapse separately from configured column visibility.
+	* Synchronizes footer spans and applies temporary column collapse.
 	*/
 	#syncResponsiveColumns() {
+		this.#syncFooter();
 		if (!this.options.responsive) return;
 		const collapsed = this.#collapsedColumns;
 		for (const cell of $.children(this.#theadRow, "[data-ui-index]")) $.setProperty(cell, "hidden", collapsed.has(Number($.getDataset(cell, "uiIndex"))));
@@ -4095,7 +4093,6 @@ var Table = class extends BaseComponent {
 		$.setProperty(this.#responsiveHeading, "hidden", !collapsed.size);
 		for (const cell of this.#responsiveFooterCells) $.setProperty(cell, "hidden", !collapsed.size);
 		if (this.#emptyCell) $.setProperty(this.#emptyCell, "colSpan", this.#getRenderedColumnCount());
-		this.#syncFooter();
 	}
 	/**
 	* Synchronizes mounted selection controls without rebuilding rows or moving focus.

@@ -2507,16 +2507,8 @@ export default class Table extends BaseComponent {
         setDisabled(nextPage, this.#page === this.#totalPages);
         setDisabled(lastPage, this.#page === this.#totalPages);
 
-        let startPage = Math.max(this.#page - 5, 1);
-        let endPage = Math.min(this.#page + 5, this.#totalPages);
-
-        while (endPage - startPage > 4) {
-            if (this.#page - startPage > endPage - this.#page) {
-                startPage++;
-            } else {
-                endPage--;
-            }
-        }
+        const startPage = Math.max(1, Math.min(this.#page - 2, this.#totalPages - 4));
+        const endPage = Math.min(this.#totalPages, startPage + 4);
 
         const pageLinks = {};
 
@@ -2768,7 +2760,6 @@ export default class Table extends BaseComponent {
 
         this.#renderHeadings();
         this.#syncResponsiveColumns();
-        this.#syncFooter();
 
         if (!active()) {
             return;
@@ -3246,9 +3237,11 @@ export default class Table extends BaseComponent {
     }
 
     /**
-     * Applies temporary collapse separately from configured column visibility.
+     * Synchronizes footer spans and applies temporary column collapse.
      */
     #syncResponsiveColumns() {
+        this.#syncFooter();
+
         if (!this.options.responsive) {
             return;
         }
@@ -3276,8 +3269,6 @@ export default class Table extends BaseComponent {
         if (this.#emptyCell) {
             $.setProperty(this.#emptyCell, 'colSpan', this.#getRenderedColumnCount());
         }
-
-        this.#syncFooter();
     }
 
     /**
