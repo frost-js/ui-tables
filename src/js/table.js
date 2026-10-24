@@ -1548,24 +1548,6 @@ export default class Table extends BaseComponent {
     }
 
     /**
-     * Restores focus when a disclosure control or its detail row is removed.
-     * @param {object} entry The rendered data row.
-     */
-    #focusResponsiveRow(entry) {
-        const tabIndex = $.getAttribute(entry.row, 'tabindex');
-
-        if (tabIndex === null) {
-            $.setAttribute(entry.row, { tabindex: -1 });
-        }
-
-        $.focus(entry.row);
-
-        if (tabIndex === null && $.getAttribute(entry.row, 'tabindex') === '-1') {
-            $.removeAttribute(entry.row, 'tabindex');
-        }
-    }
-
-    /**
      * Selects ordered row indexes without changing the current view.
      * @param {'page'|'filtered'|'all'} scope The row scope.
      * @returns {number[]} The selected indexes.
@@ -2091,14 +2073,25 @@ export default class Table extends BaseComponent {
 
         const id = generateId('table-columns');
         const triggerId = generateId('table-columns-button');
+
         const group = $.create('div', { class: this.constructor.classes.columnPickerGroup });
         const menu = $.create('div', {
             class: this.constructor.classes.columnPicker,
-            attributes: { id, 'role': 'group', 'aria-labelledby': triggerId },
+            attributes: {
+                id,
+                'role': 'group',
+                'aria-labelledby': triggerId,
+            },
         });
+
         $.addClass(button, this.constructor.classes.columnPickerButton);
-        $.setAttribute(button, { 'id': triggerId, 'aria-controls': id, 'aria-expanded': false });
+        $.setAttribute(button, {
+            'id': triggerId,
+            'aria-controls': id,
+            'aria-expanded': false,
+        });
         $.setDataset(button, { uiToggle: 'dropdown' });
+
         $.append(group, [button, menu]);
         $.append(container, group);
 
@@ -2108,16 +2101,20 @@ export default class Table extends BaseComponent {
             const heading = $.create('div');
             $.setHtml(heading, $.sanitize(String(this.#headings[index].text)));
             const text = $.getText(heading).trim() || this.options.lang.column.replace('{column}', index + 1);
+
             const label = $.create('label', { class: this.constructor.classes.columnPickerLabel });
             const input = $.create('input', {
                 class: this.constructor.classes.columnPickerInput,
                 attributes: { 'type': 'checkbox', 'aria-controls': $.getAttribute(this.node, 'id') },
             });
             const span = $.create('span', { class: this.constructor.classes.columnPickerText, text });
+
             $.setProperty(input, 'checked', Boolean(this.#columns[index].visible));
+
             $.addEvent(input, 'change.ui.table', () => {
                 this[$.getProperty(input, 'checked') ? 'showColumn' : 'hideColumn'](index);
             });
+
             $.append(label, [input, span]);
             $.append(menu, label);
             inputs.set(index, input);
@@ -2593,12 +2590,19 @@ export default class Table extends BaseComponent {
         entry.detailId = generateId('table-details');
         entry.button = $.create('button', {
             class: this.constructor.classes.detailButton,
-            attributes: { 'type': 'button', 'title': this.options.lang.responsive.details, 'aria-controls': entry.detailId, 'aria-expanded': false },
+            attributes: {
+                'type': 'button',
+                'title': this.options.lang.responsive.details,
+                'aria-controls': entry.detailId,
+                'aria-expanded': false,
+            },
         });
+
         $.append(entry.button, $.create('span', {
             class: 'visually-hidden',
             text: this.options.lang.responsive.details,
         }));
+
         $.addEvent(entry.button, 'click.ui.table', () => {
             if (this.#data[entry.index] !== entry.data) {
                 return;
@@ -2612,6 +2616,7 @@ export default class Table extends BaseComponent {
 
             this.#renderResponsiveDetails(entry);
         });
+
         $.append(entry.control, entry.button);
     }
 
@@ -2882,11 +2887,19 @@ export default class Table extends BaseComponent {
                 class: this.constructor.classes.detailCell,
                 attributes: { hidden: true },
             });
+
             $.append(row, control);
+
             responsive = {
-                row, control, data, index, pageIndex: rowIndex,
+                row,
+                control,
+                data,
+                index,
+                pageIndex: rowIndex,
                 key: this.options.rowId === null ? index : this.#rowIds[index],
-                cells: new Map(), button: null, detail: null,
+                cells: new Map(),
+                button: null,
+                detail: null,
             };
             this.#responsiveRows.push(responsive);
         }
@@ -3409,14 +3422,18 @@ export default class Table extends BaseComponent {
 
         const version = this.#drawVersion;
         const active = () => this.node && version === this.#drawVersion;
+
         const width = this.#tableContainer.clientWidth;
         const previous = this.#collapsedColumns;
+
         const focused = document.activeElement;
         const focusedEntry = this.#responsiveRows.find((entry) => $.isSame(entry.button, focused) ||
             (entry.detail && $.hasDescendent(entry.detail, focused)));
+
         const visible = this.#getVisibleColumns();
         const candidates = visible.filter((index) => this.#columns[index].responsivePriority !== null)
             .sort((a, b) => this.#columns[b].responsivePriority - this.#columns[a].responsivePriority || b - a);
+
         const releases = [];
 
         try {
@@ -3467,7 +3484,17 @@ export default class Table extends BaseComponent {
         for (const entry of this.#responsiveRows) {
             if (!this.#collapsedColumns.size) {
                 if (entry === focusedEntry) {
-                    this.#focusResponsiveRow(entry);
+                    const tabIndex = $.getAttribute(entry.row, 'tabindex');
+
+                    if (tabIndex === null) {
+                        $.setAttribute(entry.row, { tabindex: -1 });
+                    }
+
+                    $.focus(entry.row);
+
+                    if (tabIndex === null && $.getAttribute(entry.row, 'tabindex') === '-1') {
+                        $.removeAttribute(entry.row, 'tabindex');
+                    }
 
                     if (!active()) {
                         return;

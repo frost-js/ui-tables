@@ -3006,16 +3006,6 @@ var Table = class extends BaseComponent {
 		if (active()) this.#renderResults();
 	}
 	/**
-	* Restores focus when a disclosure control or its detail row is removed.
-	* @param {object} entry The rendered data row.
-	*/
-	#focusResponsiveRow(entry) {
-		const tabIndex = $.getAttribute(entry.row, "tabindex");
-		if (tabIndex === null) $.setAttribute(entry.row, { tabindex: -1 });
-		$.focus(entry.row);
-		if (tabIndex === null && $.getAttribute(entry.row, "tabindex") === "-1") $.removeAttribute(entry.row, "tabindex");
-	}
-	/**
 	* Selects ordered row indexes without changing the current view.
 	* @param {'page'|'filtered'|'all'} scope The row scope.
 	* @returns {number[]} The selected indexes.
@@ -4221,7 +4211,10 @@ var Table = class extends BaseComponent {
 		for (const entry of this.#responsiveRows) {
 			if (!this.#collapsedColumns.size) {
 				if (entry === focusedEntry) {
-					this.#focusResponsiveRow(entry);
+					const tabIndex = $.getAttribute(entry.row, "tabindex");
+					if (tabIndex === null) $.setAttribute(entry.row, { tabindex: -1 });
+					$.focus(entry.row);
+					if (tabIndex === null && $.getAttribute(entry.row, "tabindex") === "-1") $.removeAttribute(entry.row, "tabindex");
 					if (!active()) return;
 				}
 				$.remove(entry.button);

@@ -3038,16 +3038,6 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			if (active()) this.#renderResults();
 		}
 		/**
-		* Restores focus when a disclosure control or its detail row is removed.
-		* @param {object} entry The rendered data row.
-		*/
-		#focusResponsiveRow(entry) {
-			const tabIndex = _fr0st_query.default.getAttribute(entry.row, "tabindex");
-			if (tabIndex === null) _fr0st_query.default.setAttribute(entry.row, { tabindex: -1 });
-			_fr0st_query.default.focus(entry.row);
-			if (tabIndex === null && _fr0st_query.default.getAttribute(entry.row, "tabindex") === "-1") _fr0st_query.default.removeAttribute(entry.row, "tabindex");
-		}
-		/**
 		* Selects ordered row indexes without changing the current view.
 		* @param {'page'|'filtered'|'all'} scope The row scope.
 		* @returns {number[]} The selected indexes.
@@ -4253,7 +4243,10 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			for (const entry of this.#responsiveRows) {
 				if (!this.#collapsedColumns.size) {
 					if (entry === focusedEntry) {
-						this.#focusResponsiveRow(entry);
+						const tabIndex = _fr0st_query.default.getAttribute(entry.row, "tabindex");
+						if (tabIndex === null) _fr0st_query.default.setAttribute(entry.row, { tabindex: -1 });
+						_fr0st_query.default.focus(entry.row);
+						if (tabIndex === null && _fr0st_query.default.getAttribute(entry.row, "tabindex") === "-1") _fr0st_query.default.removeAttribute(entry.row, "tabindex");
 						if (!active()) return;
 					}
 					_fr0st_query.default.remove(entry.button);
