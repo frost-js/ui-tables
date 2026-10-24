@@ -17,6 +17,7 @@ Sortable, searchable tables for Frost UI, with pagination, remote data, and CSV,
 - Separate display, sort, filter, and export values, with custom comparisons
 - Column filters, numeric/date ranges, and custom local row predicates
 - Bulk local updates and scoped access to page, filtered, or all rows
+- Stable row IDs, keyed row updates, and single/multiple selection
 - Serializable view snapshots and atomic state restoration
 - Debounced remote requests, optional cancellation, and stale-response protection
 - Row/cell/header/footer callbacks and custom layouts/buttons
@@ -166,8 +167,10 @@ Use methods to update active instances. Set `Table.defaults` and `Table.classes`
 | `paging` | `boolean` | `true` | Enable pagination; `false` displays all loaded rows. |
 | `preDrawCallback` | `function \| null` | `null` | Before drawing; return `false` to retain current DOM. |
 | `rowCallback` | `function \| null` | `null` | Customize each row before insertion. |
+| `rowId` | `string \| number \| function \| null` | `null` | Stable identity accessor: a data key/dot path, array key, or pure callback. |
 | `sanitize` | `function` | `(html) => $.sanitize(html)` | Sanitize heading and cell HTML, including formatted values. |
 | `searching` | `boolean` | `true` | Enable global search, column filters, and local row predicates. |
+| `selection` | `false \| 'single' \| 'multiple'` | `false` | Enable row controls and selection APIs; requires `rowId`. |
 
 `order`, `lengths`, and `buttons` replace their default arrays, including when empty. Nested object options merge with defaults. Default labels and icon keys:
 
@@ -177,6 +180,7 @@ Table.defaults.lang = {
     infoFiltered: 'Showing results {start} to {end} of {filtered} (filtered from {total} total)',
     noData: 'No data available', noResults: 'No results to show',
     page: 'Page', perPage: 'Per Page', search: 'Search', loading: 'Loading results',
+    selection: { clear: 'Clear selection', count: '{count} selected', page: 'Select all rows on this page', row: 'Select row {id}' },
     paginate: { first: 'First', last: 'Last', next: 'Next', previous: 'Previous' },
     buttons: { csv: 'CSV', excel: 'Excel', print: 'Print' },
     aria: {
@@ -296,6 +300,86 @@ Invalid batches leave rows and the current view intact. Rows must be arrays or p
 Returned rows contain raw source values and include hidden columns. The result array and its row containers are fresh shallow copies. With no active ordering, scopes retain input order. Reading data does not change search, counts, page, length, or visibility and does not draw or fetch rows. The `all` scope invokes sort renderers and comparators as needed; keep those callbacks pure and avoid recursively requesting the same scope. If a callback disposes the table or starts a newer draw during collection, the interrupted read returns `[]`.
 
 Bulk mutators are local-only and throw `TypeError` when `getResults` is configured. Remote applications should save changes through their server and call `reload()`. Unsupported or unknown getter scopes throw `RangeError`; `getData()` never fetches other pages. Export buttons use the same scope rules and default to the current page.
+
+### Stable row identity
+
+Set `rowId` to a string data key/dot path, a nonnegative integer array key, or a pure callback receiving the source row with the Table as `this`. IDs are independent of visible columns and display renderers.
+
+```js
+const table = new Table(node, {
+    data: employees,
+    rowId: 'employee.id',
+    columns: [{ data: 'name' }, { data: 'score' }],
+});
+
+const id = table.getRowId(0); // First displayed row.
+const employee = table.getRowById('employee-42');
+
+table.setRowById('employee-42', replacementEmployee);
+table.removeRowById('employee-42');
+```
+
+Every loaded row must have a unique nonempty string or safe integer ID. Zero is valid; `42` and `'42'` are distinct. Missing, empty, boolean, object, fractional, and unsafe numeric IDs throw `TypeError`. IDs remain stable across ordering, filtering, paging, and reloads. Identity callbacks must be deterministic and must not modify data or the table.
+
+Keyed getters return shallow row copies, or `null` when absent. Keyed mutations throw `RangeError` for absent rows. Identity methods require `rowId`; malformed IDs throw `TypeError`. `getRowId()` accepts the same positional options as `getRow()`. After disposal, the keyed getter and `getRowId()` return `null`, and keyed mutators do nothing.
+
+Initial data, inserted batches, replacement datasets, and remote responses validate all IDs before installing data. Duplicate or invalid IDs leave the previous rows and selection intact. Existing positional `setRow()`, `setValue()`, and `setColumn()` methods also enforce identity: replacing a row or editing its values must retain its ID. This includes nested paths, parent-object replacement, and callback-derived IDs. Remove and insert a row to change its identity; `setData()` replaces the complete dataset and may introduce or remove IDs.
+
+With identity enabled, value writes copy affected object/array branches before validation, so rejected nested writes do not change shared source objects. Unaffected nested values retain the existing shallow-copy behavior. Do not mutate shared nested objects outside table methods. DOM cell metadata for unchanged values remains available.
+
+Remote keyed methods address only the loaded response. They neither fetch absent records nor persist server changes. The server owns ID uniqueness across pages; the table checks each accepted response. Invalid IDs use `error.ui.table` without partially installing rows or counts, and stale responses cannot replace the identity map.
+
+DOM-backed tables can resolve IDs from ingested cell values or a callback. Existing `<tr id>` and `data-row-id` attributes are not inferred. Application IDs are never assigned as DOM element IDs.
+
+### Row selection
+
+Set `selection: 'single'` or `'multiple'` alongside `rowId`. The default is `false`. Selection adds a dedicated control cell without changing data column indexes, positional row indexes, exported fields, or the state schema.
+
+```js
+const table = new Table(node, {
+    data: employees,
+    rowId: 'id',
+    selection: 'multiple',
+    columns: [{ data: 'name' }, { data: 'score' }],
+    layout: { top: 'selection,search|length', bottom: 'info,pagination' },
+});
+
+table.setSelectedIds(['employee-42', 'employee-87']);
+table.selectRows({ scope: 'filtered' });
+table.deselectRows({ scope: 'page' });
+
+const selectedIds = table.getSelectedIds();
+
+table.setSelectedIds([]); // Clear all selection, including unloaded remote IDs.
+```
+
+`setSelectedIds()` validates the entire array before replacing selection. Duplicate IDs are ignored. Local IDs must exist in the dataset; unknown IDs throw `RangeError`. `getSelectedIds()` returns an independent array in selection insertion order. Reordering an equivalent set does not change that order or emit an event. Getters return `[]` when disabled or disposed; selection mutators reject disabled selection and do nothing after disposal.
+
+`selectRows()` adds IDs from a scope; `deselectRows()` removes scoped IDs while keeping other selections. Both default to `page` and share the `page`, `filtered`, and `all` data scope definitions. A single-selection operation whose final set contains more than one ID throws `RangeError`; choosing a radio through the UI replaces the previous selection.
+
+Selection survives search, filters, ordering, page/length changes, and column visibility changes. Filtered-out rows remain selected. Local `setData()` retains IDs present in the replacement and prunes absent IDs; removing a row removes its selection. New rows are not automatically selected. `clear()` and disposal clear selection. `getState()` excludes selection, and `setState()` preserves it. Save and restore selected IDs separately when required.
+
+Multiple selection uses native checkboxes. The header checkbox controls only the current page: checked for every page row, indeterminate for some, and disabled on an empty page. It does not represent selections on other pages. Single selection uses native radios in a table-specific group and has no header selection control. Row clicks and links do not select rows. Selection-only updates preserve focus and do not redraw rows, recalculate results, change the view, or load remote data.
+
+The optional `selection` layout control shows the total selected count and a clear button. Hiding it does not disable selection. Labels are configured through `lang.selection`; `row` accepts `{id}` and `count` accepts `{count}`. Selection owns the `Table.classes.selectedRow` class (`table-active` by default); use a different callback class when styling rows independently. Utility cells are present in rendered header/body/footer DOM, so callbacks inspecting child positions must account for them. Their data and index arguments remain unchanged.
+
+#### Remote selection
+
+Remote selection retains IDs across pages and reloads without caching unloaded row objects. `setSelectedIds()` accepts valid unloaded IDs, and an absent record in one response does not prune selection. The application must reconcile server deletions and permission changes explicitly.
+
+Only `page` is supported by remote `selectRows()` / `deselectRows()`; `filtered` and `all` throw `RangeError` before changing selection. Bulk actions should send `getSelectedIds()` to the application service. There is no query-wide remote selection, selected-data scope, or selected export scope.
+
+#### Selection events
+
+`selectionchange.ui.table` reports effective selection changes, including pruning after local replacement/removal. Its detail contains independent `{ selectedIds, addedIds, removedIds }` arrays. One bulk selection update emits one aggregate event; unchanged selections and data-only edits do not notify. Selection changes do not emit `statechange.ui.table`.
+
+```js
+$.addEvent(node, 'selectionchange.ui.table', (event) => {
+    updateBulkActions(event.detail.selectedIds);
+});
+```
+
+Selection is committed before notification. Listeners may change selection again, replace data, or dispose the table; older work stops when a newer data operation takes over. Data-driven pruning may notify before the new rows are drawn; use `draw.ui.table` for completed DOM updates.
 
 ### Column filters and row predicates
 
@@ -451,7 +535,7 @@ Every callback below runs with the Table as `this`:
 
 ### Layouts and buttons
 
-The default layout is `{ top: 'search,buttons|length', bottom: 'info,pagination' }`. Commas separate layout columns; pipes stack controls within a column. Built-ins are `search`, `buttons`, `length`, `info`, and `pagination`. An empty string omits a row. Omitting a control does not disable its API feature.
+The default layout is `{ top: 'search,buttons|length', bottom: 'info,pagination' }`. Commas separate layout columns; pipes stack controls within a column. Built-ins are `search`, `buttons`, `length`, `info`, `pagination`, and `selection`. An empty string omits a row. Omitting a control does not disable its API feature.
 
 ```js
 Table.layout.summary = function (container) {
@@ -532,12 +616,16 @@ Data attributes configure options; they do not initialize Tables by themselves. 
 | `Table.init(node, options?)` | `Table` | Return the existing instance for an element or create one. |
 | `addRow(row)` | `void` | Append a copied row and refresh local results/counts. |
 | `addRows(rows)` | `void` | Append a copied local batch with one recalculation and draw. |
-| `clear()` | `void` | Clear loaded rows/counts, search, filters, predicate, paging and pending work. |
+| `clear()` | `void` | Clear loaded rows/counts, selection, search, filters, predicate, paging and pending work. |
+| `deselectRows({ scope = 'page' }?)` | `void` | Deselect scoped IDs; remote tables support only `page`. |
 | `dispose()` | `void` | Restore the original DOM and attributes, cancel owned work, and remove registered state. |
 | `getColumn(key, { modified = true }?)` | `array` | Return column values for the displayed rows or loaded dataset. |
 | `getData({ scope = 'page' }?)` | `array` | Return shallow row copies for `page`, `filtered`, or `all`, in active order. |
 | `getExportData({ scope = 'page', columns = null }?)` | `object \| null` | Return text headings and resolved export rows; return `null` if collection is interrupted. |
 | `getRow(index, { modified = true }?)` | `array \| object` | Return a shallow copy of a row. |
+| `getRowById(id)` | `array \| object \| null` | Return a copied loaded row by stable ID, or `null` when absent. |
+| `getRowId(index, { modified = true }?)` | `string \| number \| null` | Return a positional row's ID, or `null` after disposal. |
+| `getSelectedIds()` | `array` | Return an independent array of selected IDs, including unloaded remote IDs. |
 | `getState()` | `object \| null` | Return an independent versioned view snapshot, or `null` after disposal. |
 | `getValue(index, key, { modified = true }?)` | `any` | Read an array key or object dot path. |
 | `hideColumn(index)` | `void` | Hide a data column and redraw. |
@@ -549,12 +637,16 @@ Data attributes configure options; they do not initialize Tables by themselves. 
 | `refresh()` | `void` | Redraw current results without fetching/recalculating data. |
 | `reload({ reset = false }?)` | `void` | Recalculate local results or request remote data; optionally reset offset. |
 | `removeRow(index, { modified = true }?)` | `void` | Remove a row and refresh counts/results. |
+| `removeRowById(id)` | `void` | Remove a loaded row by stable ID. |
 | `search(term)` | `void` | Set a string search, synchronize input, and reset offset. |
+| `selectRows({ scope = 'page' }?)` | `void` | Add scoped IDs to selection; remote tables support only `page`. |
 | `setColumn(key, values, { modified = true }?)` | `void` | Replace one column for targeted rows; array length must match. |
 | `setData(rows, { resetPage = true }?)` | `void` | Replace the local dataset with one redraw, preserving search and filters. |
 | `setFilters(filters)` | `void` | Replace structured column filters and reset to page one. Pass `[]` to clear them. |
 | `setRow(index, row, { modified = true }?)` | `void` | Replace a row with a shallow copy. |
+| `setRowById(id, row)` | `void` | Replace a loaded row, retaining its ID. |
 | `setRowFilter(predicate)` | `void` | Set a local row predicate and reset to page one. Pass `null` to clear it. |
+| `setSelectedIds(ids)` | `void` | Replace selection atomically; `[]` clears it. |
 | `setState(state)` | `void` | Validate and restore a complete view in one recalculation or remote load. |
 | `setValue(index, key, value, { modified = true }?)` | `void` | Update one array key or object dot path. |
 | `showColumn(index)` | `void` | Reveal a data column and redraw. |
@@ -583,6 +675,7 @@ Events originate on the original table:
 | `page.ui.table` | After setting offset, before loading results. |
 | `search.ui.table` | After setting the search, before loading results. |
 | `filter.ui.table` | After setting column filters or the row predicate, before loading results. |
+| `selectionchange.ui.table` | Selection changed; detail includes `selectedIds`, `addedIds`, and `removedIds`. |
 | `statechange.ui.table` | Serialized view changed; the snapshot is in `event.detail.state`. Remote results may still be pending. |
 | `processing.ui.table` | Loading shown. |
 | `processed.ui.table` | Loading hidden; also emitted for request errors. |

@@ -46,6 +46,36 @@ export function buildTable(headings, rows, direction) {
 }
 
 /**
+ * Copies only the branches affected by a dot-path write, including wildcards.
+ * @param {Array|object} row The source row.
+ * @param {string} key The data path.
+ * @param {*} value The replacement value.
+ * @returns {Array|object} The updated row without changing shared source objects.
+ */
+export function copyRowValue(row, key, value) {
+    const copyPath = (source, keys) => {
+        const copy = Array.isArray(source) ? [...source] : { ...source };
+        const [part, ...remaining] = keys;
+        const targets = part === '*' ? Object.keys(copy) : [part];
+
+        for (const target of targets) {
+            const child = Object.hasOwn(copy, target) ? copy[target] : undefined;
+
+            Object.defineProperty(copy, target, {
+                configurable: true,
+                enumerable: true,
+                value: remaining.length ? copyPath(child, remaining) : value,
+                writable: true,
+            });
+        }
+
+        return copy;
+    };
+
+    return copyPath(row, key.split('.'));
+}
+
+/**
  * Builds a data array from a DOM element.
  * @param {HTMLElement} element The element to parse.
  * @param {WeakMap} values The cell metadata, keyed by source row.
@@ -466,6 +496,16 @@ export function saveBlob(blob, filename) {
 export function validateColumnIndex(index, count) {
     if (!Number.isInteger(index) || index < 0 || index >= count) {
         throw new RangeError('Column index is out of range.');
+    }
+}
+
+/**
+ * Validates a stable application row ID without coercing its type.
+ * @param {*} id The row ID.
+ */
+export function validateRowId(id) {
+    if ((typeof id !== 'string' || !id.length) && !Number.isSafeInteger(id)) {
+        throw new TypeError('Row IDs must be nonempty strings or safe integers.');
     }
 }
 

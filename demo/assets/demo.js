@@ -258,22 +258,31 @@ $.ready(() => {
         clear: [],
         dispose: [],
         getData: [{ scope: 'filtered' }],
+        getRowById: ['Alice'],
+        getSelectedIds: [],
         getState: [],
         info: [],
+        selectRows: [{ scope: 'filtered' }],
         setData: [rows],
+        setRowById: ['Alice', ['Alice', 'Design', 99]],
         setValue: [0, 2, 99],
     };
-    const eventNames = ['init', 'length', 'order', 'page', 'search', 'filter', 'statechange', 'processing', 'processed', 'preDraw', 'draw', 'error'];
+    const eventNames = ['init', 'length', 'order', 'page', 'search', 'filter', 'selectionchange', 'statechange', 'processing', 'processed', 'preDraw', 'draw', 'error'];
     $.addEvent('#method-table', eventNames.map((name) => `${name}.ui.table`).join(' '), (event) => {
         logEvent(`${event.type}.ui.table`);
     });
     let savedState = null;
-    let methodTable = init('method-table');
+    const initMethods = () => init('method-table', {
+        rowId: 0,
+        selection: 'multiple',
+        layout: { top: 'selection,search|length', bottom: 'info,pagination' },
+    });
+    let methodTable = initMethods();
     $('[data-demo-method]').addEvent('click', (event) => {
         try {
             const method = $.getAttribute(event.currentTarget, 'data-demo-method');
             if (method === 'init') {
-                methodTable = init('method-table');
+                methodTable = initMethods();
                 $.setText(node('method-output'), 'Initialized.');
                 return;
             }

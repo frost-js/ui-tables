@@ -34,6 +34,31 @@ function buildTable(headings, rows, direction) {
 	return table;
 }
 /**
+* Copies only the branches affected by a dot-path write, including wildcards.
+* @param {Array|object} row The source row.
+* @param {string} key The data path.
+* @param {*} value The replacement value.
+* @returns {Array|object} The updated row without changing shared source objects.
+*/
+function copyRowValue(row, key, value) {
+	const copyPath = (source, keys) => {
+		const copy = Array.isArray(source) ? [...source] : { ...source };
+		const [part, ...remaining] = keys;
+		const targets = part === "*" ? Object.keys(copy) : [part];
+		for (const target of targets) {
+			const child = Object.hasOwn(copy, target) ? copy[target] : void 0;
+			Object.defineProperty(copy, target, {
+				configurable: true,
+				enumerable: true,
+				value: remaining.length ? copyPath(child, remaining) : value,
+				writable: true
+			});
+		}
+		return copy;
+	};
+	return copyPath(row, key.split("."));
+}
+/**
 * Builds a data array from a DOM element.
 * @param {HTMLElement} element The element to parse.
 * @param {WeakMap} values The cell metadata, keyed by source row.
@@ -303,6 +328,13 @@ function saveBlob(blob, filename) {
 */
 function validateColumnIndex(index, count) {
 	if (!Number.isInteger(index) || index < 0 || index >= count) throw new RangeError("Column index is out of range.");
+}
+/**
+* Validates a stable application row ID without coercing its type.
+* @param {*} id The row ID.
+*/
+function validateRowId(id) {
+	if ((typeof id !== "string" || !id.length) && !Number.isSafeInteger(id)) throw new TypeError("Row IDs must be nonempty strings or safe integers.");
 }
 /**
 * Validates a local or remote row collection.
@@ -1848,6 +1880,7 @@ async function print(options, table, classes) {
 //#endregion
 //#region src/js/table.js
 /** @typedef {Array<*>|Record<string, *>} TableRow */
+/** @typedef {string|number} TableRowId */
 /** @typedef {[number, 'asc'|'desc']} TableOrder */
 /**
 * @typedef {object} TableState
@@ -1917,6 +1950,8 @@ async function print(options, table, classes) {
 * @typedef {object} TableOptions
 * @property {TableRow[]} [data] Local data; otherwise read the table body.
 * @property {function(TableRequest): (TableResults|PromiseLike<TableResults>)} [getResults] Loads remote rows.
+* @property {string|number|function(TableRow): TableRowId|null} [rowId=null] The stable row identity accessor.
+* @property {false|'single'|'multiple'} [selection=false] The row selection mode; requires rowId.
 * @property {TableColumn[]|null} [columns=null] The column definitions.
 * @property {function(string): string} [sanitize] Sanitizes HTML cells and headings; defaults to query sanitization.
 * @property {TableButton[]} [buttons=[]] The export and custom buttons.
@@ -1990,6 +2025,10 @@ var Table = class extends BaseComponent {
 		searchInputContainer: "form-input mx-auto me-md-0",
 		searchInputFilled: "input-filled input-sm",
 		searchInputOutline: "input-outline input-sm",
+		selectedRow: "table-active",
+		selectionCell: "text-center",
+		selectionContainer: "d-flex align-items-center gap-2 mb-1",
+		selectionInput: "input-check",
 		table: "table table-bordered",
 		tableContainer: "table-responsive",
 		tableHeading: "fw-bold",
@@ -2013,6 +2052,12 @@ var Table = class extends BaseComponent {
 			page: "Page",
 			perPage: "Per Page",
 			search: "Search",
+			selection: {
+				clear: "Clear selection",
+				count: "{count} selected",
+				page: "Select all rows on this page",
+				row: "Select row {id}"
+			},
 			loading: "Loading results",
 			paginate: {
 				first: "First",
@@ -2045,6 +2090,8 @@ var Table = class extends BaseComponent {
 		infoCallback: null,
 		preDrawCallback: null,
 		rowCallback: null,
+		rowId: null,
+		selection: false,
 		columns: null,
 		order: [[0, "asc"]],
 		lengths: [
@@ -2067,6 +2114,9 @@ var Table = class extends BaseComponent {
 		},
 		search(container) {
 			this.#renderSearch(container);
+		},
+		selection(container) {
+			this.#renderSelection(container);
 		},
 		length(container) {
 			this.#renderLengthSelect(container);
@@ -2093,6 +2143,7 @@ var Table = class extends BaseComponent {
 	#limit;
 	#loader = null;
 	#loadResults = null;
+	#notifiedSelectedIds = /* @__PURE__ */ new Set();
 	#offset = 0;
 	#order;
 	#original = null;
@@ -2105,9 +2156,17 @@ var Table = class extends BaseComponent {
 	#requestVersion = 0;
 	#results = [];
 	#rowFilter = null;
+	#rowIdIndexes = /* @__PURE__ */ new Map();
+	#rowIds = [];
 	#rowIndexes = [];
 	#searchHandler = null;
 	#searchInput = null;
+	#selectedIds = /* @__PURE__ */ new Set();
+	#selectionClear = null;
+	#selectionCount = null;
+	#selectionHeading = null;
+	#selectionInputs = /* @__PURE__ */ new WeakMap();
+	#selectionName = null;
 	#stateKey = null;
 	#tbody = null;
 	#term = "";
@@ -2129,10 +2188,18 @@ var Table = class extends BaseComponent {
 			this.#originalBusy = $.getAttribute(node, "aria-busy");
 			this.#limit = this.options.paging ? normalizePageLength(this.options.length) : Infinity;
 			for (const length of this.options.lengths) normalizePageLength(length);
+			const rowId = this.options.rowId;
+			if (rowId !== null && typeof rowId !== "function" && (typeof rowId !== "string" || !rowId.length) && (!Number.isSafeInteger(rowId) || rowId < 0)) throw new TypeError("Row ID must be a data key, callback, or null.");
+			if (![
+				false,
+				"single",
+				"multiple"
+			].includes(this.options.selection) || this.options.selection && rowId === null) throw new TypeError("Selection must be false, single, or multiple and requires rowId.");
+			this.#selectionName = generateId("table-selection");
 			if (!this.options.getResults) {
 				const data = this.options.data ?? getDomData(node, this.#domValues);
 				validateRows(data);
-				this.#data = data.slice();
+				if (!this.#setData(data.slice())) return;
 			}
 			const headings = getDomHeadings(node);
 			this.#columns = normalizeColumns(this.options.columns, headings);
@@ -2165,7 +2232,8 @@ var Table = class extends BaseComponent {
 	addRow(row) {
 		if (!this.node) return;
 		validateRows([row]);
-		this.#data.push(Array.isArray(row) ? [...row] : { ...row });
+		const data = [...this.#data, Array.isArray(row) ? [...row] : { ...row }];
+		if (!this.#setData(data)) return;
 		this.#mutated(1);
 	}
 	/**
@@ -2178,7 +2246,7 @@ var Table = class extends BaseComponent {
 		validateRows(rows);
 		if (!rows.length) return;
 		const data = rows.map((row) => Array.isArray(row) ? [...row] : { ...row });
-		this.#data = this.#data.concat(data);
+		if (!this.#setData(this.#data.concat(data))) return;
 		this.#load();
 	}
 	/**
@@ -2190,6 +2258,9 @@ var Table = class extends BaseComponent {
 		if (!this.node || requestVersion !== this.#requestVersion) return;
 		this.#searchHandler?.cancel();
 		this.#data = [];
+		this.#rowIdIndexes.clear();
+		this.#rowIds = [];
+		this.#selectedIds.clear();
 		this.#domValues = /* @__PURE__ */ new WeakMap();
 		this.#results = [];
 		this.#rowIndexes = [];
@@ -2204,6 +2275,14 @@ var Table = class extends BaseComponent {
 		this.#refreshResults();
 		this.loading({ show: false });
 		if (this.node) this.#renderResults();
+	}
+	/**
+	* Removes selected IDs in a data scope without changing the view.
+	* @param {object} [options] Options for selecting rows.
+	* @param {'page'|'filtered'|'all'} [options.scope='page'] The row scope.
+	*/
+	deselectRows({ scope = "page" } = {}) {
+		this.#selectScope(scope, false);
 	}
 	/** @inheritdoc */
 	dispose() {
@@ -2244,9 +2323,18 @@ var Table = class extends BaseComponent {
 		this.#pagination = null;
 		this.#lengthSelect = null;
 		this.#searchInput = null;
+		this.#selectionClear = null;
+		this.#selectionCount = null;
+		this.#selectionHeading = null;
+		this.#selectionInputs = /* @__PURE__ */ new WeakMap();
+		this.#selectionName = null;
+		this.#notifiedSelectedIds.clear();
 		this.#columns = [];
 		this.#headings = [];
 		this.#data = [];
+		this.#rowIdIndexes.clear();
+		this.#rowIds = [];
+		this.#selectedIds.clear();
 		this.#domValues = /* @__PURE__ */ new WeakMap();
 		this.#results = [];
 		this.#rowIndexes = [];
@@ -2328,6 +2416,34 @@ var Table = class extends BaseComponent {
 	getRow(index, { modified = true } = {}) {
 		const rowIndex = this.#getIndex(index, { modified });
 		return $._isPlainObject(this.#data[rowIndex]) ? { ...this.#data[rowIndex] } : [...this.#data[rowIndex]];
+	}
+	/**
+	* Gets a loaded row by stable identity.
+	* @param {TableRowId} id The row ID.
+	* @returns {TableRow|null} A shallow row copy, or null when absent.
+	*/
+	getRowById(id) {
+		const index = this.#getIdIndex(id);
+		return index === void 0 ? null : this.getRow(index, { modified: false });
+	}
+	/**
+	* Gets the stable identity for a positional row.
+	* @param {number} index The row index.
+	* @param {object} [options] Options for getting the row index.
+	* @param {boolean} [options.modified=true] Whether to use modified indexes.
+	* @returns {TableRowId|null} The row ID, or null after disposal.
+	*/
+	getRowId(index, { modified = true } = {}) {
+		if (!this.node) return null;
+		if (this.options.rowId === null) throw new TypeError("Row identity requires rowId.");
+		return this.#rowIds[this.#getIndex(index, { modified })];
+	}
+	/**
+	* Gets an independent selection in insertion order, including unloaded IDs.
+	* @returns {TableRowId[]} The selected IDs.
+	*/
+	getSelectedIds() {
+		return [...this.#selectedIds];
 	}
 	/**
 	* Gets an independent, serializable snapshot of the current view.
@@ -2461,8 +2577,18 @@ var Table = class extends BaseComponent {
 	*/
 	removeRow(index, { modified = true } = {}) {
 		const rowIndex = this.#getIndex(index, { modified });
-		this.#data.splice(rowIndex, 1);
+		const id = this.#rowIds[rowIndex];
+		const data = this.#data.filter((_, index) => index !== rowIndex);
+		if (!this.#setData(data)) return;
+		this.#selectedIds.delete(id);
 		this.#mutated(-1);
+	}
+	/**
+	* Removes a loaded row by stable identity.
+	* @param {TableRowId} id The row ID.
+	*/
+	removeRowById(id) {
+		if (this.node) this.removeRow(this.#getIdIndex(id), { modified: false });
 	}
 	/**
 	* Searches the Table for a term.
@@ -2478,6 +2604,14 @@ var Table = class extends BaseComponent {
 		if (this.node) this.#load();
 	}
 	/**
+	* Adds selected IDs in a data scope without changing the view.
+	* @param {object} [options] Options for selecting rows.
+	* @param {'page'|'filtered'|'all'} [options.scope='page'] The row scope.
+	*/
+	selectRows({ scope = "page" } = {}) {
+		this.#selectScope(scope, true);
+	}
+	/**
 	* Sets values for a single column.
 	* @param {string} key The key to set.
 	* @param {Array} column The column values.
@@ -2487,11 +2621,7 @@ var Table = class extends BaseComponent {
 	setColumn(key, column, { modified = true } = {}) {
 		const indexes = modified ? this.#rowIndexes : this.#data.map((_, index) => index);
 		if (!Array.isArray(column) || column.length !== indexes.length) throw new RangeError("Column values must match the selected row count.");
-		for (const [index, rowIndex] of indexes.entries()) {
-			$._setDot(this.#data[rowIndex], String(key), column[index]);
-			this.#domValues.get(this.#data[rowIndex])?.delete(String(key));
-		}
-		this.#mutated();
+		this.#setValues(indexes, String(key), column);
 	}
 	/**
 	* Replaces a local dataset with copied rows and one redraw.
@@ -2504,7 +2634,7 @@ var Table = class extends BaseComponent {
 		if (this.options.getResults) throw new TypeError("Bulk updates require local data.");
 		validateRows(rows);
 		const data = rows.map((row) => Array.isArray(row) ? [...row] : { ...row });
-		this.#data = data;
+		if (!this.#setData(data)) return;
 		this.#domValues = /* @__PURE__ */ new WeakMap();
 		this.#filteredIndexes = [];
 		this.#rowIndexes = [];
@@ -2533,8 +2663,17 @@ var Table = class extends BaseComponent {
 	setRow(index, row, { modified = true } = {}) {
 		const rowIndex = this.#getIndex(index, { modified });
 		validateRows([row]);
-		this.#data[rowIndex] = Array.isArray(row) ? [...row] : { ...row };
-		this.#mutated();
+		const data = [...this.#data];
+		data[rowIndex] = Array.isArray(row) ? [...row] : { ...row };
+		if (this.#setData(data, { preserveIds: true })) this.#mutated();
+	}
+	/**
+	* Replaces a loaded row while preserving its identity.
+	* @param {TableRowId} id The row ID.
+	* @param {TableRow} row The replacement row.
+	*/
+	setRowById(id, row) {
+		if (this.node) this.setRow(this.#getIdIndex(id), row, { modified: false });
 	}
 	/**
 	* Sets a local row predicate and resets to the first page.
@@ -2548,6 +2687,25 @@ var Table = class extends BaseComponent {
 		this.#offset = 0;
 		$.triggerEvent(this.node, "filter.ui.table");
 		if (this.node) this.#load();
+	}
+	/**
+	* Replaces the selection atomically without drawing or requesting data.
+	* @param {TableRowId[]} ids The selected IDs; an empty array clears selection.
+	*/
+	setSelectedIds(ids) {
+		if (!this.node) return;
+		if (!this.options.selection) throw new TypeError("Row selection is disabled.");
+		if (!Array.isArray(ids)) throw new TypeError("Selected IDs must be an array.");
+		const selected = new Set(ids);
+		for (const id of selected) {
+			validateRowId(id);
+			if (!this.options.getResults && !this.#rowIdIndexes.has(id)) throw new RangeError("Selected row ID is not in the dataset.");
+		}
+		if (this.options.selection === "single" && selected.size > 1) throw new RangeError("Single selection accepts only one row.");
+		if (selected.size === this.#selectedIds.size && [...selected].every((id) => this.#selectedIds.has(id))) return;
+		this.#selectedIds = selected;
+		this.#syncSelection();
+		this.#notifySelectionChange();
 	}
 	/**
 	* Restores a validated view with one recalculation or remote load.
@@ -2577,9 +2735,7 @@ var Table = class extends BaseComponent {
 	*/
 	setValue(index, key, value, { modified = true } = {}) {
 		const rowIndex = this.#getIndex(index, { modified });
-		$._setDot(this.#data[rowIndex], String(key), value);
-		this.#domValues.get(this.#data[rowIndex])?.delete(String(key));
-		this.#mutated();
+		this.#setValues([rowIndex], String(key), [value]);
 	}
 	/**
 	* Toggles a column as visible.
@@ -2635,13 +2791,26 @@ var Table = class extends BaseComponent {
 				} else order = [[index, nextDir]];
 				this.order(order);
 			};
-			$.addEventDelegate(this.#theadRow, "click.ui.table", "th", handleSort);
-			$.addEventDelegate(this.#theadRow, "keydown.ui.table", "th", (event) => {
+			$.addEventDelegate(this.#theadRow, "click.ui.table", "th[data-ui-index]", handleSort);
+			$.addEventDelegate(this.#theadRow, "keydown.ui.table", "th[data-ui-index]", (event) => {
 				switch (event.code) {
 					case "Enter":
 					case "NumpadEnter":
 					case "Space": handleSort(event);
 				}
+			});
+		}
+		if (this.options.selection) {
+			$.addEventDelegate(this.#theadRow, "change.ui.table", "[data-ui-select-page]", (event) => {
+				if ($.getProperty(event.currentTarget, "checked")) this.selectRows();
+				else this.deselectRows();
+			});
+			$.addEventDelegate(this.#tbody, "change.ui.table", "[data-ui-select-row]", (event) => {
+				const id = this.#selectionInputs.get(event.currentTarget);
+				const selected = this.options.selection === "single" ? /* @__PURE__ */ new Set() : new Set(this.#selectedIds);
+				if ($.getProperty(event.currentTarget, "checked")) selected.add(id);
+				else selected.delete(id);
+				this.setSelectedIds([...selected]);
 			});
 		}
 		if (this.#pagination) $.addEventDelegate(this.#pagination, "click.ui.table", "[data-ui-page]", (event) => {
@@ -2694,6 +2863,7 @@ var Table = class extends BaseComponent {
 			request.limit = this.#limit;
 		}
 		let response;
+		let identities;
 		try {
 			const pending = this.options.getResults.call(this, request);
 			if (!active()) {
@@ -2706,6 +2876,8 @@ var Table = class extends BaseComponent {
 			if (!active()) return;
 			validateRows(response?.results);
 			if (!Number.isSafeInteger(response.total) || !Number.isSafeInteger(response.filtered) || response.total < 0 || response.filtered < 0 || response.filtered > response.total || response.results.length > response.filtered || this.options.paging && response.results.length > this.#limit) throw new TypeError("Remote counts and rows must describe a valid result page.");
+			identities = this.#getRowIdentities(response.results);
+			if (!identities || !active()) return;
 		} catch (error) {
 			if (active()) {
 				this.#pending = null;
@@ -2723,6 +2895,8 @@ var Table = class extends BaseComponent {
 			return;
 		}
 		this.#data = response.results.slice();
+		this.#rowIdIndexes = identities;
+		this.#rowIds = [...identities.keys()];
 		this.#refreshResults();
 		this.loading({ show: false });
 		if (active()) this.#renderResults();
@@ -2747,6 +2921,17 @@ var Table = class extends BaseComponent {
 		}
 	}
 	/**
+	* Looks up a loaded row without coercing application IDs.
+	* @param {TableRowId} id The row ID.
+	* @returns {number|undefined} The loaded index, or undefined when absent.
+	*/
+	#getIdIndex(id) {
+		if (!this.node) return;
+		if (this.options.rowId === null) throw new TypeError("Row identity requires rowId.");
+		validateRowId(id);
+		return this.#rowIdIndexes.get(id);
+	}
+	/**
 	* Gets an index (optionally modified).
 	* @param {number} index The index to get.
 	* @param {object} [options] Options for getting the row index.
@@ -2766,6 +2951,26 @@ var Table = class extends BaseComponent {
 		return this.#order.flatMap(([index, direction]) => {
 			return (this.#columns[index].orderData ?? [index]).map((column) => [column, direction]);
 		});
+	}
+	/**
+	* Resolves and validates every identity before installing new data.
+	* @param {TableRow[]} data The proposed dataset.
+	* @returns {Map<TableRowId, number>|null} The identity map, or null if interrupted.
+	*/
+	#getRowIdentities(data) {
+		const identities = /* @__PURE__ */ new Map();
+		const accessor = this.options.rowId;
+		const version = this.#drawVersion;
+		const requestVersion = this.#requestVersion;
+		if (accessor === null) return identities;
+		for (const [index, row] of data.entries()) {
+			const id = typeof accessor === "function" ? accessor.call(this, row) : $._getDot(row, String(accessor));
+			if (!this.node || version !== this.#drawVersion || requestVersion !== this.#requestVersion) return null;
+			validateRowId(id);
+			if (identities.has(id)) throw new TypeError("Row IDs must be unique within the loaded dataset.");
+			identities.set(id, index);
+		}
+		return identities;
 	}
 	/**
 	* Resolves a source value for one table operation.
@@ -2810,6 +3015,9 @@ var Table = class extends BaseComponent {
 		if (this.options.getResults) {
 			const requestVersion = this.#cancelRequest();
 			if (!this.node || requestVersion !== this.#requestVersion) return;
+			this.#syncSelection();
+			this.#notifySelectionChange();
+			if (!this.node || requestVersion !== this.#requestVersion) return;
 			this.#notifyStateChange();
 			if (!this.node || requestVersion !== this.#requestVersion) return;
 			this.loading();
@@ -2820,6 +3028,10 @@ var Table = class extends BaseComponent {
 		if (!this.node || drawVersion !== this.#drawVersion) return;
 		try {
 			this.#updateLocal();
+			if (this.node && drawVersion === this.#drawVersion) {
+				this.#syncSelection();
+				this.#notifySelectionChange();
+			}
 			if (this.node && drawVersion === this.#drawVersion) this.#notifyStateChange();
 		} finally {
 			if (this.node && drawVersion === this.#drawVersion) this.loading({ show: false });
@@ -2840,14 +3052,30 @@ var Table = class extends BaseComponent {
 		if (!this.node || version !== this.#requestVersion) return;
 		this.#total = Math.max(0, this.#total + change);
 		this.#filtered = Math.max(0, this.#filtered + change);
+		this.#refreshResults();
 		if (!this.#data.length && this.#offset) {
 			this.#offset = Math.max(0, this.#offset - this.#limit);
 			this.#load();
 			return;
 		}
-		this.#refreshResults();
 		this.loading({ show: false });
 		if (this.node) this.#renderResults();
+	}
+	/**
+	* Publishes effective selection changes with independent ID arrays.
+	*/
+	#notifySelectionChange() {
+		if (!this.node || !this.options.selection) return;
+		const selectedIds = [...this.#selectedIds];
+		const addedIds = selectedIds.filter((id) => !this.#notifiedSelectedIds.has(id));
+		const removedIds = [...this.#notifiedSelectedIds].filter((id) => !this.#selectedIds.has(id));
+		if (!addedIds.length && !removedIds.length) return;
+		this.#notifiedSelectedIds = new Set(selectedIds);
+		$.triggerEvent(this.node, "selectionchange.ui.table", { detail: {
+			selectedIds,
+			addedIds,
+			removedIds
+		} });
 	}
 	/**
 	* Publishes changed view configuration independently of request completion.
@@ -2899,6 +3127,20 @@ var Table = class extends BaseComponent {
 			this.#tfoot = $.clone(tfoot)[0];
 			$.append(this.node, this.#tfoot);
 		}
+		if (this.options.selection) {
+			this.#selectionHeading = $.create("th", { class: this.constructor.classes.selectionCell });
+			if (this.options.selection === "multiple") $.append(this.#selectionHeading, $.create("input", {
+				class: this.constructor.classes.selectionInput,
+				attributes: {
+					"type": "checkbox",
+					"aria-label": this.options.lang.selection.page,
+					"aria-controls": $.getAttribute(this.node, "id")
+				},
+				dataset: { uiSelectPage: "" }
+			}));
+			$.prepend(this.#theadRow, this.#selectionHeading);
+			for (const row of $.find("tr", this.#tfoot ?? [])) $.prepend(row, $.create("td", { class: this.constructor.classes.selectionCell }));
+		}
 		$.hide(this.#loader);
 		$.after(this.node, this.#container);
 		$.append(this.#container, this.#loader);
@@ -2947,14 +3189,14 @@ var Table = class extends BaseComponent {
 	*/
 	#renderHeadings() {
 		const version = this.#drawVersion;
-		const children = $.children(this.#theadRow);
+		const children = $.children(this.#theadRow, "[data-ui-index]");
 		const headings = {};
 		for (const child of children) {
 			const index = $.getDataset(child, "uiIndex");
 			if (!this.#columns[index].visible) $.detach(child);
 			else headings[index] = child;
 		}
-		let lastCell;
+		let lastCell = this.#selectionHeading;
 		for (const [index, heading] of this.#headings.entries()) {
 			if (!this.#columns[index].visible) continue;
 			let cell;
@@ -3223,6 +3465,9 @@ var Table = class extends BaseComponent {
 		if (!this.node) return;
 		const version = ++this.#drawVersion;
 		const active = () => this.node && version === this.#drawVersion;
+		this.#syncSelection();
+		this.#notifySelectionChange();
+		if (!active()) return;
 		this.#notifyStateChange();
 		if (!active()) return;
 		$.triggerEvent(this.node, "preDraw.ui.table");
@@ -3243,7 +3488,7 @@ var Table = class extends BaseComponent {
 			$.append(row, $.create("td", {
 				class: this.constructor.classes.emptyCell,
 				text: this.#term || this.#filters.length || this.#rowFilter ? this.options.lang.noResults : this.options.lang.noData,
-				attributes: { colspan: Math.max(1, this.#getVisibleColumns().length) }
+				attributes: { colspan: Math.max(1, this.#getVisibleColumns().length + Number(Boolean(this.options.selection))) }
 			}));
 			$.append(this.#tbody, row);
 		} else for (const [index, result] of this.#results.entries()) {
@@ -3255,6 +3500,7 @@ var Table = class extends BaseComponent {
 			this.options.createdRow?.call(this, row, result, index);
 			if (!active()) return;
 		}
+		this.#syncSelection();
 		this.options.drawCallback?.call(this);
 		if (!active()) return;
 		if (this.#tfoot) this.options.footerCallback?.call(this, this.#tfoot, this.#data, this.#offset, end, [...this.#rowIndexes]);
@@ -3269,6 +3515,25 @@ var Table = class extends BaseComponent {
 	#renderRow(data, rowIndex) {
 		const row = $.create("tr");
 		const version = this.#drawVersion;
+		if (this.options.selection) {
+			const index = this.#rowIndexes[rowIndex];
+			const id = this.#rowIds[index];
+			const cell = $.create("td", { class: this.constructor.classes.selectionCell });
+			const input = $.create("input", {
+				class: this.constructor.classes.selectionInput,
+				attributes: {
+					"type": this.options.selection === "single" ? "radio" : "checkbox",
+					"name": this.#selectionName,
+					"aria-label": this.options.lang.selection.row.replace("{id}", String(id))
+				},
+				dataset: { uiSelectRow: index }
+			});
+			this.#selectionInputs.set(input, id);
+			$.setProperty(input, "checked", this.#selectedIds.has(id));
+			$.append(cell, input);
+			$.append(row, cell);
+			if (this.#selectedIds.has(id)) $.addClass(row, this.constructor.classes.selectedRow);
+		}
 		for (const [index, column] of this.#columns.entries()) {
 			if (!column.visible) continue;
 			const value = $._getDot(data, String(column.data));
@@ -3309,6 +3574,84 @@ var Table = class extends BaseComponent {
 		});
 		$.append(inputContainer, this.#searchInput);
 		$.append(container, searchContainer);
+	}
+	/**
+	* Renders a selected-count status and clear button.
+	* @param {HTMLElement} container The layout container.
+	*/
+	#renderSelection(container) {
+		if (!this.options.selection) return;
+		$.addClass(container, this.constructor.classes.selectionContainer);
+		this.#selectionCount = $.create("small", { attributes: {
+			"role": "status",
+			"aria-live": "polite"
+		} });
+		this.#selectionClear = $.create("button", {
+			class: this.constructor.classes.button,
+			text: this.options.lang.selection.clear,
+			attributes: { type: "button" }
+		});
+		$.addEvent(this.#selectionClear, "click.ui.table", () => this.setSelectedIds([]));
+		$.append(container, [this.#selectionCount, this.#selectionClear]);
+		this.#syncSelection();
+	}
+	/**
+	* Changes selection using the shared ordered data scopes.
+	* @param {'page'|'filtered'|'all'} scope The row scope.
+	* @param {boolean} selected Whether to select or deselect the scoped rows.
+	*/
+	#selectScope(scope, selected) {
+		if (!this.node) return;
+		if (!this.options.selection) throw new TypeError("Row selection is disabled.");
+		const version = this.#drawVersion;
+		const indexes = this.#getDataIndexes(scope);
+		if (!this.node || version !== this.#drawVersion) return;
+		const ids = new Set(this.#selectedIds);
+		for (const index of indexes) if (selected) ids.add(this.#rowIds[index]);
+		else ids.delete(this.#rowIds[index]);
+		this.setSelectedIds([...ids]);
+	}
+	/**
+	* Installs validated data and reconciles local selection before drawing.
+	* @param {TableRow[]} data The replacement loaded data.
+	* @param {object} [options] Identity validation options.
+	* @param {boolean} [options.preserveIds=false] Whether row identities must stay unchanged.
+	* @returns {boolean} Whether the data was installed.
+	*/
+	#setData(data, { preserveIds = false } = {}) {
+		const identities = this.#getRowIdentities(data);
+		if (!identities) return false;
+		const ids = [...identities.keys()];
+		if (preserveIds && ids.some((id, index) => id !== this.#rowIds[index])) throw new TypeError("Replacing row values must preserve row IDs.");
+		this.#drawVersion++;
+		this.#data = data;
+		this.#rowIdIndexes = identities;
+		this.#rowIds = ids;
+		if (!this.options.getResults) this.#selectedIds = new Set([...this.#selectedIds].filter((id) => identities.has(id)));
+		return true;
+	}
+	/**
+	* Validates column writes together before mutating any source rows.
+	* @param {number[]} indexes The loaded row indexes.
+	* @param {string} key The data path.
+	* @param {Array<*>} values The replacement values.
+	*/
+	#setValues(indexes, key, values) {
+		if (this.options.rowId !== null) {
+			const data = [...this.#data];
+			const metadata = indexes.map((index) => this.#domValues.get(data[index]));
+			for (const [offset, index] of indexes.entries()) data[index] = copyRowValue(data[index], key, values[offset]);
+			if (!this.#setData(data, { preserveIds: true })) return;
+			for (const [offset, index] of indexes.entries()) if (metadata[offset]) {
+				const copy = new Map(metadata[offset]);
+				copy.delete(key);
+				this.#domValues.set(data[index], copy);
+			}
+		} else for (const [offset, index] of indexes.entries()) {
+			$._setDot(this.#data[index], key, values[offset]);
+			this.#domValues.get(this.#data[index])?.delete(key);
+		}
+		this.#mutated();
 	}
 	/**
 	* Sorts local indexes, stopping if a callback interrupts the operation.
@@ -3374,6 +3717,31 @@ var Table = class extends BaseComponent {
 			$.append(this.#lengthSelect, option);
 		}
 		$.setValue(this.#lengthSelect, this.#limit);
+	}
+	/**
+	* Synchronizes mounted selection controls without rebuilding rows or moving focus.
+	*/
+	#syncSelection() {
+		if (!this.node || !this.options.selection) return;
+		for (const input of $.find("[data-ui-select-row]", this.#tbody ?? [])) {
+			const id = this.#selectionInputs.get(input);
+			const selected = this.#selectedIds.has(id);
+			$.setProperty(input, "checked", selected);
+			$.setProperty(input, "disabled", !this.#rowIdIndexes.has(id));
+			$[selected ? "addClass" : "removeClass"]($.closest(input, "tr")[0], this.constructor.classes.selectedRow);
+		}
+		const header = $.findOne("[data-ui-select-page]", this.#selectionHeading ?? []);
+		if (header) {
+			const count = this.#rowIndexes.filter((index) => this.#selectedIds.has(this.#rowIds[index])).length;
+			$.setProperty(header, "checked", count > 0 && count === this.#rowIndexes.length);
+			$.setProperty(header, "indeterminate", count > 0 && count < this.#rowIndexes.length);
+			$.setProperty(header, "disabled", !this.#rowIndexes.length);
+		}
+		if (this.#selectionCount) {
+			const text = this.options.lang.selection.count.replace("{count}", this.#selectedIds.size);
+			if ($.getText(this.#selectionCount) !== text) $.setText(this.#selectionCount, text);
+			$.setProperty(this.#selectionClear, "disabled", !this.#selectedIds.size);
+		}
 	}
 	/**
 	* Recomputes local matching, stable ordering, counts, and the current page.

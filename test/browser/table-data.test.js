@@ -72,6 +72,148 @@ test.describe('Table remote results', () => {
         });
     });
 
+    test.describe('row identity and selection', () => {
+        test('retains unloaded IDs across pages and selection changes do not load data', async ({ page }) => {
+            await page.evaluate(() => window.table = window.startRemote({ rowId: 0, selection: 'multiple' }));
+            await page.clock.runFor(25);
+            await page.evaluate(() => window.requests[0].resolve({ results: [['One'], ['Two']], total: 4, filtered: 4 }));
+            await expect(page.locator('tbody tr')).toHaveCount(2);
+            await page.evaluate(() => {
+                window.table.setSelectedIds(['One', 'Unloaded']);
+                window.table.page(2);
+            });
+            await page.clock.runFor(25);
+            await page.evaluate(() => window.requests[1].resolve({ results: [['Three'], ['Four']], total: 4, filtered: 4 }));
+            await expect(page.getByRole('checkbox', { name: 'Select row Three', exact: true })).toBeVisible();
+            const result = await page.evaluate(() => {
+                window.table.selectRows();
+                window.table.deselectRows();
+                const errors = [];
+
+                for (const method of ['selectRows', 'deselectRows']) {
+                    for (const scope of ['filtered', 'all']) {
+                        try {
+                            window.table[method]({ scope });
+                        } catch (error) {
+                            errors.push(error.name);
+                        }
+                    }
+                }
+
+                return {
+                    selected: window.table.getSelectedIds(), errors, requests: window.requests.length,
+                    absent: window.table.getRowById('One'), loaded: window.table.getRowById('Three'),
+                };
+            });
+
+            expect(result).toEqual({
+                selected: ['One', 'Unloaded'], errors: Array(4).fill('RangeError'), requests: 2,
+                absent: null, loaded: ['Three'],
+            });
+            await page.clock.runFor(25);
+            expect(await page.evaluate(() => window.requests.length)).toBe(2);
+        });
+
+        test('rejects invalid identity responses without replacing rows, counts, or selection', async ({ page }) => {
+            await page.evaluate(() => {
+                window.errors = [];
+                $.addEvent('#table', 'error.ui.table', (event) => window.errors.push(event.detail.error.name));
+                window.table = window.startRemote({ rowId: 0, selection: 'multiple' });
+            });
+            await page.clock.runFor(25);
+            await page.evaluate(() => window.requests[0].resolve({ results: [['One']], total: 1, filtered: 1 }));
+            await expect(page.getByRole('checkbox', { name: 'Select row One', exact: true })).toBeVisible();
+            await page.evaluate(() => {
+                window.table.setSelectedIds(['One']);
+                window.table.reload();
+            });
+            await page.clock.runFor(25);
+            await page.evaluate(() => window.requests[1].resolve({ results: [['Duplicate'], ['Duplicate']], total: 2, filtered: 2 }));
+            await expect(page.locator('#table')).toHaveAttribute('aria-busy', 'false');
+            const result = await page.evaluate(() => ({
+                row: window.table.getRowById('One'), absent: window.table.getRowById('Duplicate'),
+                selected: window.table.getSelectedIds(), total: window.table.info().total, errors: window.errors,
+            }));
+
+            expect(result).toEqual({ row: ['One'], absent: null, selected: ['One'], total: 1, errors: ['TypeError'] });
+        });
+
+        test('ignores stale identities and invalidates a pending response on keyed removal', async ({ page }) => {
+            await page.evaluate(() => window.table = window.startRemote({ rowId: 0, selection: 'multiple' }));
+            await page.clock.runFor(25);
+            await page.evaluate(() => window.table.reload());
+            await page.clock.runFor(25);
+            await page.evaluate(() => window.requests[1].resolve({ results: [['Current']], total: 1, filtered: 1 }));
+            await expect(page.getByRole('checkbox', { name: 'Select row Current', exact: true })).toBeVisible();
+            await page.evaluate(() => {
+                window.requests[0].resolve({ results: [['Stale']], total: 1, filtered: 1 });
+                window.table.setSelectedIds(['Current', 'Unloaded']);
+                window.table.reload();
+            });
+            await page.clock.runFor(25);
+            await page.evaluate(() => {
+                window.table.removeRowById('Current');
+                window.requests[2].resolve({ results: [['Current']], total: 1, filtered: 1 });
+            });
+            await page.clock.runFor(25);
+            const result = await page.evaluate(() => ({
+                stale: window.table.getRowById('Stale'), current: window.table.getRowById('Current'),
+                selected: window.table.getSelectedIds(), total: window.table.info().total,
+            }));
+
+            expect(result).toEqual({ stale: null, current: null, selected: ['Unloaded'], total: 0 });
+        });
+
+        test('notifies selection pruning before loading the preceding page after removal', async ({ page }) => {
+            await page.evaluate(() => window.table = window.startRemote({ rowId: 0, selection: 'multiple' }));
+            await page.clock.runFor(25);
+            await page.evaluate(() => window.requests[0].resolve({ results: [['One'], ['Two']], total: 3, filtered: 3 }));
+            await expect(page.locator('tbody tr')).toHaveCount(2);
+            await page.evaluate(() => window.table.page(2));
+            await page.clock.runFor(25);
+            await page.evaluate(() => window.requests[1].resolve({ results: [['Three']], total: 3, filtered: 3 }));
+            await expect(page.getByRole('checkbox', { name: 'Select row Three', exact: true })).toBeVisible();
+            const result = await page.evaluate(() => {
+                window.table.setSelectedIds(['Three']);
+                const events = [];
+                $.addEvent('#table', 'selectionchange.ui.table', (event) => events.push(event.detail));
+                window.table.removeRowById('Three');
+
+                return { events, selected: window.table.getSelectedIds() };
+            });
+
+            expect(result).toEqual({
+                events: [{ selectedIds: [], addedIds: [], removedIds: ['Three'] }], selected: [],
+            });
+            await expect(page.getByRole('checkbox', { name: 'Select all rows on this page' })).toBeDisabled();
+            await expect(page.getByRole('checkbox', { name: 'Select row Three', exact: true })).toBeDisabled();
+            await page.clock.runFor(25);
+            expect(await page.evaluate(() => window.requests[2].request.offset)).toBe(0);
+        });
+
+        test('abandons a response when its identity resolver starts a newer request', async ({ page }) => {
+            await page.evaluate(() => {
+                let interrupt = true;
+                window.table = window.startRemote({
+                    rowId(row) {
+                        if (interrupt) {
+                            interrupt = false;
+                            this.search('Newer');
+                        }
+
+                        return row[0];
+                    },
+                });
+            });
+            await page.clock.runFor(25);
+            await page.evaluate(() => window.requests[0].resolve({ results: [['Obsolete']], total: 1, filtered: 1 }));
+            await page.clock.runFor(25);
+            await page.evaluate(() => window.requests[1].resolve({ results: [['Newer']], total: 1, filtered: 1 }));
+            await expect(page.locator('tbody td')).toHaveText('Newer');
+            expect(await page.evaluate(() => window.table.getRowById('Obsolete'))).toBeNull();
+        });
+    });
+
     test.describe('errors and retry', () => {
         for (const { name, response } of [
             { name: 'filtered count exceeds total', response: { results: [['One']], total: 0, filtered: 1 } },
