@@ -2,9 +2,10 @@ import $ from '@fr0st/query';
 import { BaseComponent, Dropdown, generateId } from '@fr0st/ui';
 import { csv, excel, print } from './buttons.js';
 import {
-    buildTable, copyRowValue, getDomData, getDomHeadings, getFooterCells, matchesFilter, normalizeColumns, normalizeFilters,
-    normalizeOrder, normalizePageLength, normalizeSortValue, normalizeState, validateColumnIndex, validateRowId, validateRows,
-} from './helpers.js';
+    copyRowValue, matchesFilter, normalizeColumns, normalizeFilters, normalizeOrder, normalizePageLength, normalizeSortValue,
+    normalizeState, validateColumnIndex, validateRowId, validateRows,
+} from './data.js';
+import { buildTable, getDomData, getDomHeadings, getFooterCells } from './dom.js';
 
 /** @typedef {Array<*>|Record<string, *>} TableRow */
 /** @typedef {string|number} TableRowId */

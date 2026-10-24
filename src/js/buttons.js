@@ -1,5 +1,5 @@
 import $ from '@fr0st/query';
-import { saveBlob } from './helpers.js';
+import { saveBlob } from './dom.js';
 import Workbook from './workbook/workbook.js';
 
 /**
