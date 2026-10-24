@@ -47,16 +47,16 @@
 }
 
 .btn-table {
-    --ui-btn-bg: #{vars.$btn-table-bg};
-    --ui-btn-active-bg: #{vars.$btn-table-active-bg};
-    --ui-btn-active-color: #{vars.$btn-table-color};
-    --ui-btn-active-border-color: #{vars.$btn-table-border-color};
     --ui-btn-color: #{vars.$btn-table-color};
+    --ui-btn-bg: #{vars.$btn-table-bg};
     --ui-btn-border-color: #{vars.$btn-table-border-color};
     --ui-btn-hover-bg: #{vars.$btn-table-hover-bg};
     --ui-btn-hover-border-color: #{vars.$btn-table-border-color};
-    --ui-ripple-bg: #{vars.$btn-table-ripple-bg};
+    --ui-btn-active-color: #{vars.$btn-table-color};
+    --ui-btn-active-bg: #{vars.$btn-table-active-bg};
+    --ui-btn-active-border-color: #{vars.$btn-table-border-color};
     --ui-btn-focus-shadow-color: #{vars.$btn-table-focus-shadow-color};
+    --ui-ripple-bg: #{vars.$btn-table-ripple-bg};
 }
 
 .table-details-control {
@@ -64,25 +64,12 @@
     white-space: nowrap;
 }
 
-.table-details-list {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
-    gap: .5rem 1rem;
-    margin: 0;
-    overflow-wrap: anywhere;
-
-    dd {
-        min-width: 0;
-        margin: 0;
-    }
-}
-
 .table-details-toggle {
     --ui-btn-border-color: transparent;
-    --ui-btn-hover-border-color: transparent;
-    --ui-btn-active-border-color: transparent;
     --ui-btn-box-shadow: none;
+    --ui-btn-hover-border-color: transparent;
     --ui-btn-hover-box-shadow: none;
+    --ui-btn-active-border-color: transparent;
     --ui-btn-active-box-shadow: none;
 
     width: 1.5rem;
@@ -108,5 +95,18 @@
 
     &[aria-expanded="true"]:dir(rtl)::before {
         transform: rotate(-45deg);
+    }
+}
+
+.table-details-list {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+    gap: .5rem 1rem;
+    margin: 0;
+    overflow-wrap: anywhere;
+
+    dd {
+        min-width: 0;
+        margin: 0;
     }
 }
