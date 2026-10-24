@@ -150,8 +150,27 @@
                 </div>
                 <div class="col-xl-6" id="callbacks">
                     <div class="card card-body h-100 p-4">
-                        <h3 class="h5">Formatting and callbacks</h3>
-                        <p class="text-body-secondary">Display bold scores while keeping numeric sort values, highlight scores of 90 or more, and total the displayed page.</p>
+                        <h3 class="h5">Filters and formatting</h3>
+                        <p class="text-body-secondary">Filter by team and minimum score, then format and total the matching page.</p>
+                        <div class="row g-2 mb-3">
+                            <div class="col-sm-6">
+                                <label class="d-block mb-2" for="callback-team">Team</label>
+                                <select class="input-outline w-100" id="callback-team" aria-controls="callback-table">
+                                    <option value="">All teams</option>
+                                    <option>Design</option>
+                                    <option>Engineering</option>
+                                    <option>Support</option>
+                                </select>
+                            </div>
+                            <div class="col-sm-6">
+                                <label class="d-block mb-2" for="callback-score">Minimum score</label>
+                                <select class="input-outline w-100" id="callback-score" aria-controls="callback-table">
+                                    <option value="">Any score</option>
+                                    <option value="85">85</option>
+                                    <option value="90">90</option>
+                                </select>
+                            </div>
+                        </div>
                         <div class="demo-table">
                             <table id="callback-table">
                                 <caption>Formatted team scores</caption>

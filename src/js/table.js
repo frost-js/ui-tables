@@ -2,12 +2,18 @@ import $ from '@fr0st/query';
 import { BaseComponent, generateId } from '@fr0st/ui';
 import { csv, excel, print } from './buttons.js';
 import {
-    buildTable, getDomData, getDomHeadings, normalizeColumns, normalizeOrder,
+    buildTable, getDomData, getDomHeadings, matchesFilter, normalizeColumns, normalizeFilters, normalizeOrder,
     normalizePageLength, normalizeSortValue, validateColumnIndex, validateRows,
 } from './helpers.js';
 
 /** @typedef {Array<*>|Record<string, *>} TableRow */
 /** @typedef {[number, 'asc'|'desc']} TableOrder */
+/**
+ * @typedef {object} TableFilter
+ * @property {number} column The original column index.
+ * @property {'contains'|'equals'|'gt'|'gte'|'lt'|'lte'|'between'} operator The comparison.
+ * @property {string|number|boolean|null|Array<string|number>} value The scalar value or inclusive bounds.
+ */
 /**
  * @typedef {object} TableValueContext
  * @property {'display'|'sort'|'filter'|'export'} purpose The operation requesting a value.
@@ -43,6 +49,7 @@ import {
 /**
  * @typedef {object} TableRequest
  * @property {string} [term] The search term, omitted when empty.
+ * @property {TableFilter[]} [filters] The structured filters, omitted when empty.
  * @property {Record<number, {column: number, dir: string}>} [order] Remote ordering.
  * @property {Record<number, {data: string|number, name?: string, orderable: boolean, searchable: boolean}>} columns The column definitions.
  * @property {number} [offset] The zero-based offset when paging is enabled.
@@ -235,6 +242,7 @@ export default class Table extends BaseComponent {
     #domValues = new WeakMap();
     #drawVersion = 0;
     #filtered = 0;
+    #filters = [];
     #headings = [];
     #id = false;
     #infoContainer = null;
@@ -253,6 +261,7 @@ export default class Table extends BaseComponent {
     #pending = null;
     #requestVersion = 0;
     #results = [];
+    #rowFilter = null;
     #rowIndexes = [];
     #searchHandler = null;
     #searchInput = null;
@@ -372,6 +381,8 @@ export default class Table extends BaseComponent {
         this.#offset = 0;
         this.#total = 0;
         this.#filtered = 0;
+        this.#filters = [];
+        this.#rowFilter = null;
         this.#term = '';
 
         if (this.#searchInput) {
@@ -452,6 +463,9 @@ export default class Table extends BaseComponent {
         this.#domValues = new WeakMap();
         this.#results = [];
         this.#rowIndexes = [];
+
+        this.#filters = [];
+        this.#rowFilter = null;
 
         this.#loadResults = null;
         this.#searchHandler = null;
@@ -695,6 +709,24 @@ export default class Table extends BaseComponent {
     }
 
     /**
+     * Replaces structured column filters and resets to the first page.
+     * @param {TableFilter[]} filters The filters to apply together.
+     */
+    setFilters(filters) {
+        if (!this.node || !this.options.searching) {
+            return;
+        }
+
+        this.#filters = normalizeFilters(filters, this.#columns);
+        this.#offset = 0;
+        $.triggerEvent(this.node, 'filter.ui.table');
+
+        if (this.node) {
+            this.#load();
+        }
+    }
+
+    /**
      * Sets values for a single row.
      * @param {number} index The row index to set.
      * @param {Array|object} row The row values.
@@ -706,6 +738,32 @@ export default class Table extends BaseComponent {
         validateRows([row]);
         this.#data[rowIndex] = Array.isArray(row) ? [...row] : { ...row };
         this.#mutated();
+    }
+
+    /**
+     * Sets a local row predicate and resets to the first page.
+     * @param {function(TableRow): boolean|null} predicate The predicate, or null to clear it.
+     */
+    setRowFilter(predicate) {
+        if (!this.node || !this.options.searching) {
+            return;
+        }
+
+        if (predicate !== null && typeof predicate !== 'function') {
+            throw new TypeError('Row filter must be a function or null.');
+        }
+
+        if (predicate !== null && this.options.getResults) {
+            throw new TypeError('Row filters require local data.');
+        }
+
+        this.#rowFilter = predicate;
+        this.#offset = 0;
+        $.triggerEvent(this.node, 'filter.ui.table');
+
+        if (this.node) {
+            this.#load();
+        }
     }
 
     /**
@@ -887,6 +945,13 @@ export default class Table extends BaseComponent {
 
         if (this.#term) {
             request.term = this.#term;
+        }
+
+        if (this.#filters.length) {
+            request.filters = this.#filters.map((filter) => ({
+                ...filter,
+                value: Array.isArray(filter.value) ? [...filter.value] : filter.value,
+            }));
         }
 
         if (this.options.ordering) {
@@ -1791,7 +1856,7 @@ export default class Table extends BaseComponent {
             const row = $.create('tr');
             $.append(row, $.create('td', {
                 class: this.constructor.classes.emptyCell,
-                text: this.#term ? this.options.lang.noResults : this.options.lang.noData,
+                text: this.#term || this.#filters.length || this.#rowFilter ? this.options.lang.noResults : this.options.lang.noData,
                 attributes: {
                     colspan: Math.max(1, this.#getVisibleColumns().length),
                 },
@@ -1967,6 +2032,47 @@ export default class Table extends BaseComponent {
                         matches.push(rowIndex);
                         break;
                     }
+                }
+            }
+
+            indexes = matches;
+        }
+
+        for (const filter of this.#filters) {
+            const matches = [];
+            const column = this.#columns[filter.column];
+
+            for (const rowIndex of indexes) {
+                const value = this.#getValue(rowIndex, filter.column, 'filter');
+
+                if (!active()) {
+                    return;
+                }
+
+                if (matchesFilter(value, filter, column.type)) {
+                    matches.push(rowIndex);
+                }
+            }
+
+            indexes = matches;
+        }
+
+        if (this.#rowFilter) {
+            const matches = [];
+
+            for (const rowIndex of indexes) {
+                const match = this.#rowFilter.call(this, this.#data[rowIndex]);
+
+                if (!active()) {
+                    return;
+                }
+
+                if (typeof match !== 'boolean') {
+                    throw new TypeError('Row filters must return a boolean.');
+                }
+
+                if (match) {
+                    matches.push(rowIndex);
                 }
             }
 

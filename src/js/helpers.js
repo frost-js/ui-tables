@@ -1,4 +1,4 @@
-/** @import { TableColumn, TableOrder } from './table.js'; */
+/** @import { TableColumn, TableFilter, TableOrder } from './table.js'; */
 
 import $ from '@fr0st/query';
 
@@ -103,6 +103,43 @@ export function getDomHeadings(element) {
 }
 
 /**
+ * Matches a resolved cell value against a validated filter.
+ * @param {*} value The resolved filter value.
+ * @param {TableFilter} filter The column filter.
+ * @param {string} type The column type.
+ * @returns {boolean} Whether the value matches.
+ */
+export function matchesFilter(value, filter, type) {
+    const typed = filter.operator !== 'contains' && (type === 'number' || type === 'date');
+    const normalize = typed ?
+        (value) => normalizeSortValue(value, type) :
+        (value) => String(value ?? '').toLocaleLowerCase();
+    const actual = normalize(value);
+    const expected = Array.isArray(filter.value) ? filter.value.map(normalize) : normalize(filter.value);
+
+    if (actual === null) {
+        return false;
+    }
+
+    switch (filter.operator) {
+        case 'contains':
+            return actual.includes(expected);
+        case 'equals':
+            return actual === expected;
+        case 'gt':
+            return actual > expected;
+        case 'gte':
+            return actual >= expected;
+        case 'lt':
+            return actual < expected;
+        case 'lte':
+            return actual <= expected;
+        case 'between':
+            return actual >= expected[0] && actual <= expected[1];
+    }
+}
+
+/**
  * Applies column defaults and validates value options and alternate ordering.
  * @param {TableColumn[]|null} columns The configured columns.
  * @param {{text: string, class: string|null}[]} headings The parsed headings.
@@ -152,6 +189,71 @@ export function normalizeColumns(columns, headings) {
                 validateColumnIndex(index, normalized.length);
             }
         }
+    }
+
+    return normalized;
+}
+
+/**
+ * Validates and copies structured filters before applying them.
+ * @param {TableFilter[]} filters The requested filters.
+ * @param {TableColumn[]} columns The normalized columns.
+ * @returns {TableFilter[]} The copied filters.
+ */
+export function normalizeFilters(filters, columns) {
+    if (!Array.isArray(filters)) {
+        throw new TypeError('Filters must be an array.');
+    }
+
+    const normalized = [];
+
+    for (const filter of filters) {
+        if (!$._isPlainObject(filter)) {
+            throw new TypeError('Filters must contain plain objects.');
+        }
+
+        const { column, operator, value } = filter;
+        validateColumnIndex(column, columns.length);
+
+        if (!columns[column].searchable) {
+            throw new TypeError('Filters require a searchable column.');
+        }
+
+        if (!['contains', 'equals', 'gt', 'gte', 'lt', 'lte', 'between'].includes(operator)) {
+            throw new TypeError('Filter operator is invalid.');
+        }
+
+        if (operator === 'between' && (!Array.isArray(value) || value.length !== 2)) {
+            throw new TypeError('Between filters require two bounds.');
+        }
+
+        const values = operator === 'between' ? [...value] : [value];
+
+        if (values.some((value) => value !== null && typeof value !== 'string' && typeof value !== 'boolean' &&
+            (typeof value !== 'number' || !Number.isFinite(value)))) {
+            throw new TypeError('Filter values must be JSON scalars.');
+        }
+
+        const type = columns[column].type;
+        const typed = type === 'number' || type === 'date';
+
+        if (!typed && operator !== 'contains' && operator !== 'equals') {
+            throw new TypeError('Range filters require a number or date column.');
+        }
+
+        if (typed && operator !== 'contains') {
+            const bounds = values.map((value) => normalizeSortValue(value, type));
+
+            if (bounds.some((value) => value === null)) {
+                throw new TypeError('Filter values must match the column type.');
+            }
+
+            if (operator === 'between' && bounds[0] > bounds[1]) {
+                throw new RangeError('Filter bounds must be in ascending order.');
+            }
+        }
+
+        normalized.push({ column, operator, value: operator === 'between' ? [...value] : value });
     }
 
     return normalized;

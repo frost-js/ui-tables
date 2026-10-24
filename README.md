@@ -15,6 +15,7 @@ Sortable, searchable tables for Frost UI, with pagination, remote data, and CSV,
 - Native table markup, array rows, or object rows with nested column paths
 - Case-insensitive searching, typed multi-column sorting, pagination, and column visibility
 - Separate display, sort, filter, and export values, with custom comparisons
+- Column filters, numeric/date ranges, and custom local row predicates
 - Debounced remote requests, optional cancellation, and stale-response protection
 - Row/cell/header/footer callbacks and custom layouts/buttons
 - CSV, XLSX, and print exports of the displayed results
@@ -164,7 +165,7 @@ Use methods to update active instances. Set `Table.defaults` and `Table.classes`
 | `preDrawCallback` | `function \| null` | `null` | Before drawing; return `false` to retain current DOM. |
 | `rowCallback` | `function \| null` | `null` | Customize each row before insertion. |
 | `sanitize` | `function` | `(html) => $.sanitize(html)` | Sanitize heading and cell HTML, including formatted values. |
-| `searching` | `boolean` | `true` | Enable local/remote searching. |
+| `searching` | `boolean` | `true` | Enable global search, column filters, and local row predicates. |
 
 `order`, `lengths`, and `buttons` replace their default arrays, including when empty. Nested object options merge with defaults. Default labels and icon keys:
 
@@ -264,6 +265,46 @@ Override individual operations with cell attributes:
 
 Editing a cell clears its original attribute overrides; replacing a row clears that row's metadata. Replacement values follow the JavaScript data rules, so use a renderer when inserting HTML that also needs separate text values. Removing a row preserves the other rows' metadata. Disposal restores the original DOM.
 
+### Column filters and row predicates
+
+`setFilters()` replaces the complete set of column filters. All filters, global search, and the optional row predicate must match for a row to be included:
+
+```js
+const table = Table.init(document.querySelector('#scores'), {
+    data: [
+        { team: 'Engineering', score: 95, requiredScore: 90, active: true },
+        { team: 'Design', score: 80, requiredScore: 85, active: false },
+    ],
+    columns: [{ data: 'team' }, { data: 'score', type: 'number' }],
+});
+
+table.setFilters([
+    { column: 0, operator: 'equals', value: 'Engineering' },
+    { column: 1, operator: 'gte', value: 90 },
+]);
+table.setRowFilter((row) => row.active && row.score >= row.requiredScore);
+
+table.setFilters([]); // Keep global search and the row predicate.
+table.setRowFilter(null); // Keep global search and column filters.
+```
+
+Filters use original column indexes and resolved `filter` values, including `render` output and DOM `data-search` attributes. Hidden columns remain filterable; columns with `searchable: false` reject filters.
+
+| Operator | Behavior |
+| --- | --- |
+| `contains` | Literal case-insensitive substring, for every column type. |
+| `equals` | Numeric/date equality for those explicit types; otherwise case-insensitive text equality. |
+| `gt`, `gte`, `lt`, `lte` | Greater than, at least, less than, or at most; require `type: 'number'` or `type: 'date'`. |
+| `between` | Inclusive `[lower, upper]` bounds; requires `number` or `date`. Reversed bounds are invalid. |
+
+Text comparisons stringify values, treating nullish values as empty strings and retaining `0` and `false`. Numeric/date comparisons use the same conversions as typed sorting; missing or invalid cell values never match them. Filter bounds must be valid for the column type. `auto` uses text equality; select an explicit type for numeric equality or ranges. Custom sort comparators do not change filter semantics.
+
+Descriptors accept JSON scalars (`string`, finite `number`, `boolean`, or `null`), with a two-value array for `between`. Use ISO strings or epoch milliseconds for date bounds; `Date` objects, functions, nested objects, and nonfinite numbers are rejected. For example, `{ column: 2, operator: 'between', value: ['2026-01-01', '2026-01-31'] }` filters a date column. The entire array is validated before any state changes, and descriptors and bounds are copied. Invalid input preserves existing filters, page, and pending requests.
+
+Row predicates run with the Table as `this`, receive the original source row, and must return a boolean. Keep predicates pure; they may be called again after search, ordering, or data changes. Predicates are local-only and are not serializable. Passing a function to `setRowFilter()` in remote mode throws `TypeError`.
+
+Each successful setter resets to page one, emits `filter.ui.table`, and recalculates/draws once locally or schedules one remote request. Other search state remains active. `clear()` removes all rows and clears global search, column filters, and the predicate. Empty filtered results use `lang.noResults`, including when the global search is empty. Both setters do nothing when `searching` is disabled; hiding the search control does not disable filtering.
+
 ### Remote data
 
 The loader handles filtering, sorting, and paging. Return a result object, promise, or thenable:
@@ -305,6 +346,8 @@ const response = { results: [['Alice', 30]], total: 200, filtered: 1 };
 ```
 
 `name` is included for named columns. Counts must be nonnegative safe integers with `total >= filtered >= results.length`; a paged response must not exceed `limit`. Return `[]` for no matches. If counts shrink past the requested page, Tables clamps the offset and requests that page again.
+
+Active column filters add a copied `filters` array to the request, using the same `{ column, operator, value }` descriptors passed to `setFilters()`. The field is omitted when filters are empty. Accessors and names remain in `request.columns`. The server must apply equivalent conversions and filter semantics to the full dataset and return matching counts; Tables does not filter the loaded page again. Renderers, comparators, and predicates are never sent to the server. Filter changes reuse request debouncing, cancellation, and stale-response protection.
 
 A new request cancels the debounce and invokes optional `cancel()` on the original pending object. Generation checks reject stale successes/failures even when cancellation cannot stop the work. Disposal cancels owned work. Throws, rejections, and invalid responses clear loading and emit `error.ui.table`; previously rendered rows remain available. Call `reload()` to retry. There is no built-in error banner: use the error event to present one, as the demo does.
 
@@ -391,7 +434,7 @@ Data attributes configure options; they do not initialize Tables by themselves. 
 | --- | --- | --- |
 | `Table.init(node, options?)` | `Table` | Return the existing instance for an element or create one. |
 | `addRow(row)` | `void` | Append a copied row and refresh local results/counts. |
-| `clear()` | `void` | Clear loaded rows/counts, search, paging and pending work. |
+| `clear()` | `void` | Clear loaded rows/counts, search, filters, predicate, paging and pending work. |
 | `dispose()` | `void` | Restore the original DOM and attributes, cancel owned work, and remove registered state. |
 | `getColumn(key, { modified = true }?)` | `array` | Return column values for the displayed rows or loaded dataset. |
 | `getRow(index, { modified = true }?)` | `array \| object` | Return a shallow copy of a row. |
@@ -407,7 +450,9 @@ Data attributes configure options; they do not initialize Tables by themselves. 
 | `removeRow(index, { modified = true }?)` | `void` | Remove a row and refresh counts/results. |
 | `search(term)` | `void` | Set a string search, synchronize input, and reset offset. |
 | `setColumn(key, values, { modified = true }?)` | `void` | Replace one column for targeted rows; array length must match. |
+| `setFilters(filters)` | `void` | Replace structured column filters and reset to page one. Pass `[]` to clear them. |
 | `setRow(index, row, { modified = true }?)` | `void` | Replace a row with a shallow copy. |
+| `setRowFilter(predicate)` | `void` | Set a local row predicate and reset to page one. Pass `null` to clear it. |
 | `setValue(index, key, value, { modified = true }?)` | `void` | Update one array key or object dot path. |
 | `showColumn(index)` | `void` | Reveal a data column and redraw. |
 
@@ -434,6 +479,7 @@ Events originate on the original table:
 | `order.ui.table` | After setting sorting, before loading results. |
 | `page.ui.table` | After setting offset, before loading results. |
 | `search.ui.table` | After setting the search, before loading results. |
+| `filter.ui.table` | After setting column filters or the row predicate, before loading results. |
 | `processing.ui.table` | Loading shown. |
 | `processed.ui.table` | Loading hidden; also emitted for request errors. |
 | `preDraw.ui.table` | Before `preDrawCallback` and DOM rendering. |

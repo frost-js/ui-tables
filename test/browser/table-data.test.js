@@ -147,6 +147,113 @@ test.describe('Table remote results', () => {
         }
     });
 
+    test.describe('filters', () => {
+        test('sends copied descriptors with existing request fields and omits cleared filters', async ({ page }) => {
+            await page.evaluate(() => {
+                window.startRemote({ columns: [{ name: 'score', type: 'number' }] });
+                const filters = [{ column: 0, operator: 'between', value: [1, 3] }];
+                $('#table').table('setFilters', filters);
+                $('#table').table('search', 'score');
+                filters[0].value[0] = 100;
+            });
+
+            await page.clock.runFor(25);
+
+            const request = await page.evaluate(() => window.requests[0].request);
+
+            expect(request).toEqual({
+                columns: { 0: { data: 0, name: 'score', orderable: true, searchable: true } },
+                filters: [{ column: 0, operator: 'between', value: [1, 3] }],
+                term: 'score',
+                order: { 0: { column: 0, dir: 'asc' } },
+                offset: 0,
+                limit: 2,
+            });
+
+            await page.evaluate(() => {
+                window.requests[0].request.filters[0].value[0] = 100;
+                $('#table').table('reload');
+            });
+
+            await page.clock.runFor(25);
+
+            expect(await page.evaluate(() => window.requests[1].request.filters)).toEqual(request.filters);
+
+            await page.evaluate(() => $('#table').table('setFilters', []));
+
+            await page.clock.runFor(25);
+
+            expect(await page.evaluate(() => window.requests[2].request.filters)).toBeUndefined();
+        });
+
+        test('resets the page and ignores an outstanding response after a filter change', async ({ page }) => {
+            await page.evaluate(() => window.startRemote());
+
+            await page.clock.runFor(25);
+            await page.evaluate(() => window.requests[0].resolve({ results: [['A'], ['B']], total: 4, filtered: 4 }));
+
+            await expect(page.locator('tbody td')).toHaveText(['A', 'B']);
+
+            await page.evaluate(() => $('#table').table('page', 2));
+            await page.clock.runFor(25);
+            await page.evaluate(() => $('#table').table('setFilters', [{ column: 0, operator: 'equals', value: 'Newest' }]));
+            await page.clock.runFor(25);
+
+            expect(await page.evaluate(() => window.requests[2].request.offset)).toBe(0);
+            await expect(page.locator('body')).toHaveAttribute('data-cancelled', '1');
+
+            await page.evaluate(() => window.requests[2].resolve({ results: [['Newest']], total: 4, filtered: 1 }));
+
+            await expect(page.locator('tbody td')).toHaveText('Newest');
+
+            await page.evaluate(() => window.requests[1].resolve({ results: [['Old'], ['Page']], total: 4, filtered: 4 }));
+
+            await expect(page.locator('tbody td')).toHaveText('Newest');
+            await expect(page.getByRole('status')).toHaveText('Showing results 1 to 1 of 1 (filtered from 4 total)');
+        });
+
+        test('rejects local predicates and keeps a pending request when filters are invalid', async ({ page }) => {
+            await page.evaluate(() => window.startRemote());
+            await page.clock.runFor(25);
+
+            const errors = await page.evaluate(() => {
+                const table = UI.Table.init($.findOne('#table'));
+                const errors = [];
+
+                for (const update of [
+                    () => table.setRowFilter(() => true),
+                    () => table.setFilters([{ column: 2, operator: 'equals', value: 'Invalid' }]),
+                ]) {
+                    try {
+                        update();
+                    } catch (error) {
+                        errors.push(error.name);
+                    }
+                }
+
+                window.requests[0].resolve({ results: [['Original request']], total: 1, filtered: 1 });
+
+                return errors;
+            });
+
+            expect(errors).toEqual(['TypeError', 'RangeError']);
+            await expect(page.locator('tbody td')).toHaveText('Original request');
+            await expect(page.locator('body')).toHaveAttribute('data-requests', '1');
+        });
+
+        test('uses the no-results message for an empty filtered response', async ({ page }) => {
+            await page.evaluate(() => {
+                window.startRemote();
+                $('#table').table('setFilters', [{ column: 0, operator: 'contains', value: 'Missing' }]);
+            });
+
+            await page.clock.runFor(25);
+            await page.evaluate(() => window.requests[0].resolve({ results: [], total: 4, filtered: 0 }));
+
+            await expect(page.locator('tbody td')).toHaveText('No results to show');
+        });
+    });
+
     test.describe('cancellation', () => {
         test('restores the table before a cancellation hook reinitializes it', async ({ page }) => {
             await page.evaluate(() => window.startRemote({

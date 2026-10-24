@@ -127,7 +127,7 @@ $.ready(() => {
     $.addEvent(node('data-source'), 'change', initializeData);
     initializeData();
 
-    init('callback-table', {
+    const callbackTable = init('callback-table', {
         data: rows,
         columns: [{}, {}, {
             class: 'text-end',
@@ -147,6 +147,24 @@ $.ready(() => {
             $.setText(node('callback-summary'), `${this.info().filtered} matching rows. Scores of 90 or more are highlighted.`);
         },
     });
+
+    const filterScores = () => {
+        const filters = [];
+        const team = $.getValue(node('callback-team'));
+        const score = $.getValue(node('callback-score'));
+
+        if (team) {
+            filters.push({ column: 1, operator: 'equals', value: team });
+        }
+
+        if (score) {
+            filters.push({ column: 2, operator: 'gte', value: Number(score) });
+        }
+
+        callbackTable.setFilters(filters);
+    };
+    $.addEvent(node('callback-team'), 'change', filterScores);
+    $.addEvent(node('callback-score'), 'change', filterScores);
 
     const exportsTable = init('export-table', {
         data: rows,

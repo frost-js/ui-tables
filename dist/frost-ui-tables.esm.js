@@ -2,7 +2,7 @@ import { BaseComponent, generateId, initComponent } from "@fr0st/ui";
 import $ from "@fr0st/query";
 
 //#region src/js/helpers.js
-/** @import { TableColumn, TableOrder } from './table.js'; */
+/** @import { TableColumn, TableFilter, TableOrder } from './table.js'; */
 /**
 * Builds a text-only table from export data.
 * @param {string[]} headings The column headings.
@@ -74,6 +74,28 @@ function getDomHeadings(element) {
 	}));
 }
 /**
+* Matches a resolved cell value against a validated filter.
+* @param {*} value The resolved filter value.
+* @param {TableFilter} filter The column filter.
+* @param {string} type The column type.
+* @returns {boolean} Whether the value matches.
+*/
+function matchesFilter(value, filter, type) {
+	const normalize = filter.operator !== "contains" && (type === "number" || type === "date") ? (value) => normalizeSortValue(value, type) : (value) => String(value ?? "").toLocaleLowerCase();
+	const actual = normalize(value);
+	const expected = Array.isArray(filter.value) ? filter.value.map(normalize) : normalize(filter.value);
+	if (actual === null) return false;
+	switch (filter.operator) {
+		case "contains": return actual.includes(expected);
+		case "equals": return actual === expected;
+		case "gt": return actual > expected;
+		case "gte": return actual >= expected;
+		case "lt": return actual < expected;
+		case "lte": return actual <= expected;
+		case "between": return actual >= expected[0] && actual <= expected[1];
+	}
+}
+/**
 * Applies column defaults and validates value options and alternate ordering.
 * @param {TableColumn[]|null} columns The configured columns.
 * @param {{text: string, class: string|null}[]} headings The parsed headings.
@@ -112,6 +134,48 @@ function normalizeColumns(columns, headings) {
 		]) if (column[callback] !== null && column[callback] !== void 0 && typeof column[callback] !== "function") throw new TypeError(`Column ${callback} must be a function or null.`);
 		if (column.format && column.render) throw new TypeError("Columns cannot define both format and render.");
 		if (column.orderData !== null) for (const index of column.orderData) validateColumnIndex(index, normalized.length);
+	}
+	return normalized;
+}
+/**
+* Validates and copies structured filters before applying them.
+* @param {TableFilter[]} filters The requested filters.
+* @param {TableColumn[]} columns The normalized columns.
+* @returns {TableFilter[]} The copied filters.
+*/
+function normalizeFilters(filters, columns) {
+	if (!Array.isArray(filters)) throw new TypeError("Filters must be an array.");
+	const normalized = [];
+	for (const filter of filters) {
+		if (!$._isPlainObject(filter)) throw new TypeError("Filters must contain plain objects.");
+		const { column, operator, value } = filter;
+		validateColumnIndex(column, columns.length);
+		if (!columns[column].searchable) throw new TypeError("Filters require a searchable column.");
+		if (![
+			"contains",
+			"equals",
+			"gt",
+			"gte",
+			"lt",
+			"lte",
+			"between"
+		].includes(operator)) throw new TypeError("Filter operator is invalid.");
+		if (operator === "between" && (!Array.isArray(value) || value.length !== 2)) throw new TypeError("Between filters require two bounds.");
+		const values = operator === "between" ? [...value] : [value];
+		if (values.some((value) => value !== null && typeof value !== "string" && typeof value !== "boolean" && (typeof value !== "number" || !Number.isFinite(value)))) throw new TypeError("Filter values must be JSON scalars.");
+		const type = columns[column].type;
+		const typed = type === "number" || type === "date";
+		if (!typed && operator !== "contains" && operator !== "equals") throw new TypeError("Range filters require a number or date column.");
+		if (typed && operator !== "contains") {
+			const bounds = values.map((value) => normalizeSortValue(value, type));
+			if (bounds.some((value) => value === null)) throw new TypeError("Filter values must match the column type.");
+			if (operator === "between" && bounds[0] > bounds[1]) throw new RangeError("Filter bounds must be in ascending order.");
+		}
+		normalized.push({
+			column,
+			operator,
+			value: operator === "between" ? [...value] : value
+		});
 	}
 	return normalized;
 }
@@ -1747,6 +1811,12 @@ async function print(options, table, classes) {
 /** @typedef {Array<*>|Record<string, *>} TableRow */
 /** @typedef {[number, 'asc'|'desc']} TableOrder */
 /**
+* @typedef {object} TableFilter
+* @property {number} column The original column index.
+* @property {'contains'|'equals'|'gt'|'gte'|'lt'|'lte'|'between'} operator The comparison.
+* @property {string|number|boolean|null|Array<string|number>} value The scalar value or inclusive bounds.
+*/
+/**
 * @typedef {object} TableValueContext
 * @property {'display'|'sort'|'filter'|'export'} purpose The operation requesting a value.
 * @property {TableRow} row The source row.
@@ -1781,6 +1851,7 @@ async function print(options, table, classes) {
 /**
 * @typedef {object} TableRequest
 * @property {string} [term] The search term, omitted when empty.
+* @property {TableFilter[]} [filters] The structured filters, omitted when empty.
 * @property {Record<number, {column: number, dir: string}>} [order] Remote ordering.
 * @property {Record<number, {data: string|number, name?: string, orderable: boolean, searchable: boolean}>} columns The column definitions.
 * @property {number} [offset] The zero-based offset when paging is enabled.
@@ -1963,6 +2034,7 @@ var Table = class extends BaseComponent {
 	#domValues = /* @__PURE__ */ new WeakMap();
 	#drawVersion = 0;
 	#filtered = 0;
+	#filters = [];
 	#headings = [];
 	#id = false;
 	#infoContainer = null;
@@ -1981,6 +2053,7 @@ var Table = class extends BaseComponent {
 	#pending = null;
 	#requestVersion = 0;
 	#results = [];
+	#rowFilter = null;
 	#rowIndexes = [];
 	#searchHandler = null;
 	#searchInput = null;
@@ -2057,6 +2130,8 @@ var Table = class extends BaseComponent {
 		this.#offset = 0;
 		this.#total = 0;
 		this.#filtered = 0;
+		this.#filters = [];
+		this.#rowFilter = null;
 		this.#term = "";
 		if (this.#searchInput) $.setValue(this.#searchInput, "");
 		this.#refreshResults();
@@ -2108,6 +2183,8 @@ var Table = class extends BaseComponent {
 		this.#domValues = /* @__PURE__ */ new WeakMap();
 		this.#results = [];
 		this.#rowIndexes = [];
+		this.#filters = [];
+		this.#rowFilter = null;
 		this.#loadResults = null;
 		this.#searchHandler = null;
 		try {
@@ -2277,6 +2354,17 @@ var Table = class extends BaseComponent {
 		this.#mutated();
 	}
 	/**
+	* Replaces structured column filters and resets to the first page.
+	* @param {TableFilter[]} filters The filters to apply together.
+	*/
+	setFilters(filters) {
+		if (!this.node || !this.options.searching) return;
+		this.#filters = normalizeFilters(filters, this.#columns);
+		this.#offset = 0;
+		$.triggerEvent(this.node, "filter.ui.table");
+		if (this.node) this.#load();
+	}
+	/**
 	* Sets values for a single row.
 	* @param {number} index The row index to set.
 	* @param {Array|object} row The row values.
@@ -2288,6 +2376,19 @@ var Table = class extends BaseComponent {
 		validateRows([row]);
 		this.#data[rowIndex] = Array.isArray(row) ? [...row] : { ...row };
 		this.#mutated();
+	}
+	/**
+	* Sets a local row predicate and resets to the first page.
+	* @param {function(TableRow): boolean|null} predicate The predicate, or null to clear it.
+	*/
+	setRowFilter(predicate) {
+		if (!this.node || !this.options.searching) return;
+		if (predicate !== null && typeof predicate !== "function") throw new TypeError("Row filter must be a function or null.");
+		if (predicate !== null && this.options.getResults) throw new TypeError("Row filters require local data.");
+		this.#rowFilter = predicate;
+		this.#offset = 0;
+		$.triggerEvent(this.node, "filter.ui.table");
+		if (this.node) this.#load();
 	}
 	/**
 	* Sets a single value for a row.
@@ -2403,6 +2504,10 @@ var Table = class extends BaseComponent {
 			if (column.name) request.columns[index].name = column.name;
 		}
 		if (this.#term) request.term = this.#term;
+		if (this.#filters.length) request.filters = this.#filters.map((filter) => ({
+			...filter,
+			value: Array.isArray(filter.value) ? [...filter.value] : filter.value
+		}));
 		if (this.options.ordering) request.order = { ...this.#getOrder().map(([column, dir]) => ({
 			column,
 			dir
@@ -2954,7 +3059,7 @@ var Table = class extends BaseComponent {
 			const row = $.create("tr");
 			$.append(row, $.create("td", {
 				class: this.constructor.classes.emptyCell,
-				text: this.#term ? this.options.lang.noResults : this.options.lang.noData,
+				text: this.#term || this.#filters.length || this.#rowFilter ? this.options.lang.noResults : this.options.lang.noData,
 				attributes: { colspan: Math.max(1, this.#getVisibleColumns().length) }
 			}));
 			$.append(this.#tbody, row);
@@ -3055,6 +3160,26 @@ var Table = class extends BaseComponent {
 					matches.push(rowIndex);
 					break;
 				}
+			}
+			indexes = matches;
+		}
+		for (const filter of this.#filters) {
+			const matches = [];
+			const column = this.#columns[filter.column];
+			for (const rowIndex of indexes) {
+				const value = this.#getValue(rowIndex, filter.column, "filter");
+				if (!active()) return;
+				if (matchesFilter(value, filter, column.type)) matches.push(rowIndex);
+			}
+			indexes = matches;
+		}
+		if (this.#rowFilter) {
+			const matches = [];
+			for (const rowIndex of indexes) {
+				const match = this.#rowFilter.call(this, this.#data[rowIndex]);
+				if (!active()) return;
+				if (typeof match !== "boolean") throw new TypeError("Row filters must return a boolean.");
+				if (match) matches.push(rowIndex);
 			}
 			indexes = matches;
 		}

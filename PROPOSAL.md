@@ -1,6 +1,6 @@
 # Proposal: Essential table functionality
 
-Status: Item 1 is implemented; its new tests await CI validation. Items 2–5 remain proposed. See the [README](./README.md#cell-values-and-sorting) for the implemented API.
+Status: Items 1–2 are implemented; the new filtering tests await CI validation. Items 3–5 remain proposed. See the [README](./README.md#cell-values-and-sorting) for the implemented API.
 
 ## Recommendation
 
@@ -91,7 +91,7 @@ Acceptance examples: numeric salaries sort numerically while displaying currency
 
 ## 2. Column filters and custom filtering
 
-### Proposed API
+### Implemented API
 
 Keep `search(term)` for global text search. Add an atomic replacement method for structured filters:
 
