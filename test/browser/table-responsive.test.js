@@ -282,6 +282,168 @@ test.describe('Table responsive details', () => {
         });
     });
 
+    test.describe('custom renderers', () => {
+        test('rejects invalid renderer options', async ({ page }) => {
+            const errors = await page.evaluate(() => [false, 'html', 42, {}].map((renderDetails) => {
+                try {
+                    window.createResponsive({ renderDetails });
+                } catch (error) {
+                    return error.name;
+                }
+            }));
+
+            expect(errors).toEqual(['TypeError', 'TypeError', 'TypeError', 'TypeError']);
+            await expect(page.locator('.table-responsive')).toHaveCount(0);
+        });
+
+        test('provides source indexes and collapsed display metadata and sanitizes custom output', async ({ page }) => {
+            await page.evaluate(() => {
+                $.setStyle('#host', { width: '240px' });
+                $.setHtml('thead th:nth-child(2)', '<b>Team &amp; group</b>');
+                window.calls = [];
+                window.table = window.createResponsive({
+                    data: [['Bob', 'Design', 80], ['Alice', 'Engineering', 90]],
+                    order: [[2, 'desc']],
+                    columns: [
+                        { class: 'test-cell', responsivePriority: null },
+                        { class: 'test-cell', responsivePriority: 1 },
+                        { class: 'test-cell', responsivePriority: 2, format: (value) => `<strong>${value}</strong>` },
+                    ],
+                    renderDetails(row, context) {
+                        window.calls.push({ row, ...context, receiver: this === window.table });
+
+                        return `<section>${context.columns.map(({ html }) => html).join(' ')}<img src="data:," onerror="window.unsafe = true"></section>`;
+                    },
+                });
+            });
+            expect(await page.evaluate(() => window.calls)).toEqual([]);
+            await page.getByRole('button', { name: 'Show details for row Alice', exact: true }).click();
+            await expect(page.locator('.table-details section')).toHaveText('Engineering 90');
+            await expect(page.locator('.table-details strong')).toHaveText('90');
+            await expect(page.locator('.table-details [onerror], .table-details dl')).toHaveCount(0);
+            expect(await page.evaluate(() => window.calls)).toEqual([{
+                row: ['Alice', 'Engineering', 90], rowIndex: 1, receiver: true,
+                columns: [
+                    { column: 1, data: 1, title: 'Team & group', html: 'Engineering' },
+                    { column: 2, data: 2, title: 'Score', html: '<strong>90</strong>' },
+                ],
+            }]);
+            await page.evaluate(() => window.table.hideColumn(1));
+            expect(await page.evaluate(() => window.calls.at(-1).columns)).toEqual([
+                { column: 2, data: 2, title: 'Score', html: '<strong>90</strong>' },
+            ]);
+            await expect(page.locator('.table-details td')).toHaveAttribute('colspan', '2');
+        });
+
+        test('refreshes open custom details for data and collapsed columns only', async ({ page }) => {
+            await page.evaluate(() => {
+                $.setStyle('#host', { width: '240px' });
+                window.calls = 0;
+                window.table = window.createResponsive({
+                    renderDetails(row, { columns }) {
+                        window.calls++;
+
+                        return `<p>${columns.map(({ html }) => html).join(' / ')}</p>`;
+                    },
+                });
+            });
+            await page.getByRole('button', { name: 'Show details for row Alice', exact: true }).click();
+            await expect(page.locator('.table-details p')).toHaveText('Engineering / 90');
+            await page.evaluate(() => window.table.setRowById('Alice', ['Alice', 'New team', 95]));
+            await expect(page.locator('.table-details p')).toHaveText('New team / 95');
+            await page.evaluate(() => $.setStyle('#host', { width: '430px' }));
+            await expect(page.locator('.table-details p')).toHaveText('95');
+            const calls = await page.evaluate(() => window.calls);
+            await page.evaluate(async () => {
+                $.setStyle('#host', { width: '440px' });
+                await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+            });
+            expect(await page.evaluate(() => window.calls)).toBe(calls);
+            await page.getByRole('button', { name: 'Hide details for row Alice', exact: true }).click();
+            await page.evaluate(() => window.table.setRowById('Alice', ['Alice', 'Closed', 96]));
+            expect(await page.evaluate(() => window.calls)).toBe(calls);
+            await expect(page.locator('.table-details')).toHaveCount(0);
+        });
+
+        test('allows empty HTML and skips rendering when responsive behavior is disabled', async ({ page }) => {
+            await page.evaluate(() => {
+                $.setStyle('#host', { width: '240px' });
+                window.calls = 0;
+                window.table = window.createResponsive({
+                    responsive: false,
+                    renderDetails() {
+                        window.calls++;
+
+                        return '';
+                    },
+                });
+            });
+            expect(await page.evaluate(() => window.calls)).toBe(0);
+            await page.evaluate(() => {
+                window.table.dispose();
+                window.table = window.createResponsive({ renderDetails: () => '' });
+            });
+            await page.getByRole('button', { name: 'Show details for row Alice', exact: true }).click();
+            await expect(page.locator('.table-details td')).toBeEmpty();
+        });
+
+        test('abandons custom output when the renderer replaces the data', async ({ page }) => {
+            await page.evaluate(() => {
+                $.setStyle('#host', { width: '240px' });
+                window.table = window.createResponsive({
+                    renderDetails() {
+                        this.setData([['Newer', 'New team', 1]]);
+
+                        return '<p>Obsolete</p>';
+                    },
+                });
+            });
+            await page.getByRole('button', { name: 'Show details for row Alice', exact: true }).click();
+            await expect(page.getByRole('button', { name: 'Show details for row Newer', exact: true })).toBeVisible();
+            await expect(page.locator('.table-details')).toHaveCount(0);
+        });
+
+        test('abandons custom output when its sanitizer disposes the table', async ({ page }) => {
+            await page.evaluate(() => {
+                $.setStyle('#host', { width: '240px' });
+                window.table = window.createResponsive({
+                    renderDetails: () => '<p>Custom</p>',
+                    sanitize(html) {
+                        if (html === '<p>Custom</p>') window.table.dispose();
+
+                        return $.sanitize(html);
+                    },
+                });
+            });
+            await page.getByRole('button', { name: 'Show details for row Alice', exact: true }).click();
+            await expect(page.locator('.table-responsive, .table-details')).toHaveCount(0);
+        });
+
+        test.describe('invalid output', () => {
+            test.use({ expectedBrowserErrors: ['Details renderer must return an HTML string.'] });
+
+            for (const output of ['null', 'node', 'promise']) {
+                test(`rejects ${output}`, async ({ page }) => {
+                    await page.evaluate((output) => {
+                        $.setStyle('#host', { width: '240px' });
+                        window.createResponsive({
+                            renderDetails() {
+                                if (output === 'node') return document.createElement('div');
+                                if (output === 'promise') return Promise.resolve('<p>Async</p>');
+
+                                return null;
+                            },
+                        });
+                    }, output);
+                    const error = page.waitForEvent('pageerror');
+                    await page.getByRole('button', { name: 'Show details for row Alice', exact: true }).click();
+                    expect((await error).message).toBe('Details renderer must return an HTML string.');
+                    await expect(page.locator('.table-details')).toHaveCount(0);
+                });
+            }
+        });
+    });
+
     test.describe('lifecycle', () => {
         test('stops detail rendering when a display resolver disposes the table', async ({ page }) => {
             await page.evaluate(() => {

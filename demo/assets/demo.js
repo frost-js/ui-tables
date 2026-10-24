@@ -103,10 +103,20 @@ $.ready(() => {
     const detailRows = rows.map(([name, team, score], index) => [
         name, team, score, `member${index + 1}@example.com`, 'Available for project reviews',
     ]);
+    const renderDetails = (row, { columns }) => {
+        const items = columns.map(({ title, html }) => {
+            const label = $.getHtml($.create('span', { text: title }));
+
+            return `<li><strong>${label}:</strong> ${html}</li>`;
+        });
+
+        return `<ul class="mb-0">${items.join('')}</ul>`;
+    };
     let dataTable;
     const initializeData = () => {
         dataTable?.dispose();
         const objects = $.getValue(node('data-source')) === 'objects';
+        const customDetails = $.getProperty(node('data-details'), 'checked');
         const options = objects ? {
             data: detailRows.map(([name, team, score, email, notes]) => ({ person: { name, team, email }, score, notes })),
             rowId: 'person.name',
@@ -125,12 +135,15 @@ $.ready(() => {
                 { class: 'text-end', responsivePriority: 2 }, { responsivePriority: 3 }, { responsivePriority: 4 },
             ],
         };
-        dataTable = init('data-table', { ...options, responsive: true, buttons: [{ type: 'columns' }], order: [[1, 'asc'], [2, 'desc']] });
+        dataTable = init('data-table', {
+            ...options, responsive: true, renderDetails: customDetails ? renderDetails : null,
+            buttons: [{ type: 'columns' }], order: [[1, 'asc'], [2, 'desc']],
+        });
         $.setText(node('data-config'), objects ?
             `Table.init(table, {
     data: [{ person: { name: 'Alice', team: 'Design', email: 'alice@example.com' }, score: 80, notes: 'Available for reviews' }],
     rowId: 'person.name',
-    responsive: true,
+    responsive: true,${customDetails ? `\n    renderDetails: ${renderDetails.toString()},` : ''}
     columns: [
         { data: 'person.name', responsivePriority: null },
         { data: 'person.team', responsivePriority: 1 },
@@ -144,7 +157,7 @@ $.ready(() => {
             `Table.init(table, {
     data: [['Alice', 'Design', 80, 'alice@example.com', 'Available for reviews']],
     rowId: 0,
-    responsive: true,
+    responsive: true,${customDetails ? `\n    renderDetails: ${renderDetails.toString()},` : ''}
     columns: [
         { responsivePriority: null },
         { responsivePriority: 1 },
@@ -157,6 +170,7 @@ $.ready(() => {
 });`);
     };
     $.addEvent(node('data-source'), 'change', initializeData);
+    $.addEvent(node('data-details'), 'change', initializeData);
     $.addEvent(node('data-width'), 'change', () => {
         $.setStyle(node('data-preview'), { 'max-width': $.getValue(node('data-width')) === 'narrow' ? '20rem' : 'none' });
     });

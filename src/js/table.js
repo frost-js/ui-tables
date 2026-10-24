@@ -50,6 +50,18 @@ import {
  * @property {function(HTMLTableCellElement, *, TableRow, number, number): void} [createdCell] Receives a created cell.
  */
 /**
+ * @typedef {object} TableDetailColumn
+ * @property {number} column The original column index.
+ * @property {string|number} data The column data key or dot path.
+ * @property {string} title The plain heading text or localized fallback.
+ * @property {string} html The sanitized display value.
+ */
+/**
+ * @typedef {object} TableDetailContext
+ * @property {number} rowIndex The loaded-data index.
+ * @property {TableDetailColumn[]} columns The collapsed, configured-visible columns in original order.
+ */
+/**
  * @typedef {object} TableButton
  * @property {string} [type] The registered button type.
  * @property {string} [text] The button label.
@@ -81,7 +93,7 @@ import {
  * @property {string|number|function(TableRow): TableRowId|null} [rowId=null] The stable row identity accessor.
  * @property {false|'single'|'multiple'} [selection=false] The row selection mode; requires rowId.
  * @property {TableColumn[]|null} [columns=null] The column definitions.
- * @property {function(string): string} [sanitize] Sanitizes HTML cells and headings; defaults to query sanitization.
+ * @property {function(string): string} [sanitize] Sanitizes HTML cells, headings, and custom details; defaults to query sanitization.
  * @property {TableButton[]} [buttons=[]] The export and custom buttons.
  * @property {{top?: string, bottom?: string}} [layout] Comma-separated columns containing pipe-separated controls.
  * @property {Record<string, string|Record<string, string>>} [lang] The interface labels.
@@ -95,6 +107,7 @@ import {
  * @property {boolean} [lengthChange=true] Whether users can change the page length.
  * @property {boolean} [ordering=true] Whether rows can be sorted.
  * @property {boolean} [paging=true] Whether rows are paginated.
+ * @property {function(this: Table, TableRow, TableDetailContext): string} [renderDetails=null] Returns custom detail HTML synchronously.
  * @property {boolean} [responsive=false] Collapse columns into details when the container is too narrow.
  * @property {boolean} [searching=true] Whether rows can be searched.
  * @property {function(HTMLTableRowElement, TableRow, number): void} [createdRow] Receives an inserted row.
@@ -251,6 +264,7 @@ export default class Table extends BaseComponent {
         headerCallback: null,
         infoCallback: null,
         preDrawCallback: null,
+        renderDetails: null,
         rowCallback: null,
         rowId: null,
         selection: false,
@@ -385,6 +399,10 @@ export default class Table extends BaseComponent {
 
             if (typeof this.options.responsive !== 'boolean') {
                 throw new TypeError('Responsive must be a boolean.');
+            }
+
+            if (this.options.renderDetails !== null && typeof this.options.renderDetails !== 'function') {
+                throw new TypeError('Details renderer must be a function or null.');
             }
 
             this.#selectionName = generateId('table-selection');
@@ -2625,7 +2643,7 @@ export default class Table extends BaseComponent {
             return;
         }
 
-        const list = $.create('dl', { class: this.constructor.classes.detailList });
+        const columns = [];
 
         for (const index of this.#getVisibleColumns()) {
             if (!this.#collapsedColumns.has(index)) {
@@ -2647,11 +2665,38 @@ export default class Table extends BaseComponent {
                 return;
             }
 
-            $.append(list, [$.create('dt', { text }), $.create('dd', { html })]);
+            columns.push({ column: index, data: this.#columns[index].data, title: text, html });
         }
 
         const cell = $.create('td', { attributes: { colspan: this.#getRenderedColumnCount() } });
-        $.append(cell, list);
+
+        if (this.options.renderDetails) {
+            const result = this.options.renderDetails.call(this, entry.data, { rowIndex: entry.index, columns });
+
+            if (!this.node || version !== this.#drawVersion) {
+                return;
+            }
+
+            if (typeof result !== 'string') {
+                throw new TypeError('Details renderer must return an HTML string.');
+            }
+
+            const html = this.options.sanitize(result);
+
+            if (!this.node || version !== this.#drawVersion) {
+                return;
+            }
+
+            $.setHtml(cell, html);
+        } else {
+            const list = $.create('dl', { class: this.constructor.classes.detailList });
+
+            for (const { title, html } of columns) {
+                $.append(list, [$.create('dt', { text: title }), $.create('dd', { html })]);
+            }
+
+            $.append(cell, list);
+        }
 
         if (!entry.detail) {
             entry.detail = $.create('tr', {

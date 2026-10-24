@@ -167,10 +167,11 @@ Use methods to update active instances. Set `Table.defaults` and `Table.classes`
 | `ordering` | `boolean` | `true` | Enable sorting. |
 | `paging` | `boolean` | `true` | Enable pagination; `false` displays all loaded rows. |
 | `preDrawCallback` | `function \| null` | `null` | Before drawing; return `false` to retain current DOM. |
+| `renderDetails` | `function \| null` | `null` | Return custom responsive detail HTML from `(row, { rowIndex, columns })`. |
 | `responsive` | `boolean` | `false` | Collapse lower-priority columns into detail rows when the container narrows. |
 | `rowCallback` | `function \| null` | `null` | Customize each row before insertion. |
 | `rowId` | `string \| number \| function \| null` | `null` | Stable identity accessor: a data key/dot path, array key, or pure callback. |
-| `sanitize` | `function` | `(html) => $.sanitize(html)` | Sanitize heading and cell HTML, including formatted values. |
+| `sanitize` | `function` | `(html) => $.sanitize(html)` | Sanitize heading, cell, and custom detail HTML, including formatted values. |
 | `searching` | `boolean` | `true` | Enable global search, column filters, and local row predicates. |
 | `selection` | `false \| 'single' \| 'multiple'` | `false` | Enable row controls and selection APIs; requires `rowId`. |
 
@@ -411,11 +412,34 @@ The component measures existing headings, cells, and footer spans at their intri
 
 Responsive collapse is separate from configured visibility. A checked picker entry may be in details, while a user-hidden column remains absent from both the main row and details. Collapse does not change `getState()`, search/order behavior, or default export columns. Explicit getters and exports continue to address original data columns. Headers, footers, empty-result cells, and detail-row spans track the rendered columns.
 
-A compact chevron disclosure button appears in a separate utility cell when fields are collapsed. Enter/Space toggles a companion row with labels in original column order. Labels use heading text or the localized numbered fallback; values use the existing sanitized display renderer with the original source row and column context. Opening details does not rerun row/cell creation callbacks. Existing live controls are not cloned into details; stateful widgets and custom detail-renderer callbacks are outside this feature.
+A compact chevron disclosure button appears in a separate utility cell when fields are collapsed. Enter/Space toggles a companion row with labels in original column order. Labels use heading text or the localized numbered fallback; values use the existing sanitized display renderer with the original source row and column context. Opening details does not rerun row/cell creation callbacks. Existing live controls are not cloned into details; stateful widgets and live DOM output are outside this feature.
 
 The button exposes `aria-expanded` and a generated `aria-controls` ID. `lang.responsive.details` controls its tooltip and visually hidden text; `show` and `hide` accept `{row}`, using the stable ID when configured or the one-based page row number otherwise. When widening removes a focused disclosure or its detail content, focus moves to the owning data row. Selecting rows, clicking links, and toggling details remain separate interactions.
 
 With `rowId`, expansion survives redraws and remote reloads only for IDs still present on the displayed page. It is discarded when a row leaves that page. Without `rowId`, every data redraw clears expansion so a positional index cannot transfer it to another record. Revealing all columns clears expansion in either mode. Expansion is transient and excluded from view snapshots.
+
+Set `renderDetails` to replace the default labelled layout. The callback runs with the table as `this` and receives the source row plus `{ rowIndex, columns }`. `rowIndex` is the loaded-data index, independent of ordering and pagination. `columns` contains only configured-visible, collapsed columns in original order, each with `{ column, data, title, html }`: the original index, data key or dot path, plain-text heading (or localized fallback), and sanitized display HTML.
+
+```js
+const table = new Table(node, {
+    data: employees,
+    responsive: true,
+    columns: [{ data: 'name', responsivePriority: null }, { data: 'team' }, { data: 'email' }],
+    renderDetails(row, { columns }) {
+        const items = columns.map(({ title, html }) => {
+            const label = $.getHtml($.create('span', { text: title }));
+
+            return `<li><strong>${label}:</strong> ${html}</li>`;
+        });
+
+        return `<ul class="mb-0">${items.join('')}</ul>`;
+    },
+});
+```
+
+Return an HTML string synchronously; an empty string produces an empty detail cell. Other return types, including DOM nodes and promises, throw `TypeError`. The returned HTML passes through `sanitize` before insertion. Encode plain text such as headings and raw row values when interpolating it into HTML; sanitization does not replace text escaping. `renderDetails` must be a function or `null`, with `null` preserving the default layout.
+
+The callback runs when a row opens, when an open row is redrawn, and when its collapsed columns change. It does not run for closed rows, unchanged resize layouts, or when responsive behavior is disabled. Treat row data as read-only and avoid side effects; callbacks that dispose the table or trigger another draw abandon the obsolete detail render. Details still require at least one collapsed column and use the same keyboard controls, focus recovery, expansion lifetime, and export behavior. Custom widget mounting and cleanup hooks are not provided.
 
 Detail rows do not contribute to counts, pagination, selected IDs, data getters, exports, or data-row callback arguments. Callbacks that inspect the rendered DOM should account for the additional utility cells and companion rows. Disposal disconnects observation, cancels queued layout work, and restores the original table markup.
 

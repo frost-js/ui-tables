@@ -123,7 +123,7 @@
                 <div class="col-xl-6">
                     <div class="card card-body h-100 p-4">
                         <h3 class="h5">Arrays and nested objects</h3>
-                        <p class="text-body-secondary">Switch data sources or narrow the preview. Details reveal collapsed fields; Columns controls which fields are included.</p>
+                        <p class="text-body-secondary">Switch data sources or narrow the preview. Details reveal collapsed fields; try the custom list layout or use Columns to choose which fields are included.</p>
                         <label class="mb-2" for="data-source">Data source</label>
                         <select class="input-outline mb-3" id="data-source" aria-controls="data-table data-config">
                             <option value="arrays">Arrays</option>
@@ -134,6 +134,10 @@
                             <option value="full">Available width</option>
                             <option value="narrow">Narrow</option>
                         </select>
+                        <label class="form-check mb-3">
+                            <input class="input-check" type="checkbox" id="data-details" aria-controls="data-table data-config">
+                            <span class="form-check-label">Custom details list</span>
+                        </label>
                         <div class="demo-table" id="data-preview">
                             <table id="data-table">
                                 <caption>Local team scores</caption>

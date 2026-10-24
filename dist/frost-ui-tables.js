@@ -1982,6 +1982,18 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 	* @property {function(HTMLTableCellElement, *, TableRow, number, number): void} [createdCell] Receives a created cell.
 	*/
 	/**
+	* @typedef {object} TableDetailColumn
+	* @property {number} column The original column index.
+	* @property {string|number} data The column data key or dot path.
+	* @property {string} title The plain heading text or localized fallback.
+	* @property {string} html The sanitized display value.
+	*/
+	/**
+	* @typedef {object} TableDetailContext
+	* @property {number} rowIndex The loaded-data index.
+	* @property {TableDetailColumn[]} columns The collapsed, configured-visible columns in original order.
+	*/
+	/**
 	* @typedef {object} TableButton
 	* @property {string} [type] The registered button type.
 	* @property {string} [text] The button label.
@@ -2013,7 +2025,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 	* @property {string|number|function(TableRow): TableRowId|null} [rowId=null] The stable row identity accessor.
 	* @property {false|'single'|'multiple'} [selection=false] The row selection mode; requires rowId.
 	* @property {TableColumn[]|null} [columns=null] The column definitions.
-	* @property {function(string): string} [sanitize] Sanitizes HTML cells and headings; defaults to query sanitization.
+	* @property {function(string): string} [sanitize] Sanitizes HTML cells, headings, and custom details; defaults to query sanitization.
 	* @property {TableButton[]} [buttons=[]] The export and custom buttons.
 	* @property {{top?: string, bottom?: string}} [layout] Comma-separated columns containing pipe-separated controls.
 	* @property {Record<string, string|Record<string, string>>} [lang] The interface labels.
@@ -2027,6 +2039,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 	* @property {boolean} [lengthChange=true] Whether users can change the page length.
 	* @property {boolean} [ordering=true] Whether rows can be sorted.
 	* @property {boolean} [paging=true] Whether rows are paginated.
+	* @property {function(this: Table, TableRow, TableDetailContext): string} [renderDetails=null] Returns custom detail HTML synchronously.
 	* @property {boolean} [responsive=false] Collapse columns into details when the container is too narrow.
 	* @property {boolean} [searching=true] Whether rows can be searched.
 	* @property {function(HTMLTableRowElement, TableRow, number): void} [createdRow] Receives an inserted row.
@@ -2170,6 +2183,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			headerCallback: null,
 			infoCallback: null,
 			preDrawCallback: null,
+			renderDetails: null,
 			rowCallback: null,
 			rowId: null,
 			selection: false,
@@ -2290,6 +2304,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 					"multiple"
 				].includes(this.options.selection) || this.options.selection && rowId === null) throw new TypeError("Selection must be false, single, or multiple and requires rowId.");
 				if (typeof this.options.responsive !== "boolean") throw new TypeError("Responsive must be a boolean.");
+				if (this.options.renderDetails !== null && typeof this.options.renderDetails !== "function") throw new TypeError("Details renderer must be a function or null.");
 				this.#selectionName = (0, _fr0st_ui.generateId)("table-selection");
 				if (!this.options.getResults) {
 					const data = this.options.data ?? getDomData(node, this.#domValues);
@@ -3740,7 +3755,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 				}
 				return;
 			}
-			const list = _fr0st_query.default.create("dl", { class: this.constructor.classes.detailList });
+			const columns = [];
 			for (const index of this.#getVisibleColumns()) {
 				if (!this.#collapsedColumns.has(index)) continue;
 				const heading = _fr0st_query.default.create("div");
@@ -3750,10 +3765,29 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 				if (!this.node || version !== this.#drawVersion) return;
 				const html = this.options.sanitize(String(value ?? ""));
 				if (!this.node || version !== this.#drawVersion) return;
-				_fr0st_query.default.append(list, [_fr0st_query.default.create("dt", { text }), _fr0st_query.default.create("dd", { html })]);
+				columns.push({
+					column: index,
+					data: this.#columns[index].data,
+					title: text,
+					html
+				});
 			}
 			const cell = _fr0st_query.default.create("td", { attributes: { colspan: this.#getRenderedColumnCount() } });
-			_fr0st_query.default.append(cell, list);
+			if (this.options.renderDetails) {
+				const result = this.options.renderDetails.call(this, entry.data, {
+					rowIndex: entry.index,
+					columns
+				});
+				if (!this.node || version !== this.#drawVersion) return;
+				if (typeof result !== "string") throw new TypeError("Details renderer must return an HTML string.");
+				const html = this.options.sanitize(result);
+				if (!this.node || version !== this.#drawVersion) return;
+				_fr0st_query.default.setHtml(cell, html);
+			} else {
+				const list = _fr0st_query.default.create("dl", { class: this.constructor.classes.detailList });
+				for (const { title, html } of columns) _fr0st_query.default.append(list, [_fr0st_query.default.create("dt", { text: title }), _fr0st_query.default.create("dd", { html })]);
+				_fr0st_query.default.append(cell, list);
+			}
 			if (!entry.detail) {
 				entry.detail = _fr0st_query.default.create("tr", {
 					class: this.constructor.classes.detailRow,
