@@ -43,7 +43,10 @@ test.describe('Table DOM data', () => {
                     returnedFirst: first === $.getData('#table1', 'table'),
                     secondInitialized: $.getData('#table2', 'table') instanceof UI.Table,
                 };
-            })).toEqual({ returnedFirst: true, secondInitialized: true });
+            })).toEqual({
+                returnedFirst: true,
+                secondInitialized: true,
+            });
             await expect(page.locator('.table-responsive')).toHaveCount(2);
             await expect(page.locator('#table2 tbody td')).toHaveText('Dana');
         });
@@ -70,10 +73,12 @@ test.describe('Table DOM data', () => {
         test('resolves options after data attributes and defaults', async ({ page }) => {
             await page.evaluate(() => {
                 const node = $.findOne('#table1');
+
                 $.setDataset(node, 'uiLength', 2);
                 UI.Table.init(node, { length: 1 });
 
                 const second = $.findOne('#table2');
+
                 $.setDataset(second, 'uiSearching', false);
                 UI.Table.init(second);
             });
@@ -130,8 +135,11 @@ test.describe('Table DOM data', () => {
         test('removes a generated ID and preserves an existing ID', async ({ page }) => {
             await page.evaluate(() => {
                 const node = $.findOne('#table2');
+
                 $.removeAttribute(node, 'id');
+
                 const instance = UI.Table.init(node);
+
                 instance.dispose();
             });
 
@@ -141,6 +149,7 @@ test.describe('Table DOM data', () => {
 
         test('can be disposed twice and reinitialized', async ({ page }) => {
             const instance = await page.evaluateHandle(() => UI.Table.init($.findOne('#table1')));
+
             await instance.evaluate((value) => {
                 value.dispose();
                 value.dispose();
@@ -157,6 +166,7 @@ test.describe('Table DOM data', () => {
 
         test('disposes when query removes the table', async ({ page }) => {
             const instance = await page.evaluateHandle(() => UI.Table.init($.findOne('#table1')));
+
             await page.evaluate(() => $.remove('#table1'));
 
             expect(await instance.evaluate((value) => value.node)).toBeNull();
@@ -180,6 +190,7 @@ test.describe('Table DOM data', () => {
         test('registers the instance before initialization and draws the initial rows', async ({ page }) => {
             await page.evaluate(() => {
                 const log = $.create('output');
+
                 $.append(document.body, log);
                 $.addEvent('#table1', 'init.ui.table', () => {
                     $.setText(log, $.getData('#table1', 'table') instanceof UI.Table ? 'initialized' : 'missing');
@@ -273,20 +284,22 @@ test.describe('Table supplied data', () => {
 
                     return {
                         errors,
-                        unchanged: $.getHtml(document.body) === html &&
-                            $.getData(node, UI.Table.DATA_KEY) === instance,
+                        html,
+                        sameInstance: $.getData(node, UI.Table.DATA_KEY) === instance,
                     };
                 });
 
                 for (const { name, method, message } of state.errors) {
                     expect(message, `${name} (${method})`).toBe('TypeError: Table must be created on a table element.');
                 }
-                expect(state.unchanged).toBe(true);
+                expect(state.sameInstance).toBe(true);
+                await expect(page.locator('body')).toHaveJSProperty('innerHTML', state.html);
             });
 
             test('preserves untouched attributes when capturing initial state throws', async ({ page }) => {
                 const state = await page.evaluate(() => {
                     const node = $.findOne('#table');
+
                     $.setAttribute(node, {
                         'class': 'original',
                         'aria-controls': 'original-controls',
@@ -294,6 +307,7 @@ test.describe('Table supplied data', () => {
                         'aria-describedby': 'original-description',
                         'aria-busy': 'false',
                     });
+
                     const html = node.outerHTML;
                     const getAttribute = Element.prototype.getAttribute;
                     const failure = new Error('Cannot capture attributes');
@@ -318,18 +332,24 @@ test.describe('Table supplied data', () => {
                     return {
                         originalError,
                         registered: $.hasData(node, UI.Table.DATA_KEY),
-                        unchanged: node.outerHTML === html,
+                        html,
                     };
                 });
 
-                expect(state).toEqual({ originalError: true, registered: false, unchanged: true });
+                expect(state.originalError).toBe(true);
+                expect(state.registered).toBe(false);
+                await expect(page.locator('#table')).toHaveJSProperty('outerHTML', state.html);
             });
 
             for (const { name, options, error } of [
                 { name: 'columns', options: { columns: [{}] }, error: 'RangeError' },
                 { name: 'rows', options: { data: [null] }, error: 'TypeError' },
                 { name: 'order', options: { order: [[4, 'asc']] }, error: 'RangeError' },
-                { name: 'orderData', options: { order: [], columns: [{ orderData: [4] }, {}] }, error: 'RangeError' },
+                {
+                    name: 'orderData',
+                    options: { order: [], columns: [{ orderData: [4] }, {}] },
+                    error: 'RangeError',
+                },
                 { name: 'lengths', options: { lengths: [0] }, error: 'RangeError' },
             ]) {
                 test(`rejects invalid ${name} without leaving an instance or wrapper`, async ({ page }) => {
@@ -353,6 +373,7 @@ test.describe('Table supplied data', () => {
             test('rejects spanning headings', async ({ page }) => {
                 expect(await page.evaluate(() => {
                     $.setProperty($.findOne('th'), 'colSpan', 2);
+
                     try {
                         window.createTable();
                     } catch (error) {
@@ -368,11 +389,12 @@ test.describe('Table supplied data', () => {
 
     test.describe('#dispose', () => {
         test('preserves original contents and query state while cleaning generated cells', async ({ page }) => {
-            expect(await page.evaluate(() => {
+            const result = await page.evaluate(() => {
                 const node = $.findOne('#table');
                 const caption = $.findOne('caption', node);
 
                 $.prepend(node, [$.createText('\n'), $.createComment('Original table')]);
+
                 const original = $.contents(node);
                 let originalEvents = 0;
                 let generatedEvents = 0;
@@ -408,15 +430,15 @@ test.describe('Table supplied data', () => {
                     removals,
                     disposed: table.node === null,
                 };
-            })).toEqual({
-                sameContents: true,
-                originalData: 'original',
-                generatedData: false,
-                originalEvents: 1,
-                generatedEvents: 0,
-                removals: 1,
-                disposed: true,
             });
+
+            expect(result.sameContents).toBe(true);
+            expect(result.originalData).toBe('original');
+            expect(result.generatedData).toBe(false);
+            expect(result.originalEvents).toBe(1);
+            expect(result.generatedEvents).toBe(0);
+            expect(result.removals).toBe(1);
+            expect(result.disposed).toBe(true);
 
             await page.evaluate(() => window.createTable());
 
@@ -426,10 +448,15 @@ test.describe('Table supplied data', () => {
         test('supports omitted controls and restores original DOM nodes and listeners', async ({ page }) => {
             await page.evaluate(() => {
                 const caption = $.findOne('caption');
+
                 caption.addEventListener('click', () => {
                     $.setText(caption, 'Original listener');
                 });
-                const table = window.createTable({ layout: { top: '', bottom: '' } });
+
+                const table = window.createTable({
+                    layout: { top: '', bottom: '' },
+                });
+
                 table.search('A');
                 table.page(2);
                 table.dispose();

@@ -42,12 +42,15 @@ test.describe('Table buttons', () => {
                             length: 2,
                             buttons: [{ type, scope }],
                         });
+
                         table.setFilters([{ column: 1, operator: 'gte', value: 2 }]);
                         table.page(2);
                     }, { type, scope });
 
                     const pending = page.waitForEvent('download');
+
                     await page.getByRole('button', { name: label, exact: true }).click();
+
                     const data = await readDownload(await pending);
                     const rows = type === 'csv' ?
                         readCsv(data.toString()).slice(1) :
@@ -65,18 +68,23 @@ test.describe('Table buttons', () => {
         test('exports resolved values with formula escaping and preserves zero and false', async ({ page }) => {
             await page.evaluate(() => UI.Table.init($.findOne('#table'), {
                 data: [['Alice', 0], ['Bob', false]],
-                columns: [{
-                    render(value, { purpose, rowIndex }) {
-                        return purpose === 'export' ? `=${value}:${rowIndex}` : value;
+                columns: [
+                    {
+                        render(value, { purpose, rowIndex }) {
+                            return purpose === 'export' ? `=${value}:${rowIndex}` : value;
+                        },
                     },
-                }, { format: () => 'Display only' }],
+                    { format: () => 'Display only' },
+                ],
                 buttons: [{ type: 'csv', scope: 'all' }],
                 length: 1,
                 order: [[0, 'desc']],
             }));
 
             const pending = page.waitForEvent('download');
+
             await page.getByRole('button', { name: 'CSV' }).click();
+
             const rows = readCsv((await readDownload(await pending)).toString());
 
             expect(rows).toEqual([['Name', 'Value'], ['\'=Bob:1', 'false'], ['\'=Alice:0', '0']]);
@@ -90,15 +98,25 @@ test.describe('Table buttons', () => {
             });
 
             const pending = page.waitForEvent('download');
+
             await page.getByRole('button', { name: 'CSV' }).click();
+
             const rows = readCsv((await readDownload(await pending)).toString());
 
             expect(rows).toEqual([['Name', 'Value'], ['Alice & Co', ''], ['Robert', '2']]);
         });
 
         for (const { name, visible, expected } of [
-            { name: 'all columns', visible: true, expected: [['Name', 'Value'], ['Alice', '10'], ['Bob', '20'], ['Charlie', '30']] },
-            { name: 'visible columns only', visible: false, expected: [['Name'], ['Alice'], ['Bob'], ['Charlie']] },
+            {
+                name: 'all columns',
+                visible: true,
+                expected: [['Name', 'Value'], ['Alice', '10'], ['Bob', '20'], ['Charlie', '30']],
+            },
+            {
+                name: 'visible columns only',
+                visible: false,
+                expected: [['Name'], ['Alice'], ['Bob'], ['Charlie']],
+            },
         ]) {
             test(`exports displayed rows with ${name}`, async ({ page }) => {
                 await page.evaluate((visible) => UI.Table.init($.findOne('#table'), {
@@ -108,7 +126,9 @@ test.describe('Table buttons', () => {
                 }), visible);
 
                 const pending = page.waitForEvent('download');
+
                 await page.getByRole('button', { name: 'CSV' }).click();
+
                 const download = await pending;
 
                 expect(download.suggestedFilename()).toBe('scores.csv');
@@ -126,18 +146,25 @@ test.describe('Table buttons', () => {
             }), rows);
 
             const pending = page.waitForEvent('download');
+
             await page.getByRole('button', { name: 'CSV' }).click();
+
             const download = await pending;
 
             expect(download.suggestedFilename()).toBe('Values.csv');
             expect(readCsv((await readDownload(download)).toString())).toEqual([
-                ['Name', 'Value'], ['quote"only', 'line\nbreak'], ['comma,value', 'Café 🌨️'], ['0', 'false'], ['', ''],
+                ['Name', 'Value'],
+                ['quote"only', 'line\nbreak'],
+                ['comma,value', 'Café 🌨️'],
+                ['0', 'false'],
+                ['', ''],
             ]);
         });
 
         test('exports current results in the requested column order and revokes the URL', async ({ page }) => {
             await page.evaluate(() => {
                 const original = URL.revokeObjectURL;
+
                 URL.revokeObjectURL = (url) => {
                     $.setDataset(document.body, 'revoked', true);
                     original(url);
@@ -150,6 +177,7 @@ test.describe('Table buttons', () => {
             });
 
             const pending = page.waitForEvent('download');
+
             await page.getByRole('button', { name: 'CSV' }).click();
 
             expect(readCsv((await readDownload(await pending)).toString())).toEqual([['Value', 'Name'], ['1', 'A']]);
@@ -167,7 +195,9 @@ test.describe('Table buttons', () => {
                 }), escapeFormulae);
 
                 const pending = page.waitForEvent('download');
+
                 await page.getByRole('button', { name: 'CSV' }).click();
+
                 const rows = readCsv((await readDownload(await pending)).toString());
 
                 expect(rows[1][0]).toBe(expected);
@@ -180,15 +210,20 @@ test.describe('Table buttons', () => {
         test('exports renderer values instead of display markup', async ({ page }) => {
             await page.evaluate(() => UI.Table.init($.findOne('#table'), {
                 data: [['Alice', { amount: 0 }], ['Bob', { amount: false }]],
-                columns: [{}, {
-                    render: (value, { purpose }) => purpose === 'display' ? '<strong>Formatted</strong>' : value.amount,
-                }],
+                columns: [
+                    {},
+                    {
+                        render: (value, { purpose }) => purpose === 'display' ? '<strong>Formatted</strong>' : value.amount,
+                    },
+                ],
                 buttons: [{ type: 'excel', scope: 'filtered' }],
                 length: 1,
             }));
 
             const pending = page.waitForEvent('download');
+
             await page.getByRole('button', { name: 'Excel' }).click();
+
             const files = readZip(await readDownload(await pending));
             const worksheet = await page.evaluate(readWorksheet, [...files]);
 
@@ -209,7 +244,9 @@ test.describe('Table buttons', () => {
             }, values);
 
             const pending = page.waitForEvent('download');
+
             await page.getByRole('button', { name: 'Excel' }).click();
+
             const download = await pending;
 
             expect(download.suggestedFilename()).toBe('Workbook.xlsx');
@@ -248,7 +285,9 @@ test.describe('Table buttons', () => {
             }), rows);
 
             const pending = page.waitForEvent('download');
+
             await page.getByRole('button', { name: 'Excel', exact: true }).click();
+
             const files = readZip(await readDownload(await pending));
 
             const worksheet = await page.evaluate(readWorksheet, [...files]);
@@ -263,8 +302,10 @@ test.describe('Table buttons', () => {
         test('creates a text title and waits for the print view before closing', async ({ page }) => {
             await page.evaluate(() => {
                 const open = window.open.bind(window);
+
                 window.open = (...args) => {
                     const popup = open(...args);
+
                     popup.print = () => {
                         const stylesReady = $.find('link[rel="stylesheet"]', popup.document)
                             .every((link) => link.sheet?.cssRules.length);
@@ -276,22 +317,28 @@ test.describe('Table buttons', () => {
                     popup.close = () => {
                         $.setDataset(popup.document.body, 'closed', 'true');
                     };
+
                     return popup;
                 };
                 $.setProperty($.findOne('#table'), 'dir', 'rtl');
             });
             await page.evaluate(() => UI.Table.init($.findOne('#table'), {
                 data: [['Alice', 1], [0, false]],
-                columns: [{
-                    render: (value, { purpose }) => purpose === 'export' && value === 'Alice' ? 'Export Alice' : value,
-                }, {}],
+                columns: [
+                    {
+                        render: (value, { purpose }) => purpose === 'export' && value === 'Alice' ? 'Export Alice' : value,
+                    },
+                    {},
+                ],
                 order: [],
                 buttons: [{ type: 'print', scope: 'all', title: '<b>Literal title</b>' }],
                 length: 1,
             }));
 
             const pending = page.waitForEvent('popup');
+
             await page.getByRole('button', { name: 'Print' }).click();
+
             const popup = await pending;
 
             await expect(popup.getByRole('heading')).toHaveText('<b>Literal title</b>');
@@ -324,6 +371,7 @@ test.describe('Table buttons', () => {
             test(`does not open or download ${type} after renderer disposal`, async ({ page }) => {
                 const calls = await page.evaluate((type) => {
                     let calls = 0;
+
                     URL.createObjectURL = () => {
                         calls++;
                     };
@@ -333,16 +381,20 @@ test.describe('Table buttons', () => {
 
                     const table = UI.Table.init($.findOne('#table'), {
                         data: [['Alice', 1]],
-                        columns: [{
-                            render(value, { purpose }) {
-                                if (purpose === 'export') {
-                                    this.dispose();
-                                }
+                        columns: [
+                            {
+                                render(value, { purpose }) {
+                                    if (purpose === 'export') {
+                                        this.dispose();
+                                    }
 
-                                return value;
+                                    return value;
+                                },
                             },
-                        }, {}],
+                            {},
+                        ],
                     });
+
                     UI.Table.buttons[type].call(table, {});
 
                     return calls;

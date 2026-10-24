@@ -8,6 +8,7 @@ test.describe('Table local data', () => {
         test('reapplies the active search without counting nonmatches', async ({ page }) => {
             await page.evaluate(() => {
                 const table = window.createTable();
+
                 table.search('A');
                 table.addRow(['D', 5]);
                 table.addRow(['A', 6]);
@@ -25,6 +26,7 @@ test.describe('Table local data', () => {
         test('resets the search, counts, and pagination before adding fresh rows', async ({ page }) => {
             await page.evaluate(() => {
                 const table = window.createTable();
+
                 table.search('A');
                 table.clear();
             });
@@ -58,6 +60,7 @@ test.describe('Table local data', () => {
             await page.evaluate(() => {
                 const table = window.createTable();
                 const row = table.getRow(0);
+
                 row[0] = 'Changed';
                 table.refresh();
             });
@@ -82,6 +85,7 @@ test.describe('Table local data', () => {
         test('updates empty-state colspan and restores headings in their original order', async ({ page }) => {
             await page.evaluate(() => {
                 const table = window.createTable({ data: [] });
+
                 table.hideColumn(0);
             });
 
@@ -97,6 +101,7 @@ test.describe('Table local data', () => {
     test.describe('#info', () => {
         test('uses zero-based starts and an exclusive end for the displayed page', async ({ page }) => {
             await page.evaluate(() => window.createTable().page(2));
+
             const info = await page.evaluate(() => $('#table').table('info'));
 
             expect(info.start).toBe(2);
@@ -110,6 +115,7 @@ test.describe('Table local data', () => {
         test('synchronizes custom lengths with the select and clamps the current page', async ({ page }) => {
             await page.evaluate(() => {
                 const table = window.createTable();
+
                 table.page(2);
                 table.length(3);
             });
@@ -129,6 +135,7 @@ test.describe('Table local data', () => {
             test(`rejects ${name} as the page length`, async ({ page }) => {
                 expect(await page.evaluate((length) => {
                     const table = window.createTable();
+
                     try {
                         table.length(length);
                     } catch (error) {
@@ -167,7 +174,10 @@ test.describe('Table local data', () => {
         });
 
         test('honors an empty initial order and alternate orderData columns', async ({ page }) => {
-            await page.evaluate(() => window.createTable({ order: [], columns: [{ orderData: [1] }, {}] }));
+            await page.evaluate(() => window.createTable({
+                order: [],
+                columns: [{ orderData: [1] }, {}],
+            }));
 
             await expect(page.locator('tbody td')).toHaveText(['B', '2', 'A', '1']);
 
@@ -204,6 +214,7 @@ test.describe('Table local data', () => {
         test('reindexes results and clamps an emptied final page', async ({ page }) => {
             await page.evaluate(() => {
                 const table = window.createTable();
+
                 table.page(2);
                 table.removeRow(1);
                 table.removeRow(0);
@@ -223,6 +234,7 @@ test.describe('Table local data', () => {
                         ordering,
                         length: 1,
                     });
+
                     table.page(4);
                     table.search('A');
                 }, ordering);
@@ -267,6 +279,7 @@ test.describe('Table local data', () => {
             test('reapplies active filtering after an edit', async ({ page }) => {
                 await page.evaluate(() => {
                     const table = window.createTable();
+
                     table.search('A');
                 });
 
@@ -328,6 +341,7 @@ test.describe('Table local data', () => {
 
             await page.evaluate(() => {
                 const table = $('#table').table();
+
                 table.search('missing');
                 table.page(5);
                 table.length(1);

@@ -115,6 +115,7 @@ test.describe('Table styles', () => {
                 const side = direction === 'ltr' ? 'right' : 'left';
 
                 expect(await heading.evaluate((node, side) => getComputedStyle(node, '::before')[side], side)).toBe('8px');
+
                 const padding = await heading.evaluate((node, side) => {
                     return Number.parseFloat(getComputedStyle(node).getPropertyValue(`padding-${side}`));
                 }, side);

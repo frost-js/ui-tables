@@ -6,7 +6,7 @@ test.describe('Table selection', () => {
 
     test.describe('selection API', () => {
         test('requires configured identity and a supported mode', async ({ page }) => {
-            const errors = await page.evaluate(() => {
+            const result = await page.evaluate(() => {
                 const errors = [];
 
                 for (const options of [{ selection: 'multiple' }, { rowId: 1, selection: true }]) {
@@ -27,44 +27,74 @@ test.describe('Table selection', () => {
                     }
                 }
 
-                return { errors, ids: table.getSelectedIds() };
+                return {
+                    errors,
+                    ids: table.getSelectedIds(),
+                };
             });
 
-            expect(errors).toEqual({ errors: Array(5).fill('TypeError'), ids: [] });
+            expect(result.errors).toEqual(Array(5).fill('TypeError'));
+            expect(result.ids).toEqual([]);
         });
 
         test('combines page, filtered, and all scopes without changing view or drawing', async ({ page }) => {
             const result = await page.evaluate(() => {
-                const table = window.createTable({ rowId: 1, selection: 'multiple' });
+                const table = window.createTable({
+                    rowId: 1,
+                    selection: 'multiple',
+                });
                 const state = table.getState();
                 let draws = 0;
                 let states = 0;
+
                 $.addEvent('#table', 'draw.ui.table', () => draws++);
                 $.addEvent('#table', 'statechange.ui.table', () => states++);
                 table.selectRows();
+
                 const first = table.getSelectedIds();
+
                 table.selectRows({ scope: 'all' });
                 table.deselectRows();
+
                 const other = table.getSelectedIds();
                 const unchanged = JSON.stringify(state) === JSON.stringify(table.getState());
                 const counts = { draws, states };
+
                 table.search('A');
                 table.selectRows({ scope: 'filtered' });
                 table.deselectRows({ scope: 'filtered' });
 
-                return { first, other, unchanged, counts, selected: table.getSelectedIds() };
+                return {
+                    first,
+                    other,
+                    unchanged,
+                    counts,
+                    selected: table.getSelectedIds(),
+                };
             });
 
-            expect(result).toEqual({ first: [1, 3], other: [2, 4], unchanged: true, counts: { draws: 0, states: 0 }, selected: [2, 4] });
+            expect(result.first).toEqual([1, 3]);
+            expect(result.other).toEqual([2, 4]);
+            expect(result.unchanged).toBe(true);
+            expect(result.counts).toEqual({
+                draws: 0,
+                states: 0,
+            });
+            expect(result.selected).toEqual([2, 4]);
         });
 
         test('validates the complete selection and retains insertion order for equivalent sets', async ({ page }) => {
             const result = await page.evaluate(() => {
-                const table = window.createTable({ rowId: 1, selection: 'multiple' });
+                const table = window.createTable({
+                    rowId: 1,
+                    selection: 'multiple',
+                });
                 const events = [];
+
                 $.addEvent('#table', 'selectionchange.ui.table', (event) => events.push(event.detail));
                 table.setSelectedIds([3, 1, 3]);
                 table.setSelectedIds([1, 3]);
+
                 const errors = [];
 
                 for (const ids of [null, [1, 9], [1, null], [true], [1, '1']]) {
@@ -76,51 +106,71 @@ test.describe('Table selection', () => {
                 }
 
                 const copy = table.getSelectedIds();
+
                 copy.push(2);
                 events[0].selectedIds.push(4);
 
-                return { ids: table.getSelectedIds(), errors, count: events.length, added: events[0].addedIds };
+                return {
+                    ids: table.getSelectedIds(),
+                    errors,
+                    count: events.length,
+                    added: events[0].addedIds,
+                };
             });
 
-            expect(result).toEqual({
-                ids: [3, 1], count: 1, added: [3, 1],
-                errors: ['TypeError', 'RangeError', 'TypeError', 'TypeError', 'RangeError'],
-            });
+            expect(result.ids).toEqual([3, 1]);
+            expect(result.count).toBe(1);
+            expect(result.added).toEqual([3, 1]);
+            expect(result.errors).toEqual(['TypeError', 'RangeError', 'TypeError', 'TypeError', 'RangeError']);
         });
 
         test('preserves hidden selections and view restoration, pruning only removed local IDs', async ({ page }) => {
             const result = await page.evaluate(() => {
-                const table = window.createTable({ rowId: 1, selection: 'multiple' });
+                const table = window.createTable({
+                    rowId: 1,
+                    selection: 'multiple',
+                });
                 const state = table.getState();
+
                 table.setSelectedIds([1, 2, 3]);
                 table.search('C');
                 table.hideColumn(0);
                 table.setState(state);
+
                 const preserved = table.getSelectedIds();
                 const events = [];
+
                 $.addEvent('#table', 'selectionchange.ui.table', (event) => events.push(event.detail));
                 table.setRowById(1, ['Renamed', 1]);
                 table.setData([['One', 1], ['Three', 3], ['New', 5]]);
                 table.removeRowById(1);
                 table.clear();
 
-                return { preserved, events, selected: table.getSelectedIds() };
+                return {
+                    preserved,
+                    events,
+                    selected: table.getSelectedIds(),
+                };
             });
 
-            expect(result).toEqual({
-                preserved: [1, 2, 3], selected: [],
-                events: [
-                    { selectedIds: [1, 3], addedIds: [], removedIds: [2] },
-                    { selectedIds: [3], addedIds: [], removedIds: [1] },
-                    { selectedIds: [], addedIds: [], removedIds: [3] },
-                ],
-            });
+            expect(result.preserved).toEqual([1, 2, 3]);
+            expect(result.selected).toEqual([]);
+            expect(result.events).toEqual([
+                { selectedIds: [1, 3], addedIds: [], removedIds: [2] },
+                { selectedIds: [3], addedIds: [], removedIds: [1] },
+                { selectedIds: [], addedIds: [], removedIds: [3] },
+            ]);
         });
 
         test('rejects multiple final IDs in single mode without changing the previous selection', async ({ page }) => {
             const result = await page.evaluate(() => {
-                const table = window.createTable({ rowId: 1, selection: 'single' });
+                const table = window.createTable({
+                    rowId: 1,
+                    selection: 'single',
+                });
+
                 table.setSelectedIds([2]);
+
                 const errors = [];
 
                 for (const update of [() => table.setSelectedIds([1, 3]), () => table.selectRows()]) {
@@ -131,10 +181,14 @@ test.describe('Table selection', () => {
                     }
                 }
 
-                return { errors, selected: table.getSelectedIds() };
+                return {
+                    errors,
+                    selected: table.getSelectedIds(),
+                };
             });
 
-            expect(result).toEqual({ errors: ['RangeError', 'RangeError'], selected: [2] });
+            expect(result.errors).toEqual(['RangeError', 'RangeError']);
+            expect(result.selected).toEqual([2]);
         });
     });
 
@@ -142,17 +196,20 @@ test.describe('Table selection', () => {
         test('uses a page-specific checkbox and preserves focus while selecting with the keyboard', async ({ page }) => {
             await page.evaluate(() => {
                 window.table = window.createTable({
-                    rowId: 1, selection: 'multiple', layout: { top: 'selection,search', bottom: 'info,pagination' },
+                    rowId: 1,
+                    selection: 'multiple',
+                    layout: { top: 'selection,search', bottom: 'info,pagination' },
                 });
             });
 
             const header = page.getByRole('checkbox', { name: 'Select all rows on this page' });
             const first = page.getByRole('checkbox', { name: 'Select row 1', exact: true });
+
             await first.focus();
             await first.press('Space');
             await expect(first).toBeFocused();
             await expect(first).toBeChecked();
-            expect(await header.evaluate((input) => input.indeterminate)).toBe(true);
+            await expect(header).toBeChecked({ indeterminate: true });
             await expect(page.locator('tbody tr.table-active')).toHaveCount(1);
             await expect(page.getByRole('status').filter({ hasText: 'selected' })).toHaveText('1 selected');
 
@@ -160,7 +217,7 @@ test.describe('Table selection', () => {
             expect(await page.evaluate(() => window.table.getSelectedIds())).toEqual([1, 3]);
             await page.evaluate(() => window.table.page(2));
             await expect(header).not.toBeChecked();
-            expect(await header.evaluate((input) => input.indeterminate)).toBe(false);
+            await expect(header).not.toBeChecked({ indeterminate: true });
             await header.check();
             await header.uncheck();
             expect(await page.evaluate(() => window.table.getSelectedIds())).toEqual([1, 3]);
@@ -183,8 +240,9 @@ test.describe('Table selection', () => {
             });
 
             const header = page.getByRole('checkbox', { name: 'Select all rows on this page' });
+
             await expect(page.locator('tbody td:last-child')).toHaveText(['1', '3']);
-            expect(await header.evaluate((input) => input.indeterminate)).toBe(true);
+            await expect(header).toBeChecked({ indeterminate: true });
 
             await header.check();
             expect(await page.evaluate(() => window.table.getSelectedIds())).toEqual([1, 2, 3]);
@@ -198,7 +256,7 @@ test.describe('Table selection', () => {
             });
 
             await expect(page.locator('tbody td:last-child')).toHaveText(['2', '4']);
-            expect(await header.evaluate((input) => input.indeterminate)).toBe(true);
+            await expect(header).toBeChecked({ indeterminate: true });
             await header.check();
             expect(await page.evaluate(() => window.table.getSelectedIds())).toEqual([2, 4]);
         });
@@ -217,10 +275,11 @@ test.describe('Table selection', () => {
             });
 
             const header = page.getByRole('checkbox', { name: 'Select all rows on this page' });
+
             await expect(page.locator('tbody td:last-child')).toHaveText(['1', '3']);
             await expect(page.getByRole('checkbox', { name: 'Select row 1', exact: true })).toBeDisabled();
             await expect(header).toBeChecked();
-            expect(await header.evaluate((input) => input.indeterminate)).toBe(false);
+            await expect(header).not.toBeChecked({ indeterminate: true });
 
             await header.uncheck();
             expect(await page.evaluate(() => window.table.getSelectedIds())).toEqual([5]);
@@ -231,15 +290,19 @@ test.describe('Table selection', () => {
 
             await expect(header).toBeDisabled();
             await expect(header).not.toBeChecked();
-            expect(await header.evaluate((input) => input.indeterminate)).toBe(false);
+            await expect(header).not.toBeChecked({ indeterminate: true });
             expect(await page.evaluate(() => window.table.getSelectedIds())).toEqual([]);
         });
 
         test('uses radios to replace single selection and keeps controls out of data operations', async ({ page }) => {
-            await page.evaluate(() => window.table = window.createTable({ rowId: 1, selection: 'single' }));
+            await page.evaluate(() => window.table = window.createTable({
+                rowId: 1,
+                selection: 'single',
+            }));
             await expect(page.getByRole('checkbox')).toHaveCount(0);
             await page.getByRole('radio', { name: 'Select row 1', exact: true }).check();
             await page.getByRole('radio', { name: 'Select row 3', exact: true }).check();
+
             const result = await page.evaluate(() => ({
                 ids: window.table.getSelectedIds(),
                 data: window.table.getData(),
@@ -247,17 +310,23 @@ test.describe('Table selection', () => {
                 columns: window.table.getState().columns.length,
             }));
 
-            expect(result).toEqual({
-                ids: [3], data: [['A', 1], ['A', 3]],
-                exported: { headings: ['Name', 'Score'], rows: [['A', 1], ['A', 3]] }, columns: 2,
+            expect(result.ids).toEqual([3]);
+            expect(result.data).toEqual([['A', 1], ['A', 3]]);
+            expect(result.exported).toEqual({
+                headings: ['Name', 'Score'],
+                rows: [['A', 1], ['A', 3]],
             });
+            expect(result.columns).toBe(2);
             await expect(page.getByRole('radio', { name: 'Select row 1', exact: true })).not.toBeChecked();
         });
 
         test('keeps utility cells first through visibility changes and handles empty results', async ({ page }) => {
             await page.evaluate(() => {
                 $.append('#table', $.create('tfoot', { html: '<tr><td>Total</td><td>10</td></tr>' }));
-                window.table = window.createTable({ rowId: 1, selection: 'multiple' });
+                window.table = window.createTable({
+                    rowId: 1,
+                    selection: 'multiple',
+                });
                 window.table.hideColumn(0);
                 window.table.showColumn(0);
             });
@@ -278,11 +347,14 @@ test.describe('Table selection', () => {
         test('does not sort when selection controls are clicked or select when row links are clicked', async ({ page }) => {
             await page.evaluate(() => {
                 window.table = window.createTable({
-                    rowId: 1, selection: 'multiple',
+                    rowId: 1,
+                    selection: 'multiple',
                     columns: [{ format: (value) => `<a href="#target">${value}</a>` }, {}],
                 });
             });
+
             const state = await page.evaluate(() => window.table.getState());
+
             await page.locator('tbody a').first().click();
             expect(await page.evaluate(() => window.table.getSelectedIds())).toEqual([]);
             await page.getByRole('checkbox', { name: 'Select all rows on this page' }).check();
@@ -292,10 +364,18 @@ test.describe('Table selection', () => {
         test('isolates radio groups across table instances and restores original markup on disposal', async ({ page }) => {
             const names = await page.evaluate(() => {
                 const clone = $.clone('#table')[0];
+
                 $.setAttribute(clone, { id: 'second' });
                 $.append(document.body, clone);
-                window.table = window.createTable({ rowId: 1, selection: 'single' });
-                window.second = UI.Table.init(clone, { data: [['Second', 1]], rowId: 1, selection: 'single' });
+                window.table = window.createTable({
+                    rowId: 1,
+                    selection: 'single',
+                });
+                window.second = UI.Table.init(clone, {
+                    data: [['Second', 1]],
+                    rowId: 1,
+                    selection: 'single',
+                });
 
                 return $.find('input[type="radio"]').map((input) => input.name);
             });
@@ -314,8 +394,12 @@ test.describe('Table selection', () => {
     test.describe('event lifecycle', () => {
         test('retains a newer selection made by a notification listener', async ({ page }) => {
             const result = await page.evaluate(() => {
-                const table = window.createTable({ rowId: 1, selection: 'multiple' });
+                const table = window.createTable({
+                    rowId: 1,
+                    selection: 'multiple',
+                });
                 const events = [];
+
                 $.addEvent('#table', 'selectionchange.ui.table', (event) => {
                     events.push(event.detail);
 
@@ -325,21 +409,27 @@ test.describe('Table selection', () => {
                 });
                 table.setSelectedIds([1]);
 
-                return { selected: table.getSelectedIds(), events };
+                return {
+                    selected: table.getSelectedIds(),
+                    events,
+                };
             });
 
-            expect(result).toEqual({
-                selected: [3], events: [
-                    { selectedIds: [1], addedIds: [1], removedIds: [] },
-                    { selectedIds: [3], addedIds: [3], removedIds: [1] },
-                ],
-            });
+            expect(result.selected).toEqual([3]);
+            expect(result.events).toEqual([
+                { selectedIds: [1], addedIds: [1], removedIds: [] },
+                { selectedIds: [3], addedIds: [3], removedIds: [1] },
+            ]);
             await expect(page.getByRole('checkbox', { name: 'Select row 3', exact: true })).toBeChecked();
         });
 
         test('abandons an older data draw when selection pruning triggers replacement', async ({ page }) => {
             const result = await page.evaluate(() => {
-                const table = window.createTable({ rowId: 1, selection: 'multiple' });
+                const table = window.createTable({
+                    rowId: 1,
+                    selection: 'multiple',
+                });
+
                 table.setSelectedIds([1]);
                 $.addEvent('#table', 'selectionchange.ui.table', () => table.setData([['Newer', 9]]));
                 table.setData([['Obsolete', 5]]);
@@ -353,15 +443,23 @@ test.describe('Table selection', () => {
 
         test('stops drawing when a selection notification disposes the table', async ({ page }) => {
             const result = await page.evaluate(() => {
-                const table = window.createTable({ rowId: 1, selection: 'multiple' });
+                const table = window.createTable({
+                    rowId: 1,
+                    selection: 'multiple',
+                });
+
                 table.setSelectedIds([1]);
                 $.addEvent('#table', 'selectionchange.ui.table', () => table.dispose());
                 table.setData([]);
 
-                return { disposed: !table.node, selected: table.getSelectedIds() };
+                return {
+                    disposed: !table.node,
+                    selected: table.getSelectedIds(),
+                };
             });
 
-            expect(result).toEqual({ disposed: true, selected: [] });
+            expect(result.disposed).toBe(true);
+            expect(result.selected).toEqual([]);
             await expect(page.locator('#table tbody tr')).toHaveCount(0);
         });
     });

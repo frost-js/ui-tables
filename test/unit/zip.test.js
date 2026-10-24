@@ -5,10 +5,16 @@ import { readZip } from '../support/exports.js';
 test.describe('Zip', () => {
     for (const { name, filename, text, method } of [
         { name: 'stored', filename: 'café.txt', text: '123456789', method: 0 },
-        { name: 'compressed', filename: 'compressed.txt', text: 'abcdefghijklmnopqrstuvwxyz'.repeat(3000), method: 8 },
+        {
+            name: 'compressed',
+            filename: 'compressed.txt',
+            text: 'abcdefghijklmnopqrstuvwxyz'.repeat(3000),
+            method: 8,
+        },
     ]) {
         test(`round-trips ${name} entries with UTF-8 names and DOS dates`, async () => {
             const zip = new Zip();
+
             zip.addFile(filename, text);
             zip.addFile('readme.txt', 'A second entry');
 

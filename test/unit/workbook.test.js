@@ -13,11 +13,17 @@ test.describe('Workbook', () => {
             { name: 'Excel day 60', value: '29/02/1900', expected: 60, style: '4' },
             { name: 'the day after Excel day 60', value: '1900-03-01', expected: 61, style: '4' },
             { name: 'an ISO date', value: '2024-01-15', expected: 45306, style: '4' },
-            { name: 'a date and time', value: '2024-03-15 12:30:00', expected: 45366 + 12.5 / 24, style: '6' },
+            {
+                name: 'a date and time',
+                value: '2024-03-15 12:30:00',
+                expected: 45366 + 12.5 / 24,
+                style: '6',
+            },
             { name: 'a time', value: '12:30:00', expected: 12.5 / 24, style: '5' },
         ]) {
             test(`serializes ${name} with its spreadsheet type and format`, async () => {
                 const workbook = new Workbook();
+
                 workbook.addSheet({ rows: [[value]] });
 
                 const files = readZip(new Uint8Array(await workbook.create().arrayBuffer()));
@@ -34,7 +40,11 @@ test.describe('Workbook', () => {
 
     test.describe('shared strings', () => {
         for (const { name, value, encoded } of [
-            { name: 'XML punctuation', value: 'A & B & C < D < E', encoded: 'A &amp; B &amp; C &lt; D &lt; E' },
+            {
+                name: 'XML punctuation',
+                value: 'A & B & C < D < E',
+                encoded: 'A &amp; B &amp; C &lt; D &lt; E',
+            },
             { name: 'Unicode', value: 'Café 🌨️', encoded: 'Café 🌨️' },
             { name: 'an invalid date', value: '2024-02-30', encoded: '2024-02-30' },
             { name: 'an invalid time', value: '25:00:00', encoded: '25:00:00' },
@@ -43,6 +53,7 @@ test.describe('Workbook', () => {
         ]) {
             test(`preserves ${name} as text`, async () => {
                 const workbook = new Workbook();
+
                 workbook.addSheet({ rows: [[value]] });
 
                 const files = readZip(new Uint8Array(await workbook.create().arrayBuffer()));
@@ -60,11 +71,20 @@ test.describe('Workbook', () => {
     test.describe('inline strings', () => {
         for (const { name, value, encoded } of [
             { name: 'long text', value: 'x'.repeat(200), encoded: 'x'.repeat(200) },
-            { name: 'long XML punctuation', value: 'A & < B > C'.repeat(20), encoded: 'A &amp; &lt; B &gt; C'.repeat(20) },
-            { name: 'long replacement tokens', value: '$$ $& $` $\''.repeat(20), encoded: '$$ $&amp; $` $&apos;'.repeat(20) },
+            {
+                name: 'long XML punctuation',
+                value: 'A & < B > C'.repeat(20),
+                encoded: 'A &amp; &lt; B &gt; C'.repeat(20),
+            },
+            {
+                name: 'long replacement tokens',
+                value: '$$ $& $` $\''.repeat(20),
+                encoded: '$$ $&amp; $` $&apos;'.repeat(20),
+            },
         ]) {
             test(`stores ${name} inline`, async () => {
                 const workbook = new Workbook();
+
                 workbook.addSheet({ rows: [[value]] });
 
                 const files = readZip(new Uint8Array(await workbook.create().arrayBuffer()));
@@ -85,6 +105,7 @@ test.describe('Workbook', () => {
         ]) {
             test(`omits ${name} without removing the row`, async () => {
                 const workbook = new Workbook();
+
                 workbook.addSheet({ rows: [[value]] });
 
                 const files = readZip(new Uint8Array(await workbook.create().arrayBuffer()));
@@ -99,6 +120,7 @@ test.describe('Workbook', () => {
     test.describe('archive creation', () => {
         test('preserves replacement tokens in sheet names', async () => {
             const workbook = new Workbook();
+
             workbook.addSheet({ rows: [['Value']] }, '$$ $& $` $\' name');
 
             const files = readZip(new Uint8Array(await workbook.create().arrayBuffer()));
@@ -110,6 +132,7 @@ test.describe('Workbook', () => {
 
         test('escapes duplicate sheet names and recreates the archive without stale strings', async () => {
             const workbook = new Workbook();
+
             workbook.addSheet({ rows: [['first', 'first']] }, 'A & "B"');
             workbook.addSheet({ rows: [['second']] }, 'A & "B"');
 

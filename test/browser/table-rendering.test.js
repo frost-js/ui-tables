@@ -17,11 +17,11 @@ test.describe('Table rendering', () => {
 
         test('passes the footer and callback indexes in draw order', async ({ page }) => {
             await page.evaluate(() => {
-                $.append('#table', $.create('tfoot', {
-                    html: '<tr><td colspan="2">Footer</td></tr>',
-                }));
+                $.append('#table', $.create('tfoot', { html: '<tr><td colspan="2">Footer</td></tr>' }));
                 window.calls = [];
+
                 const record = (value) => window.calls.push(value);
+
                 window.createTable({
                     preDrawCallback() {
                         record('pre');
@@ -32,6 +32,7 @@ test.describe('Table rendering', () => {
                     },
                     infoCallback(start, end, total, filtered, text) {
                         record('info');
+
                         return text;
                     },
                     rowCallback() {
@@ -60,6 +61,7 @@ test.describe('Table rendering', () => {
         test('stops an obsolete draw when a callback changes the search', async ({ page }) => {
             await page.evaluate(() => {
                 let first = true;
+
                 window.createTable({
                     headerCallback() {
                         if (first) {
@@ -77,7 +79,9 @@ test.describe('Table rendering', () => {
         test('can cancel a draw and refresh it later', async ({ page }) => {
             await page.evaluate(() => {
                 window.cancelDraw = true;
-                window.createTable({ preDrawCallback: () => !window.cancelDraw });
+                window.createTable({
+                    preDrawCallback: () => !window.cancelDraw,
+                });
             });
 
             await expect(page.locator('tbody tr')).toHaveCount(0);
@@ -111,7 +115,9 @@ test.describe('Table rendering', () => {
                     $.setText(container, $.getProperty(this.node, 'id'));
                     $.setDataset(container, 'testSummary', '');
                 };
-                window.createTable({ layout: { top: 'summary' } });
+                window.createTable({
+                    layout: { top: 'summary' },
+                });
             });
 
             await expect(page.locator('[data-test-summary]')).toHaveText('table');
@@ -137,11 +143,14 @@ test.describe('Table rendering', () => {
         for (const callback of ['format', 'createdCell']) {
             test(`allows disposal during column ${callback}`, async ({ page }) => {
                 await page.evaluate((callback) => window.createTable({
-                    columns: [{
-                        [callback]() {
-                            this.dispose();
+                    columns: [
+                        {
+                            [callback]() {
+                                this.dispose();
+                            },
                         },
-                    }, {}],
+                        {},
+                    ],
                 }), callback);
 
                 await expect(page.locator('.table-responsive')).toHaveCount(0);
@@ -153,6 +162,7 @@ test.describe('Table rendering', () => {
             await page.evaluate(() => window.createTable({
                 sanitize(html) {
                     $.getData('#table', 'table').dispose();
+
                     return html;
                 },
             }));
@@ -166,7 +176,9 @@ test.describe('Table rendering', () => {
                 UI.Table.layout.stop = function() {
                     this.dispose();
                 };
-                window.createTable({ layout: { top: 'stop' } });
+                window.createTable({
+                    layout: { top: 'stop' },
+                });
             });
 
             await expect(page.locator('.table-responsive')).toHaveCount(0);

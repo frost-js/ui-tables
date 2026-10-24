@@ -6,7 +6,9 @@ test.describe('Table responsive details', () => {
     test.beforeEach(async ({ page }) => {
         await page.evaluate(() => {
             $.setHtml('thead tr', '<th>Name</th><th>Team</th><th>Score</th>');
+
             const host = $.create('div', { attributes: { id: 'host' }, style: { width: '900px' } });
+
             $.before('#table', host);
             $.append(host, $.findOne('#table'));
             $.append(document.head, $.create('style', {
@@ -53,12 +55,17 @@ test.describe('Table responsive details', () => {
                 }
 
                 $.setStyle('#host', { width: '240px' });
+
                 const table = window.createResponsive({ responsive: false });
 
-                return { error, columns: table.getState().columns.length };
+                return {
+                    error,
+                    columns: table.getState().columns.length,
+                };
             });
 
-            expect(result).toEqual({ error: 'TypeError', columns: 3 });
+            expect(result.error).toBe('TypeError');
+            expect(result.columns).toBe(3);
             await expect(page.locator('th[data-ui-index]:visible')).toHaveText(['Name', 'Team', 'Score']);
             await expect(page.getByRole('button', { name: /details for row/ })).toHaveCount(0);
         });
@@ -75,18 +82,29 @@ test.describe('Table responsive details', () => {
             await expect(page.locator('th[data-ui-index]:visible')).toHaveText(['Name', 'Team']);
             await page.evaluate(() => $.setStyle('#host', { width: '240px' }));
             await expect(page.locator('th[data-ui-index]:visible')).toHaveText(['Name']);
+
             const result = await page.evaluate(() => ({
-                state: window.table.getState(), before: window.before, events: window.events,
-                exported: window.table.getExportData(), data: window.table.getData(), info: window.table.info(),
+                state: window.table.getState(),
+                before: window.before,
+                events: window.events,
+                exported: window.table.getExportData(),
+                data: window.table.getData(),
+                info: window.table.info(),
             }));
 
             expect(result.state).toEqual(result.before);
             expect(result.events).toBe(0);
             expect(result.exported).toEqual({
-                headings: ['Name', 'Team', 'Score'], rows: [['Alice', 'Engineering', 90], ['Bob', 'Design', 80]],
+                headings: ['Name', 'Team', 'Score'],
+                rows: [['Alice', 'Engineering', 90], ['Bob', 'Design', 80]],
             });
             expect(result.data).toEqual(result.exported.rows);
-            expect(result.info).toEqual({ start: 0, end: 2, total: 3, filtered: 3 });
+            expect(result.info).toEqual({
+                start: 0,
+                end: 2,
+                total: 3,
+                filtered: 3,
+            });
             await page.evaluate(() => $.setStyle('#host', { width: '900px' }));
             await expect(page.locator('th[data-ui-index]:visible')).toHaveCount(3);
             await expect(page.getByRole('button', { name: /details for row/ })).toHaveCount(0);
@@ -100,7 +118,9 @@ test.describe('Table responsive details', () => {
             test(`respects priority order ${JSON.stringify(priorities)}`, async ({ page }) => {
                 await page.evaluate((priorities) => {
                     $.setStyle('#host', { width: '430px' });
-                    window.createResponsive({ columns: priorities.map((responsivePriority) => ({ class: 'test-cell', responsivePriority })) });
+                    window.createResponsive({
+                        columns: priorities.map((responsivePriority) => ({ class: 'test-cell', responsivePriority })),
+                    });
                 }, priorities);
 
                 await expect(page.locator('th[data-ui-index]:visible')).toHaveText(expected);
@@ -110,7 +130,9 @@ test.describe('Table responsive details', () => {
         test('retains one column and scrolling when required columns cannot fit', async ({ page }) => {
             await page.evaluate(() => {
                 $.setStyle('#host', { width: '100px' });
-                window.createResponsive({ columns: [{ class: 'test-cell' }, { class: 'test-cell' }, { class: 'test-cell' }] });
+                window.createResponsive({
+                    columns: [{ class: 'test-cell' }, { class: 'test-cell' }, { class: 'test-cell' }],
+                });
             });
 
             await expect(page.locator('th[data-ui-index]:visible')).toHaveText(['Name']);
@@ -162,16 +184,21 @@ test.describe('Table responsive details', () => {
                 });
                 window.before = { ...window.calls };
             });
+
             const button = page.getByRole('button', { name: /details for row Alice$/ });
+
             await button.focus();
             await button.press('Enter');
             await expect(button).toBeFocused();
             await expect(button).toHaveAttribute('aria-expanded', 'true');
+
             const detail = page.locator('tr.table-details');
+
             await expect(detail.locator('dt')).toHaveText(['Team & group', 'Column 3']);
             await expect(detail.locator('dd strong')).toHaveText('90');
             await expect(detail.locator('dt b, [onerror]')).toHaveCount(0);
-            expect(await button.getAttribute('aria-controls')).toBe(await detail.getAttribute('id'));
+            await expect(button).toHaveAttribute('aria-controls', await detail.getAttribute('id'));
+
             const result = await page.evaluate(() => ({ calls: window.calls, before: window.before, unsafe: Boolean(window.unsafe) }));
 
             expect(result.calls).toEqual(result.before);
@@ -185,13 +212,18 @@ test.describe('Table responsive details', () => {
         test('keeps selection independent and excludes user-hidden columns from details', async ({ page }) => {
             await page.evaluate(() => {
                 $.setStyle('#host', { width: '240px' });
-                window.table = window.createResponsive({ selection: 'multiple', buttons: [{ type: 'columns' }] });
+                window.table = window.createResponsive({
+                    selection: 'multiple',
+                    buttons: [{ type: 'columns' }],
+                });
                 window.table.setSelectedIds(['Alice']);
             });
             await page.getByRole('button', { name: 'Show details for row Alice', exact: true }).click();
             await expect(page.locator('.table-details td')).toHaveAttribute('colspan', '3');
             await page.getByRole('button', { name: 'Columns', exact: true }).click();
+
             const picker = page.getByRole('group', { name: 'Columns' });
+
             await expect(picker.getByRole('checkbox', { name: 'Team', exact: true })).toBeChecked();
             await picker.getByRole('checkbox', { name: 'Team', exact: true }).uncheck();
             await expect(page.locator('.table-details dt')).toHaveText(['Score']);
@@ -241,7 +273,9 @@ test.describe('Table responsive details', () => {
                 $.setStyle('#host', { width: '240px' });
                 window.table = window.createResponsive();
             });
+
             const button = page.getByRole('button', { name: /details for row Alice$/ });
+
             await button.click();
             await page.evaluate(() => $.setStyle('#host', { width: '430px' }));
             await expect(page.locator('.table-details dt')).toHaveText(['Score']);
@@ -259,7 +293,9 @@ test.describe('Table responsive details', () => {
                 window.createResponsive({ data: [['Alice', 'x'.repeat(500), 90]] });
             });
             await page.getByRole('button', { name: 'Show details for row Alice', exact: true }).click();
+
             const value = page.locator('.table-details dd').first();
+
             await expect(value).toHaveText('x'.repeat(500));
             await expect(value).toHaveCSS('overflow-wrap', 'anywhere');
             expect(await value.evaluate((node) => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
@@ -307,7 +343,11 @@ test.describe('Table responsive details', () => {
                     columns: [
                         { class: 'test-cell', responsivePriority: null },
                         { class: 'test-cell', responsivePriority: 1 },
-                        { class: 'test-cell', responsivePriority: 2, format: (value) => `<strong>${value}</strong>` },
+                        {
+                            class: 'test-cell',
+                            responsivePriority: 2,
+                            format: (value) => `<strong>${value}</strong>`,
+                        },
                     ],
                     renderDetails(row, context) {
                         window.calls.push({ row, ...context, receiver: this === window.table });
@@ -322,7 +362,9 @@ test.describe('Table responsive details', () => {
             await expect(page.locator('.table-details strong')).toHaveText('90');
             await expect(page.locator('.table-details [onerror], .table-details dl')).toHaveCount(0);
             expect(await page.evaluate(() => window.calls)).toEqual([{
-                row: ['Alice', 'Engineering', 90], rowIndex: 1, receiver: true,
+                row: ['Alice', 'Engineering', 90],
+                rowIndex: 1,
+                receiver: true,
                 columns: [
                     { column: 1, data: 1, title: 'Team & group', html: 'Engineering' },
                     { column: 2, data: 2, title: 'Score', html: '<strong>90</strong>' },
@@ -353,7 +395,9 @@ test.describe('Table responsive details', () => {
             await expect(page.locator('.table-details p')).toHaveText('New team / 95');
             await page.evaluate(() => $.setStyle('#host', { width: '430px' }));
             await expect(page.locator('.table-details p')).toHaveText('95');
+
             const calls = await page.evaluate(() => window.calls);
+
             await page.evaluate(async () => {
                 $.setStyle('#host', { width: '440px' });
                 await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
@@ -381,7 +425,9 @@ test.describe('Table responsive details', () => {
             expect(await page.evaluate(() => window.calls)).toBe(0);
             await page.evaluate(() => {
                 window.table.dispose();
-                window.table = window.createResponsive({ renderDetails: () => '' });
+                window.table = window.createResponsive({
+                    renderDetails: () => '',
+                });
             });
             await page.getByRole('button', { name: 'Show details for row Alice', exact: true }).click();
             await expect(page.locator('.table-details td')).toBeEmpty();
@@ -429,13 +475,16 @@ test.describe('Table responsive details', () => {
                         window.createResponsive({
                             renderDetails() {
                                 if (output === 'node') return document.createElement('div');
+
                                 if (output === 'promise') return Promise.resolve('<p>Async</p>');
 
                                 return null;
                             },
                         });
                     }, output);
+
                     const error = page.waitForEvent('pageerror');
+
                     await page.getByRole('button', { name: 'Show details for row Alice', exact: true }).click();
                     expect((await error).message).toBe('Details renderer must return an HTML string.');
                     await expect(page.locator('.table-details')).toHaveCount(0);
@@ -448,18 +497,23 @@ test.describe('Table responsive details', () => {
         test('stops detail rendering when a display resolver disposes the table', async ({ page }) => {
             await page.evaluate(() => {
                 $.setStyle('#host', { width: '240px' });
-                let dispose = false;
-                window.createResponsive({ columns: [
-                    { class: 'test-cell', responsivePriority: null }, { class: 'test-cell' },
-                    {
-                        class: 'test-cell',
-                        render(value, { purpose }) {
-                            if (dispose && purpose === 'display') this.dispose();
 
-                            return value;
+                let dispose = false;
+
+                window.createResponsive({
+                    columns: [
+                        { class: 'test-cell', responsivePriority: null },
+                        { class: 'test-cell' },
+                        {
+                            class: 'test-cell',
+                            render(value, { purpose }) {
+                                if (dispose && purpose === 'display') this.dispose();
+
+                                return value;
+                            },
                         },
-                    },
-                ] });
+                    ],
+                });
                 dispose = true;
             });
             await page.getByRole('button', { name: 'Show details for row Alice', exact: true }).click();
@@ -470,21 +524,26 @@ test.describe('Table responsive details', () => {
         test('abandons obsolete details when a renderer replaces the dataset', async ({ page }) => {
             await page.evaluate(() => {
                 $.setStyle('#host', { width: '240px' });
-                let replace = false;
-                window.table = window.createResponsive({ columns: [
-                    { class: 'test-cell', responsivePriority: null }, { class: 'test-cell' },
-                    {
-                        class: 'test-cell',
-                        render(value, { purpose }) {
-                            if (replace && purpose === 'display') {
-                                replace = false;
-                                this.setData([['Newer', 'New team', 1]]);
-                            }
 
-                            return value;
+                let replace = false;
+
+                window.table = window.createResponsive({
+                    columns: [
+                        { class: 'test-cell', responsivePriority: null },
+                        { class: 'test-cell' },
+                        {
+                            class: 'test-cell',
+                            render(value, { purpose }) {
+                                if (replace && purpose === 'display') {
+                                    replace = false;
+                                    this.setData([['Newer', 'New team', 1]]);
+                                }
+
+                                return value;
+                            },
                         },
-                    },
-                ] });
+                    ],
+                });
                 replace = true;
             });
             await page.getByRole('button', { name: 'Show details for row Alice', exact: true }).click();
@@ -496,8 +555,11 @@ test.describe('Table responsive details', () => {
         test('keeps responsive layouts and expansion independent across instances', async ({ page }) => {
             await page.evaluate(() => {
                 const clone = $.clone('#table')[0];
+
                 $.setAttribute(clone, { id: 'second' });
+
                 const host = $.create('div', { attributes: { id: 'second-host' }, style: { width: '240px' } });
+
                 $.append(document.body, host);
                 $.append(host, clone);
                 $.append(document.head, $.create('style', {
@@ -505,9 +567,13 @@ test.describe('Table responsive details', () => {
                 }));
                 window.table = window.createResponsive();
                 window.second = UI.Table.init(clone, {
-                    data: [['Other', 'Different team', 10]], rowId: 0, responsive: true,
+                    data: [['Other', 'Different team', 10]],
+                    rowId: 0,
+                    responsive: true,
                     columns: [
-                        { class: 'test-cell', responsivePriority: null }, { class: 'test-cell' }, { class: 'test-cell' },
+                        { class: 'test-cell', responsivePriority: null },
+                        { class: 'test-cell' },
+                        { class: 'test-cell' },
                     ],
                 });
             });
@@ -522,26 +588,30 @@ test.describe('Table responsive details', () => {
         });
 
         test('disconnects observation, cancels queued layout work, and restores source markup', async ({ page }) => {
-            const result = await page.evaluate(async () => {
-                const original = $.getHtml('#table');
+            const original = await page.locator('#table').innerHTML();
+            const disconnected = await page.evaluate(async () => {
                 let disconnected = 0;
                 const NativeObserver = window.ResizeObserver;
+
                 window.ResizeObserver = class extends NativeObserver {
                     disconnect() {
                         disconnected++;
                         super.disconnect();
                     }
                 };
+
                 const table = window.createResponsive();
+
                 $.setStyle('#host', { width: '240px' });
                 table.dispose();
                 await new Promise(requestAnimationFrame);
                 await new Promise(requestAnimationFrame);
 
-                return { disconnected, restored: $.getHtml('#table') === original };
+                return disconnected;
             });
 
-            expect(result).toEqual({ disconnected: 1, restored: true });
+            expect(disconnected).toBe(1);
+            await expect(page.locator('#table')).toHaveJSProperty('innerHTML', original);
             await expect(page.locator('.table-details')).toHaveCount(0);
         });
     });

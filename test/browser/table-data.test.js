@@ -23,6 +23,7 @@ test.describe('Table remote results', () => {
                         entry.resolve = resolve;
                         entry.reject = reject;
                     });
+
                     pending.cancel = () => {
                         $.setDataset(document.body, 'cancelled', ($.getDataset(document.body, 'cancelled') || 0) + 1);
                     };
@@ -141,7 +142,9 @@ test.describe('Table remote results', () => {
         test('sends copied descriptors with existing request fields and omits cleared filters', async ({ page }) => {
             await page.evaluate(() => {
                 window.startRemote({ columns: [{ name: 'score', type: 'number' }] });
+
                 const filters = [{ column: 0, operator: 'between', value: [1, 3] }];
+
                 $('#table').table('setFilters', filters);
                 $('#table').table('search', 'score');
                 filters[0].value[0] = 100;
@@ -248,6 +251,7 @@ test.describe('Table remote results', () => {
         test('coalesces rapid searches and resets the offset', async ({ page }) => {
             await page.evaluate(() => {
                 const table = window.startRemote();
+
                 table.search('a');
                 table.search('ab');
                 table.search('abc');
@@ -267,8 +271,14 @@ test.describe('Table remote results', () => {
 
     test.describe('errors and retry', () => {
         for (const { name, response } of [
-            { name: 'filtered count exceeds total', response: { results: [['One']], total: 0, filtered: 1 } },
-            { name: 'results exceed page length', response: { results: [['One'], ['Two'], ['Three']], total: 3, filtered: 3 } },
+            {
+                name: 'filtered count exceeds total',
+                response: { results: [['One']], total: 0, filtered: 1 },
+            },
+            {
+                name: 'results exceed page length',
+                response: { results: [['One'], ['Two'], ['Three']], total: 3, filtered: 3 },
+            },
             { name: 'total is fractional', response: { results: [], total: 1.5, filtered: 0 } },
         ]) {
             test(`rejects a response when ${name}`, async ({ page }) => {
@@ -276,7 +286,9 @@ test.describe('Table remote results', () => {
                     $.addEvent('#table', 'error.ui.table', (event) => {
                         $.setDataset(document.body, 'error', event.detail.error.name);
                     });
-                    window.startRemote({ getResults: () => response });
+                    window.startRemote({
+                        getResults: () => response,
+                    });
                 }, response);
 
                 await page.clock.runFor(25);
@@ -313,14 +325,21 @@ test.describe('Table remote results', () => {
                     $.addEvent('#table', 'error.ui.table', (event) => {
                         $.setDataset(document.body, 'error', event.detail.error.name);
                     });
+
                     let first = true;
+
                     window.startRemote({
                         getResults() {
                             if (!first) {
-                                return { results: [['Recovered']], total: 1, filtered: 1 };
+                                return {
+                                    results: [['Recovered']],
+                                    total: 1,
+                                    filtered: 1,
+                                };
                             }
 
                             first = false;
+
                             return fail();
                         },
                     });
@@ -385,10 +404,15 @@ test.describe('Table remote results', () => {
                 const table = window.startRemote({
                     getResults() {
                         if (!first) {
-                            return { results: [['Newest']], total: 1, filtered: 1 };
+                            return {
+                                results: [['Newest']],
+                                total: 1,
+                                filtered: 1,
+                            };
                         }
 
                         first = false;
+
                         return {
                             then() {},
                             cancel() {
@@ -501,6 +525,7 @@ test.describe('Table remote results', () => {
             const state = await page.evaluate(() => {
                 const table = UI.Table.init($.findOne('#table'));
                 const state = table.getState();
+
                 state.search = 'Wanted';
                 state.filters = [{ column: 0, operator: 'contains', value: 'Wanted' }];
                 state.order = [[0, 'desc']];
@@ -518,7 +543,13 @@ test.describe('Table remote results', () => {
             const requests = await page.evaluate(() => window.requests.map((entry) => entry.request));
 
             expect(requests).toHaveLength(2);
-            expect(requests[1]).toMatchObject({ term: 'Wanted', filters: state.filters, order: { 0: { column: 0, dir: 'desc' } }, offset: 2, limit: 1 });
+            expect(requests[1]).toMatchObject({
+                term: 'Wanted',
+                filters: state.filters,
+                order: { 0: { column: 0, dir: 'desc' } },
+                offset: 2,
+                limit: 1,
+            });
             await expect(page.locator('body')).toHaveAttribute('data-cancelled', '1');
 
             await page.evaluate(() => window.requests[1].resolve({ results: [['Wanted']], total: 10, filtered: 4 }));
@@ -534,6 +565,7 @@ test.describe('Table remote results', () => {
         test('publishes a corrected page when restored state exceeds the remote results', async ({ page }) => {
             await page.evaluate(() => {
                 const table = window.startRemote();
+
                 window.pages = [];
                 $.addEvent('#table', 'statechange.ui.table', (event) => window.pages.push(event.detail.state.page));
                 table.setState({ ...table.getState(), page: 5 });
@@ -581,6 +613,7 @@ test.describe('Table remote results', () => {
         test('stops scheduling when a state listener disposes the table', async ({ page }) => {
             await page.evaluate(() => {
                 const table = window.startRemote();
+
                 $.addEvent('#table', 'statechange.ui.table', () => table.dispose());
                 table.setState({ ...table.getState(), search: 'Changed' });
             });
@@ -594,7 +627,10 @@ test.describe('Table remote results', () => {
 
     test.describe('row identity and selection', () => {
         test('retains unloaded IDs across pages and selection changes do not load data', async ({ page }) => {
-            await page.evaluate(() => window.table = window.startRemote({ rowId: 0, selection: 'multiple' }));
+            await page.evaluate(() => window.table = window.startRemote({
+                rowId: 0,
+                selection: 'multiple',
+            }));
             await page.clock.runFor(25);
             await page.evaluate(() => window.requests[0].resolve({ results: [['One'], ['Two']], total: 4, filtered: 4 }));
             await expect(page.locator('tbody tr')).toHaveCount(2);
@@ -605,9 +641,11 @@ test.describe('Table remote results', () => {
             await page.clock.runFor(25);
             await page.evaluate(() => window.requests[1].resolve({ results: [['Three'], ['Four']], total: 4, filtered: 4 }));
             await expect(page.getByRole('checkbox', { name: 'Select row Three', exact: true })).toBeVisible();
+
             const result = await page.evaluate(() => {
                 window.table.selectRows();
                 window.table.deselectRows();
+
                 const errors = [];
 
                 for (const method of ['selectRows', 'deselectRows']) {
@@ -621,15 +659,19 @@ test.describe('Table remote results', () => {
                 }
 
                 return {
-                    selected: window.table.getSelectedIds(), errors, requests: window.requests.length,
-                    absent: window.table.getRowById('One'), loaded: window.table.getRowById('Three'),
+                    selected: window.table.getSelectedIds(),
+                    errors,
+                    requests: window.requests.length,
+                    absent: window.table.getRowById('One'),
+                    loaded: window.table.getRowById('Three'),
                 };
             });
 
-            expect(result).toEqual({
-                selected: ['One', 'Unloaded'], errors: Array(4).fill('RangeError'), requests: 2,
-                absent: null, loaded: ['Three'],
-            });
+            expect(result.selected).toEqual(['One', 'Unloaded']);
+            expect(result.errors).toEqual(Array(4).fill('RangeError'));
+            expect(result.requests).toBe(2);
+            expect(result.absent).toBeNull();
+            expect(result.loaded).toEqual(['Three']);
             await page.clock.runFor(25);
             expect(await page.evaluate(() => window.requests.length)).toBe(2);
         });
@@ -638,7 +680,10 @@ test.describe('Table remote results', () => {
             await page.evaluate(() => {
                 window.errors = [];
                 $.addEvent('#table', 'error.ui.table', (event) => window.errors.push(event.detail.error.name));
-                window.table = window.startRemote({ rowId: 0, selection: 'multiple' });
+                window.table = window.startRemote({
+                    rowId: 0,
+                    selection: 'multiple',
+                });
             });
             await page.clock.runFor(25);
             await page.evaluate(() => window.requests[0].resolve({ results: [['One']], total: 1, filtered: 1 }));
@@ -650,16 +695,27 @@ test.describe('Table remote results', () => {
             await page.clock.runFor(25);
             await page.evaluate(() => window.requests[1].resolve({ results: [['Duplicate'], ['Duplicate']], total: 2, filtered: 2 }));
             await expect(page.locator('#table')).toHaveAttribute('aria-busy', 'false');
+
             const result = await page.evaluate(() => ({
-                row: window.table.getRowById('One'), absent: window.table.getRowById('Duplicate'),
-                selected: window.table.getSelectedIds(), total: window.table.info().total, errors: window.errors,
+                row: window.table.getRowById('One'),
+                absent: window.table.getRowById('Duplicate'),
+                selected: window.table.getSelectedIds(),
+                total: window.table.info().total,
+                errors: window.errors,
             }));
 
-            expect(result).toEqual({ row: ['One'], absent: null, selected: ['One'], total: 1, errors: ['TypeError'] });
+            expect(result.row).toEqual(['One']);
+            expect(result.absent).toBeNull();
+            expect(result.selected).toEqual(['One']);
+            expect(result.total).toBe(1);
+            expect(result.errors).toEqual(['TypeError']);
         });
 
         test('ignores stale identities and invalidates a pending response on keyed removal', async ({ page }) => {
-            await page.evaluate(() => window.table = window.startRemote({ rowId: 0, selection: 'multiple' }));
+            await page.evaluate(() => window.table = window.startRemote({
+                rowId: 0,
+                selection: 'multiple',
+            }));
             await page.clock.runFor(25);
             await page.evaluate(() => window.table.reload());
             await page.clock.runFor(25);
@@ -676,16 +732,25 @@ test.describe('Table remote results', () => {
                 window.requests[2].resolve({ results: [['Current']], total: 1, filtered: 1 });
             });
             await page.clock.runFor(25);
+
             const result = await page.evaluate(() => ({
-                stale: window.table.getRowById('Stale'), current: window.table.getRowById('Current'),
-                selected: window.table.getSelectedIds(), total: window.table.info().total,
+                stale: window.table.getRowById('Stale'),
+                current: window.table.getRowById('Current'),
+                selected: window.table.getSelectedIds(),
+                total: window.table.info().total,
             }));
 
-            expect(result).toEqual({ stale: null, current: null, selected: ['Unloaded'], total: 0 });
+            expect(result.stale).toBeNull();
+            expect(result.current).toBeNull();
+            expect(result.selected).toEqual(['Unloaded']);
+            expect(result.total).toBe(0);
         });
 
         test('notifies selection pruning before loading the preceding page after removal', async ({ page }) => {
-            await page.evaluate(() => window.table = window.startRemote({ rowId: 0, selection: 'multiple' }));
+            await page.evaluate(() => window.table = window.startRemote({
+                rowId: 0,
+                selection: 'multiple',
+            }));
             await page.clock.runFor(25);
             await page.evaluate(() => window.requests[0].resolve({ results: [['One'], ['Two']], total: 3, filtered: 3 }));
             await expect(page.locator('tbody tr')).toHaveCount(2);
@@ -693,18 +758,23 @@ test.describe('Table remote results', () => {
             await page.clock.runFor(25);
             await page.evaluate(() => window.requests[1].resolve({ results: [['Three']], total: 3, filtered: 3 }));
             await expect(page.getByRole('checkbox', { name: 'Select row Three', exact: true })).toBeVisible();
+
             const result = await page.evaluate(() => {
                 window.table.setSelectedIds(['Three']);
+
                 const events = [];
+
                 $.addEvent('#table', 'selectionchange.ui.table', (event) => events.push(event.detail));
                 window.table.removeRowById('Three');
 
-                return { events, selected: window.table.getSelectedIds() };
+                return {
+                    events,
+                    selected: window.table.getSelectedIds(),
+                };
             });
 
-            expect(result).toEqual({
-                events: [{ selectedIds: [], addedIds: [], removedIds: ['Three'] }], selected: [],
-            });
+            expect(result.events).toEqual([{ selectedIds: [], addedIds: [], removedIds: ['Three'] }]);
+            expect(result.selected).toEqual([]);
             await expect(page.getByRole('checkbox', { name: 'Select all rows on this page' })).toBeDisabled();
             await expect(page.getByRole('checkbox', { name: 'Select row Three', exact: true })).toBeDisabled();
             await page.clock.runFor(25);
@@ -714,6 +784,7 @@ test.describe('Table remote results', () => {
         test('abandons a response when its identity resolver starts a newer request', async ({ page }) => {
             await page.evaluate(() => {
                 let interrupt = true;
+
                 window.table = window.startRemote({
                     rowId(row) {
                         if (interrupt) {
@@ -741,12 +812,15 @@ test.describe('Table remote results', () => {
             await page.evaluate(() => window.requests[0].resolve({ results: [['One']], total: 1, filtered: 1 }));
             await expect(page.locator('tbody td')).toHaveText('One');
             await page.getByRole('button', { name: 'Columns' }).click();
+
             const input = page.getByRole('group', { name: 'Columns' }).getByRole('checkbox', { name: 'Name' });
+
             await input.uncheck();
             await page.clock.runFor(25);
             expect(await page.evaluate(() => window.requests.length)).toBe(1);
             await page.evaluate(() => {
                 const state = window.table.getState();
+
                 state.columns[0].visible = true;
                 window.table.setState(state);
             });
@@ -764,7 +838,9 @@ test.describe('Table remote results', () => {
         test('resizes and expands loaded records without requests, preserving expansion only for current IDs', async ({ page }) => {
             await page.evaluate(() => {
                 $.append('thead tr', $.create('th', { text: 'Team' }));
+
                 const host = $.create('div', { attributes: { id: 'responsive-host' }, style: { width: '700px' } });
+
                 $.before('#table', host);
                 $.append(host, $.findOne('#table'));
                 $.append(document.head, $.create('style', {

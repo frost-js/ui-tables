@@ -12,16 +12,19 @@ test.describe('Table column picker', () => {
                 columns: [{}, { visible: false }],
                 buttons: [{ type: 'columns', text: 'Choose fields', columns: [1, 0] }],
             }));
+
             const button = page.getByRole('button', { name: 'Choose fields' });
+
             await expect(button).toHaveAttribute('aria-expanded', 'false');
             await button.click();
+
             const picker = page.getByRole('group', { name: 'Choose fields' });
 
             await expect(picker.locator('label')).toHaveText(['Score', 'Name']);
             await expect(picker.getByRole('checkbox', { name: 'Score' })).not.toBeChecked();
             await expect(picker.getByRole('checkbox', { name: 'Name' })).toBeChecked();
             await expect(picker.getByRole('checkbox')).toHaveCount(2);
-            expect(await button.getAttribute('aria-controls')).toBe(await picker.getAttribute('id'));
+            await expect(button).toHaveAttribute('aria-controls', await picker.getAttribute('id'));
         });
 
         test('uses text labels and localized fallbacks without inserting heading markup', async ({ page }) => {
@@ -33,6 +36,7 @@ test.describe('Table column picker', () => {
                 });
             });
             await page.getByRole('button', { name: 'Fields' }).click();
+
             const picker = page.getByRole('group', { name: 'Fields' });
 
             await expect(picker.locator('label')).toHaveText(['Name & team', 'Field 2']);
@@ -47,20 +51,17 @@ test.describe('Table column picker', () => {
             { columns: ['1'], error: 'RangeError' },
         ]) {
             test(`rejects invalid column selection ${JSON.stringify(columns)} and cleans up`, async ({ page }) => {
+                const original = await page.locator('#table').innerHTML();
                 const result = await page.evaluate((columns) => {
-                    const original = $.getHtml('#table');
-                    let error;
-
                     try {
                         window.createTable({ buttons: [{ type: 'columns' }, { type: 'columns', columns }] });
                     } catch (caught) {
-                        error = caught.name;
+                        return caught.name;
                     }
-
-                    return { error, restored: $.getHtml('#table') === original };
                 }, columns);
 
-                expect(result).toEqual({ error, restored: true });
+                expect(result).toBe(error);
+                await expect(page.locator('#table')).toHaveJSProperty('innerHTML', original);
                 await expect(page.locator('.dropdown-menu')).toHaveCount(0);
             });
         }
@@ -70,7 +71,9 @@ test.describe('Table column picker', () => {
                 buttons: [
                     { type: 'columns', columns: [], text: 'Empty' },
                     {
-                        type: 'columns', columns: 'ignored', text: 'Custom',
+                        type: 'columns',
+                        columns: 'ignored',
+                        text: 'Custom',
                         callback() {
                             this.hideColumn(0);
                         },
@@ -98,38 +101,62 @@ test.describe('Table column picker', () => {
                 $.addEvent('#table', 'processing.ui.table', () => window.events.processing++);
             });
             await page.getByRole('button', { name: 'Columns' }).click();
-            expect(await page.evaluate(() => window.events)).toEqual({ draw: 0, state: 0, processing: 0 });
+            expect(await page.evaluate(() => window.events)).toEqual({
+                draw: 0,
+                state: 0,
+                processing: 0,
+            });
+
             const input = page.getByRole('group', { name: 'Columns' }).getByRole('checkbox', { name: 'Name' });
+
             await input.focus();
             await input.press('Space');
             await expect(input).toBeFocused();
             await expect(input).not.toBeChecked();
             await expect(page.getByRole('group', { name: 'Columns' })).toBeVisible();
+
             const result = await page.evaluate(() => {
                 const expected = window.before;
+
                 expected.columns[0].visible = false;
 
-                return { events: window.events, state: window.table.getState(), expected, exported: window.table.getExportData() };
+                return {
+                    events: window.events,
+                    state: window.table.getState(),
+                    expected,
+                    exported: window.table.getExportData(),
+                };
             });
 
-            expect(result.events).toEqual({ draw: 1, state: 1, processing: 0 });
+            expect(result.events).toEqual({
+                draw: 1,
+                state: 1,
+                processing: 0,
+            });
             expect(result.state).toEqual(result.expected);
-            expect(result.exported).toEqual({ headings: ['Score'], rows: [[2], [1]] });
+            expect(result.exported).toEqual({
+                headings: ['Score'],
+                rows: [[2], [1]],
+            });
         });
 
         test('synchronizes multiple pickers through API changes and state restoration', async ({ page }) => {
             await page.evaluate(() => {
-                window.table = window.createTable({ buttons: [
-                    { type: 'columns', text: 'First picker', columns: [0] },
-                    { type: 'columns', text: 'Second picker' },
-                ] });
+                window.table = window.createTable({
+                    buttons: [
+                        { type: 'columns', text: 'First picker', columns: [0] },
+                        { type: 'columns', text: 'Second picker' },
+                    ],
+                });
                 window.saved = window.table.getState();
                 window.table.hideColumn(0);
             });
             await page.getByRole('button', { name: 'First picker', exact: true }).click();
             await expect(page.getByRole('group', { name: 'First picker', exact: true }).getByRole('checkbox')).not.toBeChecked();
             await page.getByRole('button', { name: 'Second picker', exact: true }).click();
+
             const input = page.getByRole('group', { name: 'Second picker', exact: true }).getByRole('checkbox', { name: 'Name' });
+
             await input.focus();
             await page.evaluate(() => window.table.setState(window.saved));
 
@@ -143,11 +170,17 @@ test.describe('Table column picker', () => {
         test('can hide every column and restore them, including footer and empty-result spans', async ({ page }) => {
             await page.evaluate(() => {
                 $.append('#table', $.create('tfoot', { html: '<tr><td colspan="2">Total</td></tr>' }));
-                window.table = window.createTable({ rowId: 1, selection: 'multiple', buttons: [{ type: 'columns' }] });
+                window.table = window.createTable({
+                    rowId: 1,
+                    selection: 'multiple',
+                    buttons: [{ type: 'columns' }],
+                });
                 window.table.search('missing');
             });
             await page.getByRole('button', { name: 'Columns' }).click();
+
             const picker = page.getByRole('group', { name: 'Columns' });
+
             await picker.getByRole('checkbox', { name: 'Name' }).uncheck();
             await expect(page.locator('tfoot td').last()).toHaveAttribute('colspan', '1');
             await expect(page.locator('tbody td')).toHaveAttribute('colspan', '2');
@@ -163,32 +196,48 @@ test.describe('Table column picker', () => {
         });
 
         test('maps footer row spans to original columns and restores original markup on disposal', async ({ page }) => {
-            const result = await page.evaluate(() => {
+            await page.evaluate(() => {
                 $.append('#table', $.create('tfoot', {
                     html: '<tr><td rowspan="2">Name</td><td>First score</td></tr><tr><td>Second score</td></tr>',
                 }));
-                const original = $.getHtml('#table');
-                const table = window.createTable({ buttons: [{ type: 'columns' }] });
-                table.hideColumn(1);
-                const hidden = $.find('tfoot td').map((cell) => cell.hidden);
-                table.showColumn(1);
-                const restored = $.find('tfoot td').every((cell) => !cell.hidden);
-                table.dispose();
-
-                return { hidden, restored, original: $.getHtml('#table') === original };
             });
 
-            expect(result).toEqual({ hidden: [false, true, true], restored: true, original: true });
+            const original = await page.locator('#table').innerHTML();
+
+            await page.evaluate(() => {
+                window.table = window.createTable({ buttons: [{ type: 'columns' }] });
+                window.table.hideColumn(1);
+            });
+
+            const cells = page.locator('tfoot td');
+
+            await expect(cells.nth(0)).toBeVisible();
+            await expect(cells.nth(1)).toBeHidden();
+            await expect(cells.nth(2)).toBeHidden();
+
+            await page.evaluate(() => window.table.showColumn(1));
+
+            await expect(cells.nth(0)).toBeVisible();
+            await expect(cells.nth(1)).toBeVisible();
+            await expect(cells.nth(2)).toBeVisible();
+
+            await page.evaluate(() => window.table.dispose());
+
+            await expect(page.locator('#table')).toHaveJSProperty('innerHTML', original);
         });
     });
 
     test.describe('keyboard and lifecycle', () => {
         test('opens with an arrow key, toggles with Space, and restores focus with Escape', async ({ page }) => {
             await page.evaluate(() => window.createTable({ buttons: [{ type: 'columns' }] }));
+
             const button = page.getByRole('button', { name: 'Columns' });
+
             await button.focus();
             await button.press('ArrowDown');
+
             const input = page.getByRole('group', { name: 'Columns' }).getByRole('checkbox', { name: 'Name' });
+
             await expect(input).toBeFocused();
             await expect(button).toHaveAttribute('aria-expanded', 'true');
             await input.press('Space');
@@ -201,12 +250,16 @@ test.describe('Table column picker', () => {
 
         test('dismisses on outside interaction and tabbing out', async ({ page }) => {
             await page.evaluate(() => window.createTable({ buttons: [{ type: 'columns' }] }));
+
             const button = page.getByRole('button', { name: 'Columns' });
+
             await button.click();
             await page.getByRole('searchbox').click();
             await expect(button).toHaveAttribute('aria-expanded', 'false');
             await button.click();
+
             const picker = page.getByRole('group', { name: 'Columns' });
+
             await picker.getByRole('checkbox', { name: 'Score' }).focus();
             await picker.getByRole('checkbox', { name: 'Score' }).press('Tab');
             await expect(button).toHaveAttribute('aria-expanded', 'false');
@@ -215,10 +268,14 @@ test.describe('Table column picker', () => {
         test('isolates instances and releases an open dropdown during disposal', async ({ page }) => {
             await page.evaluate(() => {
                 const clone = $.clone('#table')[0];
+
                 $.setAttribute(clone, { id: 'second' });
                 $.append(document.body, clone);
                 window.table = window.createTable({ buttons: [{ type: 'columns', text: 'First fields' }] });
-                window.second = UI.Table.init(clone, { data: [['Other', 9]], buttons: [{ type: 'columns', text: 'Second fields' }] });
+                window.second = UI.Table.init(clone, {
+                    data: [['Other', 9]],
+                    buttons: [{ type: 'columns', text: 'Second fields' }],
+                });
             });
             await page.getByRole('button', { name: 'First fields' }).click();
             await page.getByRole('group', { name: 'First fields' }).getByRole('checkbox', { name: 'Name' }).uncheck();
@@ -237,6 +294,7 @@ test.describe('Table column picker', () => {
         test('stops safely when a visibility notification disposes the table', async ({ page }) => {
             await page.evaluate(() => {
                 const table = window.createTable({ buttons: [{ type: 'columns' }] });
+
                 $.addEvent('#table', 'statechange.ui.table', () => table.dispose());
             });
             await page.getByRole('button', { name: 'Columns' }).click();

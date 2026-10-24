@@ -8,7 +8,10 @@ test.describe('Table state', () => {
     test.describe('#getState', () => {
         test('returns a serializable view without data or callbacks', async ({ page }) => {
             const state = await page.evaluate(() => {
-                const table = window.createTable({ columns: [{ name: 'name' }, { name: 'score', type: 'number' }] });
+                const table = window.createTable({
+                    columns: [{ name: 'name' }, { name: 'score', type: 'number' }],
+                });
+
                 table.setRowFilter(() => true);
 
                 return JSON.parse(JSON.stringify(table.getState()));
@@ -28,9 +31,12 @@ test.describe('Table state', () => {
         test('returns independent filters, bounds, order, and column objects', async ({ page }) => {
             const result = await page.evaluate(() => {
                 const table = window.createTable({ columns: [{}, { type: 'number' }] });
+
                 table.setFilters([{ column: 1, operator: 'between', value: [1, 3] }]);
+
                 const expected = table.getState();
                 const state = table.getState();
+
                 state.filters[0].value[0] = 99;
                 state.filters[0].column = 0;
                 state.filters.push({ column: 0, operator: 'equals', value: 'Missing' });
@@ -38,7 +44,10 @@ test.describe('Table state', () => {
                 state.columns[0].visible = false;
                 state.columns.pop();
 
-                return { expected, actual: table.getState() };
+                return {
+                    expected,
+                    actual: table.getState(),
+                };
             });
 
             expect(result.actual).toEqual(result.expected);
@@ -46,11 +55,19 @@ test.describe('Table state', () => {
 
         test('represents disabled features with an empty order and unpaged values', async ({ page }) => {
             const result = await page.evaluate(() => {
-                const table = window.createTable({ paging: false, ordering: false, searching: false });
+                const table = window.createTable({
+                    paging: false,
+                    ordering: false,
+                    searching: false,
+                });
                 const state = table.getState();
+
                 table.setState(JSON.parse(JSON.stringify(state)));
 
-                return { state, restored: table.getState() };
+                return {
+                    state,
+                    restored: table.getState(),
+                };
             });
 
             expect(result.state).toMatchObject({ length: null, page: 1, order: [], search: '', filters: [] });
@@ -63,6 +80,7 @@ test.describe('Table state', () => {
             const result = await page.evaluate(() => {
                 const table = window.createTable({ columns: [{}, { type: 'number' }] });
                 const state = table.getState();
+
                 state.search = 'A';
                 state.filters = [{ column: 1, operator: 'gte', value: 1 }];
                 state.order = [[1, 'desc']];
@@ -74,6 +92,7 @@ test.describe('Table state', () => {
                 let processing = 0;
                 let draws = 0;
                 const notifications = [];
+
                 $.addEvent('#table', 'processing.ui.table', () => processing++);
                 $.addEvent('#table', 'draw.ui.table', () => draws++);
                 $.addEvent('#table', 'statechange.ui.table', (event) => notifications.push(event.detail.state));
@@ -82,7 +101,13 @@ test.describe('Table state', () => {
                 state.order[0][1] = 'asc';
                 state.columns[0].visible = true;
 
-                return { expected, actual: table.getState(), processing, draws, notifications };
+                return {
+                    expected,
+                    actual: table.getState(),
+                    processing,
+                    draws,
+                    notifications,
+                };
             });
 
             expect(result.actual).toEqual(result.expected);
@@ -99,15 +124,24 @@ test.describe('Table state', () => {
         test('clamps a saved page after data shrinks and retains the active row predicate', async ({ page }) => {
             const result = await page.evaluate(() => {
                 const table = window.createTable();
+
                 table.page(2);
+
                 const saved = JSON.parse(JSON.stringify(table.getState()));
+
                 table.setRowFilter((row) => row[1] > 1);
                 table.setData([['Excluded', 1], ['Kept', 2]]);
+
                 const notifications = [];
+
                 $.addEvent('#table', 'statechange.ui.table', (event) => notifications.push(event.detail.state));
                 table.setState(saved);
 
-                return { page: table.getState().page, rows: table.getData(), notifications };
+                return {
+                    page: table.getState().page,
+                    rows: table.getData(),
+                    notifications,
+                };
             });
 
             expect(result.page).toBe(1);
@@ -126,6 +160,7 @@ test.describe('Table state', () => {
             await page.evaluate(() => {
                 const table = UI.Table.init($.findOne('#table'));
                 const state = table.getState();
+
                 state.search = 'A';
                 table.setState(state);
             });
@@ -140,24 +175,53 @@ test.describe('Table state', () => {
         for (const { name, patch, error } of [
             { name: 'version', patch: { version: 2 }, error: 'TypeError' },
             { name: 'search', patch: { search: null }, error: 'TypeError' },
-            { name: 'filters', patch: { filters: [{ column: 9, operator: 'equals', value: 'A' }] }, error: 'RangeError' },
+            {
+                name: 'filters',
+                patch: { filters: [{ column: 9, operator: 'equals', value: 'A' }] },
+                error: 'RangeError',
+            },
             { name: 'order', patch: { order: [[0, 'invalid']] }, error: 'TypeError' },
             { name: 'length', patch: { length: 0 }, error: 'RangeError' },
             { name: 'numeric string length', patch: { length: '2' }, error: 'RangeError' },
             { name: 'page', patch: { page: 0 }, error: 'RangeError' },
-            { name: 'offset overflow', patch: { page: Number.MAX_SAFE_INTEGER, length: 2 }, error: 'RangeError' },
+            {
+                name: 'offset overflow',
+                patch: { page: Number.MAX_SAFE_INTEGER, length: 2 },
+                error: 'RangeError',
+            },
             { name: 'column count', patch: { columns: [] }, error: 'TypeError' },
-            { name: 'column identity', patch: { columns: [{ data: '0', name: null, visible: true }, { data: 1, name: null, visible: true }] }, error: 'TypeError' },
-            { name: 'column name', patch: { columns: [{ data: 0, name: 'renamed', visible: true }, { data: 1, name: null, visible: true }] }, error: 'TypeError' },
-            { name: 'visibility', patch: { columns: [{ data: 0, name: null, visible: 'false' }, { data: 1, name: null, visible: true }] }, error: 'TypeError' },
+            {
+                name: 'column identity',
+                patch: {
+                    columns: [{ data: '0', name: null, visible: true }, { data: 1, name: null, visible: true }],
+                },
+                error: 'TypeError',
+            },
+            {
+                name: 'column name',
+                patch: {
+                    columns: [{ data: 0, name: 'renamed', visible: true }, { data: 1, name: null, visible: true }],
+                },
+                error: 'TypeError',
+            },
+            {
+                name: 'visibility',
+                patch: {
+                    columns: [{ data: 0, name: null, visible: 'false' }, { data: 1, name: null, visible: true }],
+                },
+                error: 'TypeError',
+            },
         ]) {
             test(`rejects an invalid ${name} without partially restoring state`, async ({ page }) => {
                 const result = await page.evaluate((patch) => {
                     const table = window.createTable();
+
                     table.page(2);
+
                     const before = table.getState();
                     let error;
                     let events = 0;
+
                     $.addEvent('#table', 'processing.ui.table statechange.ui.table', () => events++);
 
                     try {
@@ -166,7 +230,12 @@ test.describe('Table state', () => {
                         error = caught.name;
                     }
 
-                    return { before, after: table.getState(), error, events };
+                    return {
+                        before,
+                        after: table.getState(),
+                        error,
+                        events,
+                    };
                 }, patch);
 
                 expect(result.error).toBe(error);
@@ -178,7 +247,10 @@ test.describe('Table state', () => {
 
         for (const { options, patch } of [
             { options: { searching: false }, patch: { search: 'A' } },
-            { options: { searching: false }, patch: { filters: [{ column: 0, operator: 'equals', value: 'A' }] } },
+            {
+                options: { searching: false },
+                patch: { filters: [{ column: 0, operator: 'equals', value: 'A' }] },
+            },
             { options: { ordering: false }, patch: { order: [[0, 'asc']] } },
             { options: { columns: [{ orderable: false }, {}] }, patch: { order: [[0, 'asc']] } },
             { options: { paging: false }, patch: { length: 2 } },
@@ -205,6 +277,7 @@ test.describe('Table state', () => {
             const result = await page.evaluate(() => {
                 const table = window.createTable();
                 const notifications = [];
+
                 $.addEvent('#table', 'statechange.ui.table', (event) => notifications.push(event.detail.state));
                 table.search('A');
                 table.search('A');
@@ -233,6 +306,7 @@ test.describe('Table state', () => {
             const result = await page.evaluate(() => {
                 const table = window.createTable();
                 let changes = 0;
+
                 $.addEvent('#table', 'statechange.ui.table', (event) => {
                     changes++;
                     event.detail.state.columns[0].visible = false;
@@ -242,7 +316,10 @@ test.describe('Table state', () => {
                 table.removeRow(3, { modified: false });
                 table.removeRow(2, { modified: false });
 
-                return { changes, state: table.getState() };
+                return {
+                    changes,
+                    state: table.getState(),
+                };
             });
 
             expect(result.changes).toBe(2);
@@ -254,6 +331,7 @@ test.describe('Table state', () => {
         test('stops an obsolete draw when a listener restores another state', async ({ page }) => {
             await page.evaluate(() => {
                 const table = window.createTable();
+
                 $.addEvent('#table', 'statechange.ui.table', (event) => {
                     if (event.detail.state.search === 'A') {
                         table.setState({ ...table.getState(), search: 'C' });
@@ -270,6 +348,7 @@ test.describe('Table state', () => {
         test('allows disposal during a state notification', async ({ page }) => {
             const state = await page.evaluate(() => {
                 const table = window.createTable();
+
                 $.addEvent('#table', 'statechange.ui.table', () => table.dispose());
                 table.hideColumn(0);
 

@@ -8,10 +8,13 @@ test.describe('Table export data', () => {
         test('selects ordered scopes without changing the current view', async ({ page }) => {
             const result = await page.evaluate(() => {
                 const table = window.createTable({ columns: [{}, { type: 'number' }] });
+
                 table.setFilters([{ column: 1, operator: 'gte', value: 2 }]);
                 table.order([[1, 'desc']]);
                 table.page(2);
+
                 let events = 0;
+
                 $.addEvent('#table', 'draw.ui.table processing.ui.table page.ui.table', () => events++);
 
                 return {
@@ -23,13 +26,25 @@ test.describe('Table export data', () => {
                 };
             });
 
-            expect(result).toEqual({
-                page: { headings: ['Name', 'Score'], rows: [['B', 2]] },
-                filtered: { headings: ['Name', 'Score'], rows: [['C', 4], ['A', 3], ['B', 2]] },
-                all: { headings: ['Name', 'Score'], rows: [['C', 4], ['A', 3], ['B', 2], ['A', 1]] },
-                info: { start: 2, end: 3, total: 4, filtered: 3 },
-                events: 0,
+            expect(result.page).toEqual({
+                headings: ['Name', 'Score'],
+                rows: [['B', 2]],
             });
+            expect(result.filtered).toEqual({
+                headings: ['Name', 'Score'],
+                rows: [['C', 4], ['A', 3], ['B', 2]],
+            });
+            expect(result.all).toEqual({
+                headings: ['Name', 'Score'],
+                rows: [['C', 4], ['A', 3], ['B', 2], ['A', 1]],
+            });
+            expect(result.info).toEqual({
+                start: 2,
+                end: 3,
+                total: 4,
+                filtered: 3,
+            });
+            expect(result.events).toBe(0);
             await expect(page.locator('tbody td')).toHaveText(['B', '2']);
         });
 
@@ -41,27 +56,40 @@ test.describe('Table export data', () => {
                     length: 5,
                     order: [[1, 'desc']],
                 });
+
                 table.search('café');
                 table.setFilters([{ column: 1, operator: 'gte', value: 3 }]);
                 table.setRowFilter((row) => row[1] < 40);
                 table.page(2);
 
-                return { data: table.getExportData({ scope: 'filtered' }), info: table.info() };
+                return {
+                    data: table.getExportData({ scope: 'filtered' }),
+                    info: table.info(),
+                };
             });
 
             expect(result.data.rows).toEqual(Array.from({ length: 37 }, (_, index) => ['Café', 39 - index]));
-            expect(result.info).toEqual({ start: 5, end: 10, filtered: 37, total: 50 });
+            expect(result.info).toEqual({
+                start: 5,
+                end: 10,
+                filtered: 37,
+                total: 50,
+            });
             await expect(page.getByRole('searchbox')).toHaveValue('café');
         });
 
         test('resolves export values and original row indexes for reordered hidden columns', async ({ page }) => {
             const result = await page.evaluate(() => {
                 $.setHtml('thead th:first-child', '<strong>Name &amp; team</strong>');
+
                 const table = window.createTable({
                     data: [['Café', '02'], ['Zero', 0], ['False', false]],
-                    columns: [{
-                        render: (value, { purpose, rowIndex }) => purpose === 'export' ? `${value}:${rowIndex}` : value,
-                    }, { type: 'number', visible: false }],
+                    columns: [
+                        {
+                            render: (value, { purpose, rowIndex }) => purpose === 'export' ? `${value}:${rowIndex}` : value,
+                        },
+                        { type: 'number', visible: false },
+                    ],
                     order: [[1, 'asc']],
                 });
 
@@ -71,9 +99,13 @@ test.describe('Table export data', () => {
                 };
             });
 
-            expect(result).toEqual({
-                visible: { headings: ['Name & team'], rows: [['Zero:1'], ['Café:0'], ['False:2']] },
-                selected: { headings: ['Score', 'Name & team'], rows: [[0, 'Zero:1'], ['02', 'Café:0'], [false, 'False:2']] },
+            expect(result.visible).toEqual({
+                headings: ['Name & team'],
+                rows: [['Zero:1'], ['Café:0'], ['False:2']],
+            });
+            expect(result.selected).toEqual({
+                headings: ['Score', 'Name & team'],
+                rows: [[0, 'Zero:1'], ['02', 'Café:0'], [false, 'False:2']],
             });
             await expect(page.locator('thead th')).toHaveCount(1);
         });
@@ -82,8 +114,13 @@ test.describe('Table export data', () => {
             const result = await page.evaluate(() => {
                 $.setHtml('tbody', '<tr><td><strong>Alice &amp; Co</strong></td><td>1</td></tr>' +
                     '<tr><td data-export="Robert"><em>Bob</em></td><td data-export="">2</td></tr>');
-                const table = window.createTable({ data: null, length: 1 });
+
+                const table = window.createTable({
+                    data: null,
+                    length: 1,
+                });
                 const data = table.getExportData({ scope: 'all' });
+
                 data.headings[0] = 'Changed';
                 data.rows[0][0] = 'Changed';
                 data.rows.pop();
@@ -91,12 +128,16 @@ test.describe('Table export data', () => {
                 return table.getExportData({ scope: 'all' });
             });
 
-            expect(result).toEqual({ headings: ['Name', 'Score'], rows: [['Alice & Co', '1'], ['Robert', '']] });
+            expect(result).toEqual({
+                headings: ['Name', 'Score'],
+                rows: [['Alice & Co', '1'], ['Robert', '']],
+            });
         });
 
         test('retains input order without sorting and returns headings for no matches', async ({ page }) => {
             const result = await page.evaluate(() => {
                 const table = window.createTable({ order: [] });
+
                 table.search('Missing');
 
                 return {
@@ -106,10 +147,17 @@ test.describe('Table export data', () => {
                 };
             });
 
-            expect(result).toEqual({
-                all: { headings: ['Name', 'Score'], rows: [['B', 2], ['A', 1], ['A', 3], ['C', 4]] },
-                filtered: { headings: ['Name', 'Score'], rows: [] },
-                emptyColumns: { headings: [], rows: [[], [], [], []] },
+            expect(result.all).toEqual({
+                headings: ['Name', 'Score'],
+                rows: [['B', 2], ['A', 1], ['A', 3], ['C', 4]],
+            });
+            expect(result.filtered).toEqual({
+                headings: ['Name', 'Score'],
+                rows: [],
+            });
+            expect(result.emptyColumns).toEqual({
+                headings: [],
+                rows: [[], [], [], []],
             });
         });
 
@@ -137,15 +185,21 @@ test.describe('Table export data', () => {
             test(`returns null after disposal during ${purpose}`, async ({ page }) => {
                 const result = await page.evaluate((purpose) => {
                     let armed = false;
-                    const table = window.createTable({ columns: [{
-                        render(value, context) {
-                            if (armed && context.purpose === purpose) {
-                                this.dispose();
-                            }
+                    const table = window.createTable({
+                        columns: [
+                            {
+                                render(value, context) {
+                                    if (armed && context.purpose === purpose) {
+                                        this.dispose();
+                                    }
 
-                            return value;
-                        },
-                    }, {}] });
+                                    return value;
+                                },
+                            },
+                            {},
+                        ],
+                    });
+
                     armed = true;
 
                     return table.getExportData({ scope: 'all' });
@@ -159,16 +213,21 @@ test.describe('Table export data', () => {
         test('discards partial data when an export renderer replaces the dataset', async ({ page }) => {
             const result = await page.evaluate(() => {
                 let replaced = false;
-                const table = window.createTable({ columns: [{
-                    render(value, { purpose }) {
-                        if (purpose === 'export' && !replaced) {
-                            replaced = true;
-                            this.setData([['Newest', 9]]);
-                        }
+                const table = window.createTable({
+                    columns: [
+                        {
+                            render(value, { purpose }) {
+                                if (purpose === 'export' && !replaced) {
+                                    replaced = true;
+                                    this.setData([['Newest', 9]]);
+                                }
 
-                        return value;
-                    },
-                }, {}] });
+                                return value;
+                            },
+                        },
+                        {},
+                    ],
+                });
 
                 return table.getExportData({ scope: 'filtered' });
             });
@@ -190,6 +249,7 @@ test.describe('Table export data', () => {
                 const table = UI.Table.init($.findOne('#table'));
                 const errors = [];
                 let calls = 0;
+
                 URL.createObjectURL = () => calls++;
                 window.open = () => calls++;
 
@@ -203,14 +263,19 @@ test.describe('Table export data', () => {
                     }
                 }
 
-                return { data: table.getExportData(), errors, calls };
+                return {
+                    data: table.getExportData(),
+                    errors,
+                    calls,
+                };
             });
 
-            expect(result).toEqual({
-                data: { headings: ['Name', 'Score'], rows: [['Remote', 1]] },
-                errors: Array(6).fill('RangeError'),
-                calls: 0,
+            expect(result.data).toEqual({
+                headings: ['Name', 'Score'],
+                rows: [['Remote', 1]],
             });
+            expect(result.errors).toEqual(Array(6).fill('RangeError'));
+            expect(result.calls).toBe(0);
         });
     });
 });
