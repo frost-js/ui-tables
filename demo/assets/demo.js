@@ -257,8 +257,13 @@ $.ready(() => {
     });
 
     const methods = {
-        addRow: [['Morgan', 'Support', 97]], clear: [], dispose: [],
-        getValue: [0, 2], info: [], setValue: [0, 2, 99],
+        addRows: [[['Morgan', 'Support', 97], ['Noor', 'Engineering', 94]]],
+        clear: [],
+        dispose: [],
+        getData: [{ scope: 'filtered' }],
+        info: [],
+        setData: [rows],
+        setValue: [0, 2, 99],
     };
     const eventNames = ['init', 'length', 'order', 'page', 'search', 'processing', 'processed', 'preDraw', 'draw', 'error'];
     $.addEvent('#method-table', eventNames.map((name) => `${name}.ui.table`).join(' '), (event) => {

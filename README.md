@@ -16,6 +16,7 @@ Sortable, searchable tables for Frost UI, with pagination, remote data, and CSV,
 - Case-insensitive searching, typed multi-column sorting, pagination, and column visibility
 - Separate display, sort, filter, and export values, with custom comparisons
 - Column filters, numeric/date ranges, and custom local row predicates
+- Bulk local updates and scoped access to page, filtered, or all rows
 - Debounced remote requests, optional cancellation, and stale-response protection
 - Row/cell/header/footer callbacks and custom layouts/buttons
 - CSV, XLSX, and print exports of the displayed results
@@ -265,6 +266,36 @@ Override individual operations with cell attributes:
 
 Editing a cell clears its original attribute overrides; replacing a row clears that row's metadata. Replacement values follow the JavaScript data rules, so use a renderer when inserting HTML that also needs separate text values. Removing a row preserves the other rows' metadata. Disposal restores the original DOM.
 
+### Bulk data and row scopes
+
+Use `addRows()` to append a batch or `setData()` to replace the local dataset. Both validate and shallow-copy the full batch before changing data, then recalculate and draw once:
+
+```js
+table.addRows([['Morgan', 97], ['Noor', 94]]);
+table.setData([['Alice', 80], ['Bob', 90]]);
+table.setData(nextRows, { resetPage: false });
+
+const page = table.getData();
+const matches = table.getData({ scope: 'filtered' });
+const all = table.getData({ scope: 'all' });
+```
+
+`addRows()` preserves the current page; an empty batch does nothing. `setData()` resets to page one by default. With `resetPage: false`, it retains the page and clamps it when the new results have fewer pages. Both preserve global search, column filters, the row predicate, ordering, visibility, and page length.
+
+Invalid batches leave rows and the current view intact. Rows must be arrays or plain objects; sparse row collections are rejected. Copies isolate each row container, while nested objects remain shared, matching the existing single-row APIs. Validation and copying finish before rows are changed; renderer or predicate errors during the subsequent recalculation do not roll back an accepted dataset.
+
+`setData([])` removes all rows while keeping search and filter state. Use `clear()` to clear those settings too. Replacing DOM-ingested rows discards their original cell metadata; replacement rows follow JavaScript data rules. Disposal still restores the original table markup.
+
+| `getData()` scope | Local rows | Remote rows |
+| --- | --- | --- |
+| `page` (default) | Current page after filtering and sorting | Current loaded page |
+| `filtered` | Every matching row across pages, in active order | Unsupported |
+| `all` | Entire dataset in active order, ignoring all filters | Unsupported |
+
+Returned rows contain raw source values and include hidden columns. The result array and its row containers are fresh shallow copies. With no active ordering, scopes retain input order. Reading data does not change search, counts, page, length, or visibility and does not draw or fetch rows. The `all` scope invokes sort renderers and comparators as needed; keep those callbacks pure and avoid recursively requesting the same scope. If a callback disposes the table or starts a newer draw during collection, the interrupted read returns `[]`.
+
+Bulk mutators are local-only and throw `TypeError` when `getResults` is configured. Remote applications should save changes through their server and call `reload()`. Unsupported or unknown getter scopes throw `RangeError`; `getData()` never fetches other pages. Existing export buttons still export the current page.
+
 ### Column filters and row predicates
 
 `setFilters()` replaces the complete set of column filters. All filters, global search, and the optional row predicate must match for a row to be included:
@@ -434,9 +465,11 @@ Data attributes configure options; they do not initialize Tables by themselves. 
 | --- | --- | --- |
 | `Table.init(node, options?)` | `Table` | Return the existing instance for an element or create one. |
 | `addRow(row)` | `void` | Append a copied row and refresh local results/counts. |
+| `addRows(rows)` | `void` | Append a copied local batch with one recalculation and draw. |
 | `clear()` | `void` | Clear loaded rows/counts, search, filters, predicate, paging and pending work. |
 | `dispose()` | `void` | Restore the original DOM and attributes, cancel owned work, and remove registered state. |
 | `getColumn(key, { modified = true }?)` | `array` | Return column values for the displayed rows or loaded dataset. |
+| `getData({ scope = 'page' }?)` | `array` | Return shallow row copies for `page`, `filtered`, or `all`, in active order. |
 | `getRow(index, { modified = true }?)` | `array \| object` | Return a shallow copy of a row. |
 | `getValue(index, key, { modified = true }?)` | `any` | Read an array key or object dot path. |
 | `hideColumn(index)` | `void` | Hide a data column and redraw. |
@@ -450,6 +483,7 @@ Data attributes configure options; they do not initialize Tables by themselves. 
 | `removeRow(index, { modified = true }?)` | `void` | Remove a row and refresh counts/results. |
 | `search(term)` | `void` | Set a string search, synchronize input, and reset offset. |
 | `setColumn(key, values, { modified = true }?)` | `void` | Replace one column for targeted rows; array length must match. |
+| `setData(rows, { resetPage = true }?)` | `void` | Replace the local dataset with one redraw, preserving search and filters. |
 | `setFilters(filters)` | `void` | Replace structured column filters and reset to page one. Pass `[]` to clear them. |
 | `setRow(index, row, { modified = true }?)` | `void` | Replace a row with a shallow copy. |
 | `setRowFilter(predicate)` | `void` | Set a local row predicate and reset to page one. Pass `null` to clear it. |

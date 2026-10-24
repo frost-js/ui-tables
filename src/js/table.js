@@ -242,6 +242,7 @@ export default class Table extends BaseComponent {
     #domValues = new WeakMap();
     #drawVersion = 0;
     #filtered = 0;
+    #filteredIndexes = [];
     #filters = [];
     #headings = [];
     #id = false;
@@ -360,6 +361,30 @@ export default class Table extends BaseComponent {
     }
 
     /**
+     * Adds copied rows to a local dataset with one redraw.
+     * @param {TableRow[]} rows The rows to append.
+     */
+    addRows(rows) {
+        if (!this.node) {
+            return;
+        }
+
+        if (this.options.getResults) {
+            throw new TypeError('Bulk updates require local data.');
+        }
+
+        validateRows(rows);
+
+        if (!rows.length) {
+            return;
+        }
+
+        const data = rows.map((row) => Array.isArray(row) ? [...row] : { ...row });
+        this.#data = this.#data.concat(data);
+        this.#load();
+    }
+
+    /**
      * Clears all rows from the data array.
      */
     clear() {
@@ -381,6 +406,7 @@ export default class Table extends BaseComponent {
         this.#offset = 0;
         this.#total = 0;
         this.#filtered = 0;
+        this.#filteredIndexes = [];
         this.#filters = [];
         this.#rowFilter = null;
         this.#term = '';
@@ -464,6 +490,7 @@ export default class Table extends BaseComponent {
         this.#results = [];
         this.#rowIndexes = [];
 
+        this.#filteredIndexes = [];
         this.#filters = [];
         this.#rowFilter = null;
 
@@ -489,6 +516,22 @@ export default class Table extends BaseComponent {
         return modified ?
             this.#rowIndexes.map((rowIndex) => $._getDot(this.#data[rowIndex], `${key}`)) :
             this.#data.map((row) => $._getDot(row, `${key}`));
+    }
+
+    /**
+     * Gets copied rows in the active order without changing the current view.
+     * @param {object} [options] Options for selecting rows.
+     * @param {'page'|'filtered'|'all'} [options.scope='page'] The row scope.
+     * @returns {TableRow[]} Shallow copies of the selected source rows.
+     */
+    getData({ scope = 'page' } = {}) {
+        const indexes = this.#getDataIndexes(scope);
+
+        return indexes.map((index) => {
+            const row = this.#data[index];
+
+            return Array.isArray(row) ? [...row] : { ...row };
+        });
     }
 
     /**
@@ -706,6 +749,37 @@ export default class Table extends BaseComponent {
         }
 
         this.#mutated();
+    }
+
+    /**
+     * Replaces a local dataset with copied rows and one redraw.
+     * @param {TableRow[]} rows The replacement rows.
+     * @param {object} [options] Options for replacing the dataset.
+     * @param {boolean} [options.resetPage=true] Whether to reset to the first page.
+     */
+    setData(rows, { resetPage = true } = {}) {
+        if (!this.node) {
+            return;
+        }
+
+        if (this.options.getResults) {
+            throw new TypeError('Bulk updates require local data.');
+        }
+
+        validateRows(rows);
+        const data = rows.map((row) => Array.isArray(row) ? [...row] : { ...row });
+
+        this.#data = data;
+        this.#domValues = new WeakMap();
+        this.#filteredIndexes = [];
+        this.#rowIndexes = [];
+        this.#results = [];
+
+        if (resetPage) {
+            this.#offset = 0;
+        }
+
+        this.#load();
     }
 
     /**
@@ -1027,6 +1101,34 @@ export default class Table extends BaseComponent {
 
         if (active()) {
             this.#renderResults();
+        }
+    }
+
+    /**
+     * Selects ordered row indexes without changing the current view.
+     * @param {'page'|'filtered'|'all'} scope The row scope.
+     * @returns {number[]} The selected indexes.
+     */
+    #getDataIndexes(scope) {
+        if (!['page', 'filtered', 'all'].includes(scope)) {
+            throw new RangeError('Data scope must be page, filtered, or all.');
+        }
+
+        if (!this.node) {
+            return [];
+        }
+
+        if (scope !== 'page' && this.options.getResults) {
+            throw new RangeError('Remote data supports only the page scope.');
+        }
+
+        switch (scope) {
+            case 'page':
+                return this.#rowIndexes;
+            case 'filtered':
+                return this.#filteredIndexes;
+            case 'all':
+                return this.#sortIndexes(this.#data.map((_, index) => index)) ?? [];
         }
     }
 
@@ -1982,6 +2084,91 @@ export default class Table extends BaseComponent {
     }
 
     /**
+     * Sorts local indexes, stopping if a callback interrupts the operation.
+     * @param {number[]} indexes The indexes to sort in place.
+     * @returns {number[]|null} The ordered indexes, or null if interrupted.
+     */
+    #sortIndexes(indexes) {
+        const version = this.#drawVersion;
+        const active = () => this.node && version === this.#drawVersion;
+        const order = this.options.ordering ? this.#getOrder() : [];
+
+        // Resolve keys once per row so sorting does not repeatedly invoke renderers.
+        const values = new Map();
+
+        for (const rowIndex of indexes) {
+            const row = [];
+
+            for (const [index] of order) {
+                const column = this.#columns[index];
+                const raw = this.#getValue(rowIndex, index, 'sort');
+
+                if (!active()) {
+                    return null;
+                }
+
+                row.push({ raw, value: normalizeSortValue(raw, column.type) });
+            }
+
+            values.set(rowIndex, row);
+        }
+
+        indexes.sort((a, b) => {
+            if (!active()) {
+                return 0;
+            }
+
+            for (const [key, [index, direction]] of order.entries()) {
+                const column = this.#columns[index];
+                const aValue = values.get(a)[key];
+                const bValue = values.get(b)[key];
+
+                if (column.type !== 'auto' && (aValue.value === null || bValue.value === null)) {
+                    if (aValue.value === bValue.value) {
+                        continue;
+                    }
+
+                    return aValue.value === null ? 1 : -1;
+                }
+
+                let difference;
+
+                if (column.compare) {
+                    difference = column.compare.call(this, aValue.raw, bValue.raw, { column: index });
+
+                    if (!active()) {
+                        return 0;
+                    }
+
+                    if (!Number.isFinite(difference)) {
+                        throw new TypeError('Column compare must return a finite number.');
+                    }
+                } else if (column.type === 'number' || column.type === 'date' ||
+                    (column.type === 'auto' && $._isNumeric(aValue.value) && $._isNumeric(bValue.value))) {
+                    difference = Number(aValue.value) - Number(bValue.value);
+                } else {
+                    const aText = String(aValue.value ?? '').toLocaleLowerCase();
+                    const bText = String(bValue.value ?? '').toLocaleLowerCase();
+                    difference = aText.localeCompare(bText);
+                }
+
+                if (difference) {
+                    return direction === 'desc' ? -difference : difference;
+                }
+            }
+
+            // Equal values retain their original data order across sorting and filtering.
+            return a - b;
+        });
+
+        if (!active()) {
+            return null;
+        }
+
+        return indexes;
+    }
+
+    /**
      * Selects the current length, including a programmatically requested length.
      */
     #syncLength() {
@@ -2010,7 +2197,6 @@ export default class Table extends BaseComponent {
         const version = this.#drawVersion;
         const active = () => this.node && version === this.#drawVersion;
         const term = this.#term.toLocaleLowerCase();
-        const order = this.options.ordering ? this.#getOrder() : [];
         let indexes = this.#data.map((_, index) => index);
 
         if (term) {
@@ -2079,78 +2265,13 @@ export default class Table extends BaseComponent {
             indexes = matches;
         }
 
-        // Resolve keys once per row so sorting does not repeatedly invoke renderers.
-        const values = new Map();
+        indexes = this.#sortIndexes(indexes);
 
-        for (const rowIndex of indexes) {
-            const row = [];
-
-            for (const [index] of order) {
-                const column = this.#columns[index];
-                const raw = this.#getValue(rowIndex, index, 'sort');
-
-                if (!active()) {
-                    return;
-                }
-
-                row.push({ raw, value: normalizeSortValue(raw, column.type) });
-            }
-
-            values.set(rowIndex, row);
-        }
-
-        indexes.sort((a, b) => {
-            if (!active()) {
-                return 0;
-            }
-
-            for (const [key, [index, direction]] of order.entries()) {
-                const column = this.#columns[index];
-                const aValue = values.get(a)[key];
-                const bValue = values.get(b)[key];
-
-                if (column.type !== 'auto' && (aValue.value === null || bValue.value === null)) {
-                    if (aValue.value === bValue.value) {
-                        continue;
-                    }
-
-                    return aValue.value === null ? 1 : -1;
-                }
-
-                let difference;
-
-                if (column.compare) {
-                    difference = column.compare.call(this, aValue.raw, bValue.raw, { column: index });
-
-                    if (!active()) {
-                        return 0;
-                    }
-
-                    if (!Number.isFinite(difference)) {
-                        throw new TypeError('Column compare must return a finite number.');
-                    }
-                } else if (column.type === 'number' || column.type === 'date' ||
-                    (column.type === 'auto' && $._isNumeric(aValue.value) && $._isNumeric(bValue.value))) {
-                    difference = Number(aValue.value) - Number(bValue.value);
-                } else {
-                    const aText = String(aValue.value ?? '').toLocaleLowerCase();
-                    const bText = String(bValue.value ?? '').toLocaleLowerCase();
-                    difference = aText.localeCompare(bText);
-                }
-
-                if (difference) {
-                    return direction === 'desc' ? -difference : difference;
-                }
-            }
-
-            // Equal values retain their original data order across sorting and filtering.
-            return a - b;
-        });
-
-        if (!active()) {
+        if (!indexes || !active()) {
             return;
         }
 
+        this.#filteredIndexes = indexes;
         this.#total = this.#data.length;
         this.#filtered = indexes.length;
 

@@ -1,6 +1,6 @@
 # Proposal: Essential table functionality
 
-Status: Items 1–2 are implemented; the new filtering tests await CI validation. Items 3–5 remain proposed. See the [README](./README.md#cell-values-and-sorting) for the implemented API.
+Status: Items 1–3 are implemented; the new bulk data tests await CI validation. Items 4–5 remain proposed. See the [README](./README.md#cell-values-and-sorting) for the implemented API.
 
 ## Recommendation
 
@@ -131,7 +131,7 @@ Acceptance examples: exact team plus numeric threshold; inclusive date range; cl
 
 ## 3. Bulk data APIs
 
-### Proposed API
+### Implemented API
 
 ```js
 table.addRows(newRows);

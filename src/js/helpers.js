@@ -408,7 +408,13 @@ export function validateColumnIndex(index, count) {
  * @param {Array<Array<*>|Record<string, *>>} rows The supplied rows.
  */
 export function validateRows(rows) {
-    if (!Array.isArray(rows) || rows.some((row) => !Array.isArray(row) && !$._isPlainObject(row))) {
+    if (!Array.isArray(rows)) {
         throw new TypeError('Results must be an array of arrays or plain objects.');
+    }
+
+    for (const row of rows) {
+        if (!Array.isArray(row) && !$._isPlainObject(row)) {
+            throw new TypeError('Results must be an array of arrays or plain objects.');
+        }
     }
 }
