@@ -1,12 +1,12 @@
 # Frost UI Tables
 
-[![CI](https://github.com/elusivecodes/FrostUI-Tables/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/elusivecodes/FrostUI-Tables/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/elusivecodes/FrostUI-Tables/branch/main/graph/badge.svg)](https://codecov.io/gh/elusivecodes/FrostUI-Tables)
+[![CI](https://github.com/frost-js/ui-tables/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/frost-js/ui-tables/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/frost-js/ui-tables/branch/main/graph/badge.svg)](https://codecov.io/gh/frost-js/ui-tables)
 [![npm version](https://img.shields.io/npm/v/%40fr0st%2Fui-tables?style=flat-square)](https://www.npmjs.com/package/@fr0st/ui-tables)
 [![npm downloads](https://img.shields.io/npm/dm/%40fr0st%2Fui-tables?style=flat-square)](https://www.npmjs.com/package/@fr0st/ui-tables)
-[![JS gzip size](https://img.badgesize.io/elusivecodes/FrostUI-Tables/main/dist/frost-ui-tables.min.js?compression=gzip&label=JS%20gzip%20size&style=flat-square)](https://github.com/elusivecodes/FrostUI-Tables/blob/main/dist/frost-ui-tables.min.js)
-[![CSS gzip size](https://img.badgesize.io/elusivecodes/FrostUI-Tables/main/dist/frost-ui-tables.min.css?compression=gzip&label=CSS%20gzip%20size&style=flat-square)](https://github.com/elusivecodes/FrostUI-Tables/blob/main/dist/frost-ui-tables.min.css)
-[![license](https://img.shields.io/github/license/elusivecodes/FrostUI-Tables?style=flat-square)](./LICENSE)
+[![JS gzip size](https://img.badgesize.io/frost-js/ui-tables/main/dist/frost-ui-tables.min.js?compression=gzip&label=JS%20gzip%20size&style=flat-square)](https://github.com/frost-js/ui-tables/blob/main/dist/frost-ui-tables.min.js)
+[![CSS gzip size](https://img.badgesize.io/frost-js/ui-tables/main/dist/frost-ui-tables.min.css?compression=gzip&label=CSS%20gzip%20size&style=flat-square)](https://github.com/frost-js/ui-tables/blob/main/dist/frost-ui-tables.min.css)
+[![license](https://img.shields.io/github/license/frost-js/ui-tables?style=flat-square)](./LICENSE)
 
 Sortable, searchable tables for Frost UI, with pagination, remote data, and CSV, Excel, and print exports.
 

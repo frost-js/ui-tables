@@ -12,14 +12,14 @@
         "table",
         "ui"
     ],
-    "homepage": "https://github.com/elusivecodes/FrostUI-Tables",
+    "homepage": "https://github.com/frost-js/ui-tables",
     "bugs": {
-        "url": "https://github.com/elusivecodes/FrostUI-Tables/issues",
+        "url": "https://github.com/frost-js/ui-tables/issues",
         "email": "elusivecodes@gmail.com"
     },
     "repository": {
         "type": "git",
-        "url": "git+https://github.com/elusivecodes/FrostUI-Tables.git"
+        "url": "git+https://github.com/frost-js/ui-tables.git"
     },
     "license": "MIT",
     "author": "Elusive <elusivecodes@gmail.com>",
