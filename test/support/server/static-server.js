@@ -8,8 +8,8 @@ const resolveModule = (specifier) => new URL(import.meta.resolve(specifier));
 
 const routes = new Map([
     ['/', { contentType: html, file: new URL('../app/index.html', import.meta.url) }],
-    ['/assets/frost-ui-tables.js', { contentType: javaScript, file: new URL('../../../dist/frost-ui-tables.js', import.meta.url) }],
     ['/assets/frost-ui-tables.css', { contentType: css, file: new URL('../../../dist/frost-ui-tables.css', import.meta.url) }],
+    ['/assets/frost-ui-tables.js', { contentType: javaScript, file: new URL('../../../dist/frost-ui-tables.js', import.meta.url) }],
     ['/assets/frost-ui-bundle.js', { contentType: javaScript, file: resolveModule('@fr0st/ui/dist/frost-ui-bundle.js') }],
     ['/assets/frost-ui.css', { contentType: css, file: resolveModule('@fr0st/ui/dist/frost-ui.css') }],
 ]);
@@ -23,7 +23,6 @@ const server = createServer(async (request, response) => {
             'Content-Type': 'text/plain; charset=utf-8',
         });
         response.end('Not found');
-
         return;
     }
 
