@@ -50,6 +50,11 @@
   --ui-btn-focus-shadow-color: var(--ui-secondary-color);
 }
 
+.table-details-control {
+  width: 1%;
+  white-space: nowrap;
+}
+
 .table-details-list {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
@@ -60,6 +65,35 @@
 .table-details-list dd {
   min-width: 0;
   margin: 0;
+}
+
+.table-details-toggle {
+  --ui-btn-border-color: transparent;
+  --ui-btn-hover-border-color: transparent;
+  --ui-btn-active-border-color: transparent;
+  --ui-btn-box-shadow: none;
+  --ui-btn-hover-box-shadow: none;
+  --ui-btn-active-box-shadow: none;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+}
+.table-details-toggle::before {
+  width: 0.4rem;
+  height: 0.4rem;
+  content: "";
+  border-block-end: 2px solid currentcolor;
+  border-inline-end: 2px solid currentcolor;
+  transform: rotate(-45deg);
+}
+.table-details-toggle:dir(rtl)::before {
+  transform: rotate(45deg);
+}
+.table-details-toggle[aria-expanded=true]::before {
+  transform: rotate(45deg);
+}
+.table-details-toggle[aria-expanded=true]:dir(rtl)::before {
+  transform: rotate(-45deg);
 }
 
 /*# sourceMappingURL=frost-ui-tables.css.map */

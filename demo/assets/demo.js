@@ -205,9 +205,9 @@ $.ready(() => {
         data: rows,
         buttons: [
             { type: 'columns' },
-            { type: 'csv', scope: 'filtered', text: 'CSV matches', title: 'Matching team scores' },
-            { type: 'excel', scope: 'all', text: 'Excel all rows', title: 'All team scores' },
-            { type: 'print', scope: 'page', text: 'Print page', title: 'Team scores' },
+            { type: 'csv', scope: 'filtered', title: 'Matching team scores' },
+            { type: 'excel', scope: 'all', title: 'All team scores' },
+            { type: 'print', scope: 'page', title: 'Team scores' },
         ],
     });
 

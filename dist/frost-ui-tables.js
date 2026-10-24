@@ -2064,8 +2064,8 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		};
 		static classes = {
 			bottomRow: "d-md-flex justify-content-between",
-			button: "btn btn-table",
-			buttonGroup: "btn-group btn-group-sm mt-1",
+			button: "btn btn-table btn-sm",
+			buttonGroup: "btn-group mt-1",
 			column: "d-md-flex",
 			columnContainer: "text-center px-2 mb-1",
 			columnPicker: "dropdown-menu p-3",
@@ -2075,8 +2075,8 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			columnPickerLabel: "form-check mb-1",
 			columnPickerText: "form-check-label",
 			container: "position-relative mb-2",
-			detailButton: "btn btn-outline-secondary btn-sm",
-			detailCell: "text-center",
+			detailButton: "btn btn-table btn-sm table-details-toggle",
+			detailCell: "table-details-control text-center",
 			detailList: "table-details-list",
 			detailRow: "table-details",
 			emptyCell: "text-center py-3",
@@ -3698,13 +3698,17 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			entry.detailId = (0, _fr0st_ui.generateId)("table-details");
 			entry.button = _fr0st_query.default.create("button", {
 				class: this.constructor.classes.detailButton,
-				text: this.options.lang.responsive.details,
 				attributes: {
 					"type": "button",
+					"title": this.options.lang.responsive.details,
 					"aria-controls": entry.detailId,
 					"aria-expanded": false
 				}
 			});
+			_fr0st_query.default.append(entry.button, _fr0st_query.default.create("span", {
+				class: "visually-hidden",
+				text: this.options.lang.responsive.details
+			}));
 			_fr0st_query.default.addEvent(entry.button, "click.ui.table", () => {
 				if (this.#data[entry.index] !== entry.data) return;
 				if (this.#expandedRows.has(entry.key)) this.#expandedRows.delete(entry.key);

@@ -59,6 +59,11 @@
     --ui-btn-focus-shadow-color: #{vars.$btn-table-focus-shadow-color};
 }
 
+.table-details-control {
+    width: 1%;
+    white-space: nowrap;
+}
+
 .table-details-list {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
@@ -69,5 +74,39 @@
     dd {
         min-width: 0;
         margin: 0;
+    }
+}
+
+.table-details-toggle {
+    --ui-btn-border-color: transparent;
+    --ui-btn-hover-border-color: transparent;
+    --ui-btn-active-border-color: transparent;
+    --ui-btn-box-shadow: none;
+    --ui-btn-hover-box-shadow: none;
+    --ui-btn-active-box-shadow: none;
+
+    width: 1.5rem;
+    height: 1.5rem;
+    padding: 0;
+
+    &::before {
+        width: .4rem;
+        height: .4rem;
+        content: "";
+        border-block-end: 2px solid currentcolor;
+        border-inline-end: 2px solid currentcolor;
+        transform: rotate(-45deg);
+    }
+
+    &:dir(rtl)::before {
+        transform: rotate(45deg);
+    }
+
+    &[aria-expanded="true"]::before {
+        transform: rotate(45deg);
+    }
+
+    &[aria-expanded="true"]:dir(rtl)::before {
+        transform: rotate(-45deg);
     }
 }

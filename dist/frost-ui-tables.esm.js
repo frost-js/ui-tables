@@ -2032,8 +2032,8 @@ var Table = class extends BaseComponent {
 	};
 	static classes = {
 		bottomRow: "d-md-flex justify-content-between",
-		button: "btn btn-table",
-		buttonGroup: "btn-group btn-group-sm mt-1",
+		button: "btn btn-table btn-sm",
+		buttonGroup: "btn-group mt-1",
 		column: "d-md-flex",
 		columnContainer: "text-center px-2 mb-1",
 		columnPicker: "dropdown-menu p-3",
@@ -2043,8 +2043,8 @@ var Table = class extends BaseComponent {
 		columnPickerLabel: "form-check mb-1",
 		columnPickerText: "form-check-label",
 		container: "position-relative mb-2",
-		detailButton: "btn btn-outline-secondary btn-sm",
-		detailCell: "text-center",
+		detailButton: "btn btn-table btn-sm table-details-toggle",
+		detailCell: "table-details-control text-center",
 		detailList: "table-details-list",
 		detailRow: "table-details",
 		emptyCell: "text-center py-3",
@@ -3666,13 +3666,17 @@ var Table = class extends BaseComponent {
 		entry.detailId = generateId("table-details");
 		entry.button = $.create("button", {
 			class: this.constructor.classes.detailButton,
-			text: this.options.lang.responsive.details,
 			attributes: {
 				"type": "button",
+				"title": this.options.lang.responsive.details,
 				"aria-controls": entry.detailId,
 				"aria-expanded": false
 			}
 		});
+		$.append(entry.button, $.create("span", {
+			class: "visually-hidden",
+			text: this.options.lang.responsive.details
+		}));
 		$.addEvent(entry.button, "click.ui.table", () => {
 			if (this.#data[entry.index] !== entry.data) return;
 			if (this.#expandedRows.has(entry.key)) this.#expandedRows.delete(entry.key);
