@@ -72,6 +72,30 @@ test.describe('Table remote results', () => {
         });
     });
 
+    test.describe('column picker', () => {
+        test('toggles loaded columns without requesting data and synchronizes pending restored state', async ({ page }) => {
+            await page.evaluate(() => window.table = window.startRemote({ buttons: [{ type: 'columns' }] }));
+            await page.clock.runFor(25);
+            await page.evaluate(() => window.requests[0].resolve({ results: [['One']], total: 1, filtered: 1 }));
+            await expect(page.locator('tbody td')).toHaveText('One');
+            await page.getByRole('button', { name: 'Columns' }).click();
+            const input = page.getByRole('group', { name: 'Columns' }).getByRole('checkbox', { name: 'Name' });
+            await input.uncheck();
+            await page.clock.runFor(25);
+            expect(await page.evaluate(() => window.requests.length)).toBe(1);
+            await page.evaluate(() => {
+                const state = window.table.getState();
+                state.columns[0].visible = true;
+                window.table.setState(state);
+            });
+            await expect(input).toBeChecked();
+            await expect(input).toBeFocused();
+            await expect(page.getByRole('group', { name: 'Columns' })).toBeVisible();
+            await page.clock.runFor(25);
+            expect(await page.evaluate(() => window.requests.length)).toBe(2);
+        });
+    });
+
     test.describe('row identity and selection', () => {
         test('retains unloaded IDs across pages and selection changes do not load data', async ({ page }) => {
             await page.evaluate(() => window.table = window.startRemote({ rowId: 0, selection: 'multiple' }));

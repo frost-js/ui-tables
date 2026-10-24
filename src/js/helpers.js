@@ -133,6 +133,38 @@ export function getDomHeadings(element) {
 }
 
 /**
+ * Maps footer cells to original data columns, accounting for spanning cells.
+ * @param {HTMLTableSectionElement} footer The cloned footer.
+ * @returns {Array<{cell: HTMLTableCellElement, columns: number[], hidden: boolean}>} The cell metadata.
+ */
+export function getFooterCells(footer) {
+    const cells = [];
+    const occupied = [];
+
+    for (const [rowIndex, row] of [...footer.rows].entries()) {
+        let index = 0;
+
+        for (const cell of row.cells) {
+            while (occupied[index] > rowIndex) {
+                index++;
+            }
+
+            const columns = Array.from({ length: cell.colSpan }, (_, offset) => index + offset);
+            const end = cell.rowSpan ? rowIndex + cell.rowSpan : footer.rows.length;
+
+            for (const column of columns) {
+                occupied[column] = end;
+            }
+
+            cells.push({ cell, columns, hidden: cell.hidden });
+            index += cell.colSpan;
+        }
+    }
+
+    return cells;
+}
+
+/**
  * Matches a resolved cell value against a validated filter.
  * @param {*} value The resolved filter value.
  * @param {TableFilter} filter The column filter.

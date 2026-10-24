@@ -13,7 +13,7 @@ Sortable, searchable tables for Frost UI, with pagination, remote data, and CSV,
 ## Highlights
 
 - Native table markup, array rows, or object rows with nested column paths
-- Case-insensitive searching, typed multi-column sorting, pagination, and column visibility
+- Case-insensitive searching, typed multi-column sorting, pagination, and a column visibility picker
 - Separate display, sort, filter, and export values, with custom comparisons
 - Column filters, numeric/date ranges, and custom local row predicates
 - Bulk local updates and scoped access to page, filtered, or all rows
@@ -181,8 +181,9 @@ Table.defaults.lang = {
     noData: 'No data available', noResults: 'No results to show',
     page: 'Page', perPage: 'Per Page', search: 'Search', loading: 'Loading results',
     selection: { clear: 'Clear selection', count: '{count} selected', page: 'Select all rows on this page', row: 'Select row {id}' },
+    column: 'Column {column}',
     paginate: { first: 'First', last: 'Last', next: 'Next', previous: 'Previous' },
-    buttons: { csv: 'CSV', excel: 'Excel', print: 'Print' },
+    buttons: { columns: 'Columns', csv: 'CSV', excel: 'Excel', print: 'Print' },
     aria: {
         sortAscending: ': activate to sort column ascending',
         sortDescending: ': activate to sort column descending',
@@ -551,6 +552,7 @@ Custom layout functions receive a destination container and the Table as `this`.
 ```js
 Table.init(document.querySelector('#scores'), {
     buttons: [
+        { type: 'columns' },
         { type: 'csv', scope: 'filtered', title: 'Matching scores', columns: [1, 0] },
         { type: 'excel', scope: 'all', title: 'All scores' },
         { type: 'print', scope: 'page', title: 'Team scores' },
@@ -559,7 +561,30 @@ Table.init(document.querySelector('#scores'), {
 });
 ```
 
-Button options are `type`, `text`, `title`, `scope`, `columns`, `callback`, and CSV's `escapeFormulae`. `text` overrides the translated type label; `title` defaults to the document title. `callback()` overrides the registered handler and receives the Table as `this`. Register reusable handlers through `Table.buttons.yourType = function (options) { ... }`.
+Button options are `type`, `text`, `title`, `scope`, `columns`, `callback`, and CSV's `escapeFormulae`. `text` overrides the translated type label; `title` defaults to the document title. `callback()` overrides the registered handler and receives the Table as `this`. Register reusable handlers through `Table.buttons.yourType = function (options, button) { ... }`.
+
+#### Column visibility picker
+
+Add `{ type: 'columns' }` to `buttons` to render a Frost UI dropdown with native checkboxes. Its optional `columns` array chooses and orders entries by original data-column index; omitted or `null` includes every data column, including initially hidden columns. An empty array produces an empty picker. Duplicate or out-of-range indexes throw `RangeError`; nonarray input throws `TypeError` when the picker is created. Selection control cells never appear in the list.
+
+```js
+buttons: [
+    { type: 'columns', text: 'Choose fields', columns: [2, 0, 1] },
+    { type: 'csv', scope: 'filtered' },
+]
+```
+
+Labels use sanitized heading text, with `lang.column` (`'Column {column}'`) as a one-based numbered fallback for blank headings. `lang.buttons.columns` defaults to `'Columns'`; the button's `text` overrides it. Checkbox styling follows Frost UI's native check controls. The picker is a labelled group, without menu roles.
+
+Click the trigger or activate it with Enter/Space to open it. Arrow Up/Down opens it and focuses the first checkbox; Tab moves between controls and Space toggles a column. The picker stays open while toggling, preserving checkbox focus across table redraws. Escape closes it and returns focus to the trigger; outside clicks and tabbing out dismiss it using Frost UI's dropdown behavior.
+
+Each toggle uses `showColumn()` / `hideColumn()` and performs one redraw with the existing state notification. It preserves search, ordering, and pagination without loading remote data. API visibility changes and `setState()` synchronize all pickers, including during a pending remote restore. Opening or closing the picker does not change table state or draw rows.
+
+All data columns may be hidden; the toolbar remains available to restore them. Footer cells track their original column ranges, adjusting spans or hiding cells with no visible columns. Original footer markup is restored on disposal. Footer callbacks still run after visibility synchronization and may customize the rendered footer.
+
+Configured visibility continues to control default exports and is already included in saved state. Explicit export column lists can still include hidden columns. A custom `callback` on a `columns` button takes precedence and creates a regular callback button instead of a picker. Dropdown instances, positioning work, and owned listeners are released on disposal.
+
+#### Exports
 
 Built-in exports use resolved export values and visible columns. `columns` explicitly selects/reorders columns, including hidden ones. Heading markup becomes text. Display formatters are not used. JavaScript rows default to raw values; DOM rows default to text or `data-export`. A renderer can provide an export value independently of the display, and CSV formula escaping applies to resolved strings. Internal sort conversions do not replace export values.
 

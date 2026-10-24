@@ -166,19 +166,14 @@ $.ready(() => {
     $.addEvent(node('callback-team'), 'change', filterScores);
     $.addEvent(node('callback-score'), 'change', filterScores);
 
-    const exportsTable = init('export-table', {
+    init('export-table', {
         data: rows,
         buttons: [
+            { type: 'columns' },
             { type: 'csv', scope: 'filtered', text: 'CSV matches', title: 'Matching team scores' },
             { type: 'excel', scope: 'all', text: 'Excel all rows', title: 'All team scores' },
             { type: 'print', scope: 'page', text: 'Print page', title: 'Team scores' },
         ],
-    });
-    $.addEvent(node('toggle-team'), 'click', (event) => {
-        const hidden = $.getAttribute(event.currentTarget, 'aria-pressed') !== 'true';
-        exportsTable[hidden ? 'hideColumn' : 'showColumn'](1);
-        $.setAttribute(event.currentTarget, 'aria-pressed', String(hidden));
-        $.setText(event.currentTarget, hidden ? 'Show Team column' : 'Hide Team column');
     });
 
     let requestId = 0;

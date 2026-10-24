@@ -131,6 +131,31 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		}));
 	}
 	/**
+	* Maps footer cells to original data columns, accounting for spanning cells.
+	* @param {HTMLTableSectionElement} footer The cloned footer.
+	* @returns {Array<{cell: HTMLTableCellElement, columns: number[], hidden: boolean}>} The cell metadata.
+	*/
+	function getFooterCells(footer) {
+		const cells = [];
+		const occupied = [];
+		for (const [rowIndex, row] of [...footer.rows].entries()) {
+			let index = 0;
+			for (const cell of row.cells) {
+				while (occupied[index] > rowIndex) index++;
+				const columns = Array.from({ length: cell.colSpan }, (_, offset) => index + offset);
+				const end = cell.rowSpan ? rowIndex + cell.rowSpan : footer.rows.length;
+				for (const column of columns) occupied[column] = end;
+				cells.push({
+					cell,
+					columns,
+					hidden: cell.hidden
+				});
+				index += cell.colSpan;
+			}
+		}
+		return cells;
+	}
+	/**
 	* Matches a resolved cell value against a validated filter.
 	* @param {*} value The resolved filter value.
 	* @param {TableFilter} filter The column filter.
@@ -1958,7 +1983,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 	* @property {string} [type] The registered button type.
 	* @property {string} [text] The button label.
 	* @property {string} [title] The export title, defaulting to the document title.
-	* @property {number[]} [columns] The columns to export; defaults to visible columns.
+	* @property {number[]} [columns] Export columns (visible by default), or picker entries (all by default).
 	* @property {'page'|'filtered'|'all'} [scope='page'] The rows to export; remote data supports page only.
 	* @property {boolean} [escapeFormulae=true] Prefixes formula-like CSV strings with an apostrophe.
 	* @property {function(this: Table): void} [callback] Runs with the table as its receiver.
@@ -2014,6 +2039,9 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 	*/
 	var Table = class extends _fr0st_ui.BaseComponent {
 		static buttons = {
+			columns(options, button) {
+				_fr0st_ui.Dropdown.init(button).toggle();
+			},
 			csv(options) {
 				const data = this.getExportData(options);
 				if (data) csv(options, data);
@@ -2036,6 +2064,12 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			buttonGroup: "btn-group btn-group-sm mt-1",
 			column: "d-md-flex",
 			columnContainer: "text-center px-2 mb-1",
+			columnPicker: "dropdown-menu p-3",
+			columnPickerButton: "dropdown-toggle",
+			columnPickerGroup: "btn-group",
+			columnPickerInput: "input-check",
+			columnPickerLabel: "form-check mb-1",
+			columnPickerText: "form-check-label",
 			container: "position-relative mb-2",
 			emptyCell: "text-center py-3",
 			infoContainer: "text-center text-md-start mb-2 mb-md-0 w-100",
@@ -2077,6 +2111,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 				bottom: "info,pagination"
 			},
 			lang: {
+				column: "Column {column}",
 				info: "Showing results {start} to {end} of {total}",
 				infoFiltered: "Showing results {start} to {end} of {filtered} (filtered from {total} total)",
 				noData: "No data available",
@@ -2098,6 +2133,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 					previous: "Previous"
 				},
 				buttons: {
+					columns: "Columns",
 					csv: "CSV",
 					excel: "Excel",
 					print: "Print"
@@ -2160,6 +2196,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 				this.#renderPaginationContainer(container);
 			}
 		};
+		#columnPickers = [];
 		#columns = [];
 		#container = null;
 		#data = [];
@@ -2168,6 +2205,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		#filtered = 0;
 		#filteredIndexes = [];
 		#filters = [];
+		#footerCells = [];
 		#headings = [];
 		#id = false;
 		#infoContainer = null;
@@ -2327,6 +2365,9 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			const pending = this.#pending;
 			this.#pending = null;
 			super.dispose();
+			for (const { dropdown } of this.#columnPickers) dropdown.dispose();
+			this.#columnPickers = [];
+			this.#footerCells = [];
 			if (this.#id) _fr0st_query.default.removeAttribute(node, "id");
 			for (const [attribute, value] of [
 				["class", this.#originalClass],
@@ -2754,6 +2795,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			this.#offset = this.options.paging ? (normalized.page - 1) * this.#limit : 0;
 			for (const [index, column] of normalized.columns.entries()) this.#columns[index].visible = column.visible;
 			if (this.#searchInput) _fr0st_query.default.setValue(this.#searchInput, this.#term);
+			this.#syncColumnPickers();
 			this.#syncLength();
 			this.#load();
 		}
@@ -3157,6 +3199,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			const tfoot = _fr0st_query.default.findOne("tfoot", this.#original);
 			if (tfoot) {
 				this.#tfoot = _fr0st_query.default.clone(tfoot)[0];
+				this.#footerCells = getFooterCells(this.#tfoot);
 				_fr0st_query.default.append(this.node, this.#tfoot);
 			}
 			if (this.options.selection) {
@@ -3210,11 +3253,87 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 				_fr0st_query.default.addEvent(btn, "click.ui.table", (event) => {
 					event.preventDefault();
 					if (button.callback) button.callback.call(this);
-					else if (Object.hasOwn(this.constructor.buttons, button.type)) this.constructor.buttons[button.type].call(this, button);
+					else if (Object.hasOwn(this.constructor.buttons, button.type)) {
+						if (button.type === "columns") event.stopPropagation();
+						this.constructor.buttons[button.type].call(this, button, btn);
+					}
 				});
-				_fr0st_query.default.append(btnGroup, btn);
+				if (button.type === "columns" && !button.callback) this.#renderColumnPicker(btnGroup, btn, button);
+				else _fr0st_query.default.append(btnGroup, btn);
 			}
 			_fr0st_query.default.append(container, btnGroup);
+		}
+		/**
+		* Renders a persistent column picker beside its trigger.
+		* @param {HTMLElement} container The button group.
+		* @param {HTMLButtonElement} button The trigger.
+		* @param {TableButton} options The picker options.
+		*/
+		#renderColumnPicker(container, button, options) {
+			const columns = options.columns ?? this.#columns.map((_, index) => index);
+			if (!Array.isArray(columns)) throw new TypeError("Picker columns must be an array.");
+			for (const index of columns) validateColumnIndex(index, this.#columns.length);
+			if (new Set(columns).size !== columns.length) throw new RangeError("Picker columns must not contain duplicate indexes.");
+			const id = (0, _fr0st_ui.generateId)("table-columns");
+			const triggerId = (0, _fr0st_ui.generateId)("table-columns-button");
+			const group = _fr0st_query.default.create("div", { class: this.constructor.classes.columnPickerGroup });
+			const menu = _fr0st_query.default.create("div", {
+				class: this.constructor.classes.columnPicker,
+				attributes: {
+					id,
+					"role": "group",
+					"aria-labelledby": triggerId
+				}
+			});
+			_fr0st_query.default.addClass(button, this.constructor.classes.columnPickerButton);
+			_fr0st_query.default.setAttribute(button, {
+				"id": triggerId,
+				"aria-controls": id,
+				"aria-expanded": false
+			});
+			_fr0st_query.default.setDataset(button, { uiToggle: "dropdown" });
+			_fr0st_query.default.append(group, [button, menu]);
+			_fr0st_query.default.append(container, group);
+			const inputs = /* @__PURE__ */ new Map();
+			for (const index of columns) {
+				const heading = _fr0st_query.default.create("div");
+				_fr0st_query.default.setHtml(heading, _fr0st_query.default.sanitize(String(this.#headings[index].text)));
+				const text = _fr0st_query.default.getText(heading).trim() || this.options.lang.column.replace("{column}", index + 1);
+				const label = _fr0st_query.default.create("label", { class: this.constructor.classes.columnPickerLabel });
+				const input = _fr0st_query.default.create("input", {
+					class: this.constructor.classes.columnPickerInput,
+					attributes: {
+						"type": "checkbox",
+						"aria-controls": _fr0st_query.default.getAttribute(this.node, "id")
+					}
+				});
+				const span = _fr0st_query.default.create("span", {
+					class: this.constructor.classes.columnPickerText,
+					text
+				});
+				_fr0st_query.default.setProperty(input, "checked", Boolean(this.#columns[index].visible));
+				_fr0st_query.default.addEvent(input, "change.ui.table", () => {
+					this[_fr0st_query.default.getProperty(input, "checked") ? "showColumn" : "hideColumn"](index);
+				});
+				_fr0st_query.default.append(label, [input, span]);
+				_fr0st_query.default.append(menu, label);
+				inputs.set(index, input);
+			}
+			const dropdown = _fr0st_ui.Dropdown.init(button, { autoClose: "outside" });
+			this.#columnPickers.push({
+				dropdown,
+				inputs
+			});
+			_fr0st_query.default.addEvent(button, "keydown.ui.table", (event) => {
+				if (!["ArrowDown", "ArrowUp"].includes(event.code)) return;
+				event.preventDefault();
+				event.stopPropagation();
+				dropdown.show();
+				if (this.node && _fr0st_query.default.hasClass(menu, "show")) _fr0st_query.default.focus(inputs.values().next().value);
+			});
+			this.listen(document, "keydown.ui.table", (event) => {
+				if (event.code === "Escape" && _fr0st_query.default.hasDescendent(menu, event.target)) _fr0st_query.default.focus(button);
+			}, { capture: true });
 		}
 		/**
 		* Renders the table headings.
@@ -3497,6 +3616,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			if (!this.node) return;
 			const version = ++this.#drawVersion;
 			const active = () => this.node && version === this.#drawVersion;
+			this.#syncColumnPickers();
 			this.#syncSelection();
 			this.#notifySelectionChange();
 			if (!active()) return;
@@ -3508,6 +3628,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			if (!active() || proceed === false) return;
 			_fr0st_query.default.empty(this.#tbody);
 			this.#renderHeadings();
+			this.#syncFooter();
 			if (!active()) return;
 			const end = this.#offset + this.#results.length;
 			this.options.headerCallback?.call(this, this.#theadRow, this.#data, this.#offset, end, [...this.#rowIndexes]);
@@ -3735,6 +3856,22 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			});
 			if (!active()) return null;
 			return indexes;
+		}
+		/**
+		* Synchronizes picker checkboxes without replacing focused controls.
+		*/
+		#syncColumnPickers() {
+			for (const { inputs } of this.#columnPickers) for (const [index, input] of inputs) _fr0st_query.default.setProperty(input, "checked", Boolean(this.#columns[index].visible));
+		}
+		/**
+		* Aligns footer cells with visible data columns while retaining their source spans.
+		*/
+		#syncFooter() {
+			for (const { cell, columns, hidden } of this.#footerCells) {
+				const count = columns.filter((index) => this.#columns[index]?.visible).length;
+				_fr0st_query.default.setProperty(cell, "hidden", hidden || !count);
+				_fr0st_query.default.setProperty(cell, "colSpan", Math.max(1, count));
+			}
 		}
 		/**
 		* Selects the current length, including a programmatically requested length.

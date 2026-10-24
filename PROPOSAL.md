@@ -1,6 +1,6 @@
 # Proposal: Row identity, selection, and table controls
 
-Status: Stable row IDs and row selection (items 1–2) are implemented; their new tests await CI validation. The column visibility picker and responsive detail rows (items 3–4) remain proposed. See the [README](./README.md#stable-row-identity) for the supported APIs.
+Status: Stable row IDs, row selection, and the column visibility picker (items 1–3) are implemented; the new picker tests await CI validation. Responsive detail rows (item 4) remain proposed. See the [README](./README.md#stable-row-identity) for the supported APIs.
 
 ## Recommendation
 
@@ -150,7 +150,7 @@ Remote bulk actions receive IDs, not cached row objects. The application must ha
 
 ## 3. Column visibility picker
 
-### Proposed API
+### Implemented API
 
 Add a built-in `columns` button using the existing button registry and Frost UI controls:
 

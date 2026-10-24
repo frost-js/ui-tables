@@ -1,4 +1,4 @@
-import { BaseComponent, generateId, initComponent } from "@fr0st/ui";
+import { BaseComponent, Dropdown, generateId, initComponent } from "@fr0st/ui";
 import $ from "@fr0st/query";
 
 //#region src/js/helpers.js
@@ -97,6 +97,31 @@ function getDomHeadings(element) {
 		text: $.getHtml(cell),
 		class: $.getAttribute(cell, "class")
 	}));
+}
+/**
+* Maps footer cells to original data columns, accounting for spanning cells.
+* @param {HTMLTableSectionElement} footer The cloned footer.
+* @returns {Array<{cell: HTMLTableCellElement, columns: number[], hidden: boolean}>} The cell metadata.
+*/
+function getFooterCells(footer) {
+	const cells = [];
+	const occupied = [];
+	for (const [rowIndex, row] of [...footer.rows].entries()) {
+		let index = 0;
+		for (const cell of row.cells) {
+			while (occupied[index] > rowIndex) index++;
+			const columns = Array.from({ length: cell.colSpan }, (_, offset) => index + offset);
+			const end = cell.rowSpan ? rowIndex + cell.rowSpan : footer.rows.length;
+			for (const column of columns) occupied[column] = end;
+			cells.push({
+				cell,
+				columns,
+				hidden: cell.hidden
+			});
+			index += cell.colSpan;
+		}
+	}
+	return cells;
 }
 /**
 * Matches a resolved cell value against a validated filter.
@@ -1926,7 +1951,7 @@ async function print(options, table, classes) {
 * @property {string} [type] The registered button type.
 * @property {string} [text] The button label.
 * @property {string} [title] The export title, defaulting to the document title.
-* @property {number[]} [columns] The columns to export; defaults to visible columns.
+* @property {number[]} [columns] Export columns (visible by default), or picker entries (all by default).
 * @property {'page'|'filtered'|'all'} [scope='page'] The rows to export; remote data supports page only.
 * @property {boolean} [escapeFormulae=true] Prefixes formula-like CSV strings with an apostrophe.
 * @property {function(this: Table): void} [callback] Runs with the table as its receiver.
@@ -1982,6 +2007,9 @@ async function print(options, table, classes) {
 */
 var Table = class extends BaseComponent {
 	static buttons = {
+		columns(options, button) {
+			Dropdown.init(button).toggle();
+		},
 		csv(options) {
 			const data = this.getExportData(options);
 			if (data) csv(options, data);
@@ -2004,6 +2032,12 @@ var Table = class extends BaseComponent {
 		buttonGroup: "btn-group btn-group-sm mt-1",
 		column: "d-md-flex",
 		columnContainer: "text-center px-2 mb-1",
+		columnPicker: "dropdown-menu p-3",
+		columnPickerButton: "dropdown-toggle",
+		columnPickerGroup: "btn-group",
+		columnPickerInput: "input-check",
+		columnPickerLabel: "form-check mb-1",
+		columnPickerText: "form-check-label",
 		container: "position-relative mb-2",
 		emptyCell: "text-center py-3",
 		infoContainer: "text-center text-md-start mb-2 mb-md-0 w-100",
@@ -2045,6 +2079,7 @@ var Table = class extends BaseComponent {
 			bottom: "info,pagination"
 		},
 		lang: {
+			column: "Column {column}",
 			info: "Showing results {start} to {end} of {total}",
 			infoFiltered: "Showing results {start} to {end} of {filtered} (filtered from {total} total)",
 			noData: "No data available",
@@ -2066,6 +2101,7 @@ var Table = class extends BaseComponent {
 				previous: "Previous"
 			},
 			buttons: {
+				columns: "Columns",
 				csv: "CSV",
 				excel: "Excel",
 				print: "Print"
@@ -2128,6 +2164,7 @@ var Table = class extends BaseComponent {
 			this.#renderPaginationContainer(container);
 		}
 	};
+	#columnPickers = [];
 	#columns = [];
 	#container = null;
 	#data = [];
@@ -2136,6 +2173,7 @@ var Table = class extends BaseComponent {
 	#filtered = 0;
 	#filteredIndexes = [];
 	#filters = [];
+	#footerCells = [];
 	#headings = [];
 	#id = false;
 	#infoContainer = null;
@@ -2295,6 +2333,9 @@ var Table = class extends BaseComponent {
 		const pending = this.#pending;
 		this.#pending = null;
 		super.dispose();
+		for (const { dropdown } of this.#columnPickers) dropdown.dispose();
+		this.#columnPickers = [];
+		this.#footerCells = [];
 		if (this.#id) $.removeAttribute(node, "id");
 		for (const [attribute, value] of [
 			["class", this.#originalClass],
@@ -2722,6 +2763,7 @@ var Table = class extends BaseComponent {
 		this.#offset = this.options.paging ? (normalized.page - 1) * this.#limit : 0;
 		for (const [index, column] of normalized.columns.entries()) this.#columns[index].visible = column.visible;
 		if (this.#searchInput) $.setValue(this.#searchInput, this.#term);
+		this.#syncColumnPickers();
 		this.#syncLength();
 		this.#load();
 	}
@@ -3125,6 +3167,7 @@ var Table = class extends BaseComponent {
 		const tfoot = $.findOne("tfoot", this.#original);
 		if (tfoot) {
 			this.#tfoot = $.clone(tfoot)[0];
+			this.#footerCells = getFooterCells(this.#tfoot);
 			$.append(this.node, this.#tfoot);
 		}
 		if (this.options.selection) {
@@ -3178,11 +3221,87 @@ var Table = class extends BaseComponent {
 			$.addEvent(btn, "click.ui.table", (event) => {
 				event.preventDefault();
 				if (button.callback) button.callback.call(this);
-				else if (Object.hasOwn(this.constructor.buttons, button.type)) this.constructor.buttons[button.type].call(this, button);
+				else if (Object.hasOwn(this.constructor.buttons, button.type)) {
+					if (button.type === "columns") event.stopPropagation();
+					this.constructor.buttons[button.type].call(this, button, btn);
+				}
 			});
-			$.append(btnGroup, btn);
+			if (button.type === "columns" && !button.callback) this.#renderColumnPicker(btnGroup, btn, button);
+			else $.append(btnGroup, btn);
 		}
 		$.append(container, btnGroup);
+	}
+	/**
+	* Renders a persistent column picker beside its trigger.
+	* @param {HTMLElement} container The button group.
+	* @param {HTMLButtonElement} button The trigger.
+	* @param {TableButton} options The picker options.
+	*/
+	#renderColumnPicker(container, button, options) {
+		const columns = options.columns ?? this.#columns.map((_, index) => index);
+		if (!Array.isArray(columns)) throw new TypeError("Picker columns must be an array.");
+		for (const index of columns) validateColumnIndex(index, this.#columns.length);
+		if (new Set(columns).size !== columns.length) throw new RangeError("Picker columns must not contain duplicate indexes.");
+		const id = generateId("table-columns");
+		const triggerId = generateId("table-columns-button");
+		const group = $.create("div", { class: this.constructor.classes.columnPickerGroup });
+		const menu = $.create("div", {
+			class: this.constructor.classes.columnPicker,
+			attributes: {
+				id,
+				"role": "group",
+				"aria-labelledby": triggerId
+			}
+		});
+		$.addClass(button, this.constructor.classes.columnPickerButton);
+		$.setAttribute(button, {
+			"id": triggerId,
+			"aria-controls": id,
+			"aria-expanded": false
+		});
+		$.setDataset(button, { uiToggle: "dropdown" });
+		$.append(group, [button, menu]);
+		$.append(container, group);
+		const inputs = /* @__PURE__ */ new Map();
+		for (const index of columns) {
+			const heading = $.create("div");
+			$.setHtml(heading, $.sanitize(String(this.#headings[index].text)));
+			const text = $.getText(heading).trim() || this.options.lang.column.replace("{column}", index + 1);
+			const label = $.create("label", { class: this.constructor.classes.columnPickerLabel });
+			const input = $.create("input", {
+				class: this.constructor.classes.columnPickerInput,
+				attributes: {
+					"type": "checkbox",
+					"aria-controls": $.getAttribute(this.node, "id")
+				}
+			});
+			const span = $.create("span", {
+				class: this.constructor.classes.columnPickerText,
+				text
+			});
+			$.setProperty(input, "checked", Boolean(this.#columns[index].visible));
+			$.addEvent(input, "change.ui.table", () => {
+				this[$.getProperty(input, "checked") ? "showColumn" : "hideColumn"](index);
+			});
+			$.append(label, [input, span]);
+			$.append(menu, label);
+			inputs.set(index, input);
+		}
+		const dropdown = Dropdown.init(button, { autoClose: "outside" });
+		this.#columnPickers.push({
+			dropdown,
+			inputs
+		});
+		$.addEvent(button, "keydown.ui.table", (event) => {
+			if (!["ArrowDown", "ArrowUp"].includes(event.code)) return;
+			event.preventDefault();
+			event.stopPropagation();
+			dropdown.show();
+			if (this.node && $.hasClass(menu, "show")) $.focus(inputs.values().next().value);
+		});
+		this.listen(document, "keydown.ui.table", (event) => {
+			if (event.code === "Escape" && $.hasDescendent(menu, event.target)) $.focus(button);
+		}, { capture: true });
 	}
 	/**
 	* Renders the table headings.
@@ -3465,6 +3584,7 @@ var Table = class extends BaseComponent {
 		if (!this.node) return;
 		const version = ++this.#drawVersion;
 		const active = () => this.node && version === this.#drawVersion;
+		this.#syncColumnPickers();
 		this.#syncSelection();
 		this.#notifySelectionChange();
 		if (!active()) return;
@@ -3476,6 +3596,7 @@ var Table = class extends BaseComponent {
 		if (!active() || proceed === false) return;
 		$.empty(this.#tbody);
 		this.#renderHeadings();
+		this.#syncFooter();
 		if (!active()) return;
 		const end = this.#offset + this.#results.length;
 		this.options.headerCallback?.call(this, this.#theadRow, this.#data, this.#offset, end, [...this.#rowIndexes]);
@@ -3703,6 +3824,22 @@ var Table = class extends BaseComponent {
 		});
 		if (!active()) return null;
 		return indexes;
+	}
+	/**
+	* Synchronizes picker checkboxes without replacing focused controls.
+	*/
+	#syncColumnPickers() {
+		for (const { inputs } of this.#columnPickers) for (const [index, input] of inputs) $.setProperty(input, "checked", Boolean(this.#columns[index].visible));
+	}
+	/**
+	* Aligns footer cells with visible data columns while retaining their source spans.
+	*/
+	#syncFooter() {
+		for (const { cell, columns, hidden } of this.#footerCells) {
+			const count = columns.filter((index) => this.#columns[index]?.visible).length;
+			$.setProperty(cell, "hidden", hidden || !count);
+			$.setProperty(cell, "colSpan", Math.max(1, count));
+		}
 	}
 	/**
 	* Selects the current length, including a programmatically requested length.
