@@ -32,6 +32,7 @@ export default class Zip {
         const filenameLength = byteLength(filename);
 
         data = encode(data);
+
         const uncompressedSize = data.byteLength;
 
         const crc32 = CRC32.calc(data);

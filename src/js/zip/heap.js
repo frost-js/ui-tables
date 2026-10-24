@@ -51,6 +51,7 @@ export default class Heap {
 
             if (this.#buffer[current] > this.#buffer[parent]) {
                 let swap = this.#buffer[parent];
+
                 this.#buffer[parent] = this.#buffer[current];
                 this.#buffer[current] = swap;
 
@@ -74,6 +75,7 @@ export default class Heap {
      */
     push(index, value) {
         let current = this.#length;
+
         this.#buffer[this.#length++] = value;
         this.#buffer[this.#length++] = index;
 
@@ -83,6 +85,7 @@ export default class Heap {
 
             if (this.#buffer[current] > this.#buffer[parent]) {
                 let swap = this.#buffer[current];
+
                 this.#buffer[current] = this.#buffer[parent];
                 this.#buffer[parent] = swap;
 

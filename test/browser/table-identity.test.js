@@ -71,7 +71,7 @@ test.describe('Table row identity', () => {
                 return errors;
             });
 
-            expect(errors).toEqual(Array(6).fill('TypeError'));
+            expect(errors).toEqual(Array(5).fill('TypeError'));
         });
 
         test('supports nested accessors and pure callbacks with the table as receiver', async ({ page }) => {

@@ -1,12 +1,12 @@
+/** @import { TableButton } from './table.js'; */
+
 import $ from '@fr0st/query';
 import { saveBlob } from './dom.js';
 import Workbook from './workbook/workbook.js';
 
 /**
  * Downloads the selected rows as CSV, escaping delimiters, quotes and line breaks.
- * @param {object} options The button options.
- * @param {string} [options.title] The download title.
- * @param {boolean} [options.escapeFormulae=true] Prefix spreadsheet formula-like strings with an apostrophe.
+ * @param {TableButton} options The button options.
  * @param {object} data The export data.
  * @param {string[]} data.headings The headings.
  * @param {Array<Array<*>>} data.rows The selected rows.
@@ -36,18 +36,20 @@ export function csv(options, { headings, rows }) {
     const blob = new Blob([lines.join('\r\n')], {
         type: 'text/csv;charset=utf-8;',
     });
+
     saveBlob(blob, `${title}.csv`);
 }
 
 /**
  * Downloads the selected rows as an Excel workbook.
- * @param {object} options The button options.
+ * @param {TableButton} options The button options.
  * @param {object} data The export data.
  * @param {string[]} data.headings The headings.
  * @param {Array<Array<*>>} data.rows The selected rows.
  */
 export function excel(options, { headings, rows }) {
     const workbook = new Workbook();
+
     workbook.addSheet({
         header: headings,
         rows,
@@ -57,7 +59,7 @@ export function excel(options, { headings, rows }) {
 
 /**
  * Opens a text-only print view and waits for its styles and fonts.
- * @param {object} options The button options.
+ * @param {TableButton} options The button options.
  * @param {HTMLTableElement} table The table to print.
  * @param {string} classes The table classes.
  * @returns {Promise<void>} Completion of print preparation, or nothing when blocked.
@@ -70,10 +72,12 @@ export async function print(options, table, classes) {
     }
 
     const title = options.title || document.title;
+
     win.document.title = title;
     win.document.documentElement.dir = $.getProperty(table, 'dir') || document.documentElement.dir;
 
     const heading = win.document.createElement('h1');
+
     $.setText(heading, title);
     $.addClass(table, classes || '');
     $.append(win.document.body, [heading, table]);

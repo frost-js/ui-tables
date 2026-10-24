@@ -27,6 +27,7 @@ test.describe('Table remote results', () => {
                     pending.cancel = () => {
                         $.setDataset(document.body, 'cancelled', ($.getDataset(document.body, 'cancelled') || 0) + 1);
                     };
+
                     window.requests.push(entry);
                     $.setDataset(document.body, 'requests', window.requests.length);
 

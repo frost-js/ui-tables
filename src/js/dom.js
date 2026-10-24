@@ -9,7 +9,9 @@ import $ from '@fr0st/query';
  */
 export function buildTable(headings, rows, direction) {
     const table = $.create('table');
+
     $.setProperty(table, 'dir', direction);
+
     const thead = $.create('thead');
     const tr = $.create('tr');
 
@@ -17,6 +19,7 @@ export function buildTable(headings, rows, direction) {
         const th = $.create('th', {
             text: heading,
         });
+
         $.append(tr, th);
     }
 
@@ -32,6 +35,7 @@ export function buildTable(headings, rows, direction) {
             const td = $.create('td', {
                 text: value,
             });
+
             $.append(tr, td);
         }
 
@@ -45,9 +49,9 @@ export function buildTable(headings, rows, direction) {
 
 /**
  * Builds a data array from a DOM element.
- * @param {HTMLElement} element The element to parse.
- * @param {WeakMap} values The cell metadata, keyed by source row.
- * @returns {Array} The parsed data.
+ * @param {HTMLTableElement} element The table to parse.
+ * @param {WeakMap<string[], Map<string, {value: string, sort: string, filter: string, export: string}>>} values The cell metadata, keyed by source row.
+ * @returns {string[][]} The parsed rows.
  */
 export function getDomData(element, values) {
     const tbody = $.findOne('tbody', element);
@@ -65,6 +69,7 @@ export function getDomData(element, values) {
                 export: $.getAttribute(cell, 'data-export') ?? text,
             }];
         }));
+
         values.set(data, metadata);
 
         return data;
@@ -73,8 +78,8 @@ export function getDomData(element, values) {
 
 /**
  * Builds a heading array from a DOM element.
- * @param {HTMLElement} element The element to parse.
- * @returns {Array} The parsed data.
+ * @param {HTMLTableElement} element The table to parse.
+ * @returns {Array<{text: string, class: string|null}>} The parsed headings.
  */
 export function getDomHeadings(element) {
     const thead = $.getProperty(element, 'tHead');

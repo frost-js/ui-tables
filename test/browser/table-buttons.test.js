@@ -169,6 +169,7 @@ test.describe('Table buttons', () => {
                     $.setDataset(document.body, 'revoked', true);
                     original(url);
                 };
+
                 UI.Table.init($.findOne('#table'), {
                     data: [['A', 1], ['B', 2]],
                     length: 1,
@@ -228,7 +229,8 @@ test.describe('Table buttons', () => {
             const worksheet = await page.evaluate(readWorksheet, [...files]);
 
             expect(worksheet.valid).toBe(true);
-            expect(worksheet.rows).toEqual([['Alice', '0'], ['Bob', 'false']]);
+            // The XML reader returns the raw 0 stored in an Excel boolean cell.
+            expect(worksheet.rows).toEqual([['Alice', '0'], ['Bob', '0']]);
         });
 
         test('downloads a named workbook with valid XML and columns beyond Z', async ({ page }) => {
@@ -314,12 +316,14 @@ test.describe('Table buttons', () => {
                         $.setDataset(popup.document.body, 'stylesReady', String(stylesReady));
                         $.setDataset(popup.document.body, 'fonts', popup.document.fonts.status);
                     };
+
                     popup.close = () => {
                         $.setDataset(popup.document.body, 'closed', 'true');
                     };
 
                     return popup;
                 };
+
                 $.setProperty($.findOne('#table'), 'dir', 'rtl');
             });
             await page.evaluate(() => UI.Table.init($.findOne('#table'), {
@@ -375,6 +379,7 @@ test.describe('Table buttons', () => {
                     URL.createObjectURL = () => {
                         calls++;
                     };
+
                     window.open = () => {
                         calls++;
                     };

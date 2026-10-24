@@ -115,6 +115,7 @@ test.describe('Table rendering', () => {
                     $.setText(container, $.getProperty(this.node, 'id'));
                     $.setDataset(container, 'testSummary', '');
                 };
+
                 window.createTable({
                     layout: { top: 'summary' },
                 });
@@ -176,6 +177,7 @@ test.describe('Table rendering', () => {
                 UI.Table.layout.stop = function() {
                     this.dispose();
                 };
+
                 window.createTable({
                     layout: { top: 'stop' },
                 });

@@ -66,9 +66,9 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 	}
 	/**
 	* Builds a data array from a DOM element.
-	* @param {HTMLElement} element The element to parse.
-	* @param {WeakMap} values The cell metadata, keyed by source row.
-	* @returns {Array} The parsed data.
+	* @param {HTMLTableElement} element The table to parse.
+	* @param {WeakMap<string[], Map<string, {value: string, sort: string, filter: string, export: string}>>} values The cell metadata, keyed by source row.
+	* @returns {string[][]} The parsed rows.
 	*/
 	function getDomData(element, values) {
 		const tbody = _fr0st_query.default.findOne("tbody", element);
@@ -90,8 +90,8 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 	}
 	/**
 	* Builds a heading array from a DOM element.
-	* @param {HTMLElement} element The element to parse.
-	* @returns {Array} The parsed data.
+	* @param {HTMLTableElement} element The table to parse.
+	* @returns {Array<{text: string, class: string|null}>} The parsed headings.
 	*/
 	function getDomHeadings(element) {
 		const thead = _fr0st_query.default.getProperty(element, "tHead");
@@ -1437,8 +1437,8 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		#strings = [];
 		/**
 		* Adds a sheet to the Workbook.
-		* @param {object} data The sheet data.
-		* @param {string} [name] The name of the sheet.
+		* @param {{header?: Array<*>, rows?: Array<Array<*>>, footer?: Array<*>}} data The sheet rows and optional headings and footer.
+		* @param {string|null} [name=null] The sheet name; null generates a name.
 		*/
 		addSheet(data, name = null) {
 			this.#sheetCount++;
@@ -1604,11 +1604,10 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 
 //#endregion
 //#region src/js/buttons.js
-/**
+/** @import { TableButton } from './table.js'; */
+	/**
 	* Downloads the selected rows as CSV, escaping delimiters, quotes and line breaks.
-	* @param {object} options The button options.
-	* @param {string} [options.title] The download title.
-	* @param {boolean} [options.escapeFormulae=true] Prefix spreadsheet formula-like strings with an apostrophe.
+	* @param {TableButton} options The button options.
 	* @param {object} data The export data.
 	* @param {string[]} data.headings The headings.
 	* @param {Array<Array<*>>} data.rows The selected rows.
@@ -1628,7 +1627,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 	}
 	/**
 	* Downloads the selected rows as an Excel workbook.
-	* @param {object} options The button options.
+	* @param {TableButton} options The button options.
 	* @param {object} data The export data.
 	* @param {string[]} data.headings The headings.
 	* @param {Array<Array<*>>} data.rows The selected rows.
@@ -1643,7 +1642,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 	}
 	/**
 	* Opens a text-only print view and waits for its styles and fonts.
-	* @param {object} options The button options.
+	* @param {TableButton} options The button options.
 	* @param {HTMLTableElement} table The table to print.
 	* @param {string} classes The table classes.
 	* @returns {Promise<void>} Completion of print preparation, or nothing when blocked.
@@ -1683,13 +1682,13 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 
 //#endregion
 //#region src/js/data.js
-/** @import { TableColumn, TableFilter, TableOptions, TableOrder, TableState } from './table.js'; */
+/** @import { TableColumn, TableFilter, TableOptions, TableOrder, TableRow, TableState } from './table.js'; */
 	/**
 	* Copies only the branches affected by a dot-path write, including wildcards.
-	* @param {Array|object} row The source row.
+	* @param {TableRow} row The source row.
 	* @param {string} key The data path.
 	* @param {*} value The replacement value.
-	* @returns {Array|object} The updated row without changing shared source objects.
+	* @returns {TableRow} The updated row without changing shared source objects.
 	*/
 	function copyRowValue(row, key, value) {
 		const copyPath = (source, keys) => {
@@ -2380,6 +2379,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 				this.#renderPaginationContainer(container);
 			}
 		};
+		#addedClasses = [];
 		#collapsedColumns = /* @__PURE__ */ new Set();
 		#columnPickers = [];
 		#columns = [];
@@ -2493,7 +2493,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		}
 		/**
 		* Adds a row to the data array.
-		* @param {Array|object} row The row to add.
+		* @param {TableRow} row The row to add.
 		*/
 		addRow(row) {
 			if (!this.node) return;
@@ -2577,11 +2577,10 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			this.#responsiveWidth = null;
 			this.#tableContainer = null;
 			if (this.#id) _fr0st_query.default.removeAttribute(node, "id");
-			for (const [attribute, value] of [
-				["class", this.#originalClass],
-				["aria-describedby", this.#originalDescription],
-				["aria-busy", this.#originalBusy]
-			]) {
+			_fr0st_query.default.removeClass(node, this.#addedClasses);
+			this.#addedClasses = [];
+			if (this.#originalClass === null && !node.getAttribute("class")) _fr0st_query.default.removeAttribute(node, "class");
+			for (const [attribute, value] of [["aria-describedby", this.#originalDescription], ["aria-busy", this.#originalBusy]]) {
 				if (value === void 0) continue;
 				if (value === null) _fr0st_query.default.removeAttribute(node, attribute);
 				else _fr0st_query.default.setAttribute(node, { [attribute]: value });
@@ -2631,7 +2630,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		}
 		/**
 		* Gets values for a single column.
-		* @param {string} key The key to retrieve.
+		* @param {string|number} key The key to retrieve.
 		* @param {object} [options] Options for getting the column.
 		* @param {boolean} [options.modified=true] Whether to use modified indexes.
 		* @returns {Array} The column values.
@@ -2752,7 +2751,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		/**
 		* Gets a single value from a row.
 		* @param {number} index The row index to retrieve.
-		* @param {string} key The key to retrieve.
+		* @param {string|number} key The key to retrieve.
 		* @param {object} [options] Options for getting the row index.
 		* @param {boolean} [options.modified=true] Whether to use modified indexes.
 		* @returns {*} The value.
@@ -2813,7 +2812,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		}
 		/**
 		* Sets the Table order data.
-		* @param {Array} order The order data.
+		* @param {TableOrder[]} order The column indexes and sort directions.
 		*/
 		order(order) {
 			if (!this.node || !this.options.ordering) return;
@@ -2842,7 +2841,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		}
 		/**
 		* Reloads the Table data.
-		* @param {object} [options] Options for reloading the data
+		* @param {object} [options] Options for reloading the data.
 		* @param {boolean} [options.reset=false] Whether to reset the offset.
 		*/
 		reload({ reset = false } = {}) {
@@ -2894,8 +2893,8 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		}
 		/**
 		* Sets values for a single column.
-		* @param {string} key The key to set.
-		* @param {Array} column The column values.
+		* @param {string|number} key The key to set.
+		* @param {Array<*>} column The replacement column values.
 		* @param {object} [options] Options for getting the row index.
 		* @param {boolean} [options.modified=true] Whether to use modified indexes.
 		*/
@@ -2937,7 +2936,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		/**
 		* Sets values for a single row.
 		* @param {number} index The row index to set.
-		* @param {Array|object} row The row values.
+		* @param {TableRow} row The row values.
 		* @param {object} [options] Options for getting the row index.
 		* @param {boolean} [options.modified=true] Whether to use modified indexes.
 		*/
@@ -3010,7 +3009,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		/**
 		* Sets a single value for a row.
 		* @param {number} index The row index to set.
-		* @param {string} key The key to set.
+		* @param {string|number} key The key to set.
 		* @param {*} value The value to set.
 		* @param {object} [options] Options for getting the row index.
 		* @param {boolean} [options.modified=true] Whether to use modified indexes.
@@ -3419,7 +3418,9 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			});
 			const loaderIcon = _fr0st_query.default.create("span", { class: this.constructor.classes.loaderIcon });
 			_fr0st_query.default.append(this.#loader, loaderIcon);
+			const originalClasses = new Set(this.node.classList);
 			_fr0st_query.default.addClass(this.node, this.constructor.classes.table);
+			this.#addedClasses = [...this.node.classList].filter((name) => !originalClasses.has(name));
 			const caption = _fr0st_query.default.findOne("caption", this.#original);
 			if (caption) _fr0st_query.default.append(this.node, _fr0st_query.default.clone(caption));
 			const thead = _fr0st_query.default.create("thead");
@@ -3683,7 +3684,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		}
 		/**
 		* Renders a layout row in a container.
-		* @param {Array} columns The columns to render.
+		* @param {string} columns The comma-separated layout columns and pipe-separated controls.
 		* @param {string} rowClass The row class.
 		*/
 		#renderLayoutRow(columns, rowClass) {
@@ -3737,8 +3738,8 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		}
 		/**
 		* Renders a pagination item.
-		* @param {object} options Options for rendering the pagnination item.
-		* @returns {HTMLElement} The pagnination item.
+		* @param {object} options Options for rendering the pagination item.
+		* @returns {HTMLElement} The pagination item.
 		*/
 		#renderPageItem(options) {
 			const label = options.text ? `${options.text} ${this.options.lang.page}` : `${this.options.lang.page} ${options.page}`;
@@ -3977,6 +3978,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 				this.#expandedRows = new Set([...this.#expandedRows].filter((id) => ids.has(id)));
 			}
 			this.#renderHeadings();
+			if (!active()) return;
 			this.#syncResponsiveColumns();
 			if (!active()) return;
 			const end = this.#offset + this.#results.length;
@@ -4409,10 +4411,8 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			for (const entry of this.#responsiveRows) {
 				if (!this.#collapsedColumns.size) {
 					if (entry === focusedEntry) {
-						const tabIndex = _fr0st_query.default.getAttribute(entry.row, "tabindex");
-						if (tabIndex === null) _fr0st_query.default.setAttribute(entry.row, { tabindex: -1 });
+						if (_fr0st_query.default.getAttribute(entry.row, "tabindex") === null) _fr0st_query.default.setAttribute(entry.row, { tabindex: -1 });
 						_fr0st_query.default.focus(entry.row);
-						if (tabIndex === null && _fr0st_query.default.getAttribute(entry.row, "tabindex") === "-1") _fr0st_query.default.removeAttribute(entry.row, "tabindex");
 						if (!active()) return;
 					}
 					_fr0st_query.default.remove(entry.button);

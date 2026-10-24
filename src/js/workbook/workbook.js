@@ -25,8 +25,8 @@ export default class Workbook {
 
     /**
      * Adds a sheet to the Workbook.
-     * @param {object} data The sheet data.
-     * @param {string} [name] The name of the sheet.
+     * @param {{header?: Array<*>, rows?: Array<Array<*>>, footer?: Array<*>}} data The sheet rows and optional headings and footer.
+     * @param {string|null} [name=null] The sheet name; null generates a name.
      */
     addSheet(data, name = null) {
         this.#sheetCount++;
@@ -46,6 +46,7 @@ export default class Workbook {
 
         while (this.#sheets.some((sheet) => sheet.name.toLowerCase() === name.toLowerCase())) {
             const tail = ` (${suffix++})`;
+
             name = base.slice(0, 31 - tail.length) + tail;
         }
 
@@ -88,6 +89,7 @@ export default class Workbook {
 
                     break;
                 }
+
                 case 'xl/_rels/workbook.xml.rels': {
                     let relationships = this.#sheets.map((_, index) =>
                         `<Relationship Id="rId${index + 2}" ` +
@@ -103,6 +105,7 @@ export default class Workbook {
 
                     break;
                 }
+
                 case 'xl/workbook.xml': {
                     const sheets = this.#sheets.map((sheet, index) =>
                         `<sheet name="${escape(sheet.name)}" sheetId="${index + 1}" ` +
@@ -113,12 +116,15 @@ export default class Workbook {
 
                     break;
                 }
+
                 case 'docProps/core.xml': {
                     const date = (new Date()).toISOString().substring(0, 19) + 'Z';
+
                     template = template.replaceAll('{date}', date);
 
                     break;
                 }
+
                 case 'xl/sharedStrings.xml': {
                     const strings = this.#strings.map((string) =>
                         `<si><t xml:space="preserve">${string}</t></si>`,
@@ -131,6 +137,7 @@ export default class Workbook {
 
                     break;
                 }
+
                 case 'xl/worksheets/sheet1.xml': {
                     for (const [index, xml] of worksheets.entries()) {
                         zip.addFile(`xl/worksheets/sheet${index + 1}.xml`, xml);
@@ -138,6 +145,7 @@ export default class Workbook {
 
                     continue;
                 }
+
                 default:
                     break;
             }

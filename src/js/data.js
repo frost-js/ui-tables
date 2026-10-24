@@ -1,13 +1,13 @@
-/** @import { TableColumn, TableFilter, TableOptions, TableOrder, TableState } from './table.js'; */
+/** @import { TableColumn, TableFilter, TableOptions, TableOrder, TableRow, TableState } from './table.js'; */
 
 import $ from '@fr0st/query';
 
 /**
  * Copies only the branches affected by a dot-path write, including wildcards.
- * @param {Array|object} row The source row.
+ * @param {TableRow} row The source row.
  * @param {string} key The data path.
  * @param {*} value The replacement value.
- * @returns {Array|object} The updated row without changing shared source objects.
+ * @returns {TableRow} The updated row without changing shared source objects.
  */
 export function copyRowValue(row, key, value) {
     const copyPath = (source, keys) => {
@@ -149,6 +149,7 @@ export function normalizeFilters(filters, columns) {
         }
 
         const { column, operator, value } = filter;
+
         validateColumnIndex(column, columns.length);
 
         if (!columns[column].searchable) {

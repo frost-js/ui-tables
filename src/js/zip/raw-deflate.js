@@ -277,6 +277,7 @@ export default class RawDeflate {
 
                 for (let i = 0; i < this.#input.length - position; i++) {
                     const literal = this.#input[position + i];
+
                     tokens[tokenIndex++] = literal;
                     literalFrequencies[literal]++;
                 }
@@ -290,6 +291,7 @@ export default class RawDeflate {
                 if (previousMatch) {
                     if (previousMatch.length < longestMatch.length) {
                         const literal = this.#input[position - 1];
+
                         tokens[tokenIndex++] = literal;
                         literalFrequencies[literal]++;
 
@@ -307,6 +309,7 @@ export default class RawDeflate {
                 writeMatch(previousMatch, -1);
             } else {
                 const literal = this.#input[position];
+
                 tokens[tokenIndex++] = literal;
                 literalFrequencies[literal]++;
             }

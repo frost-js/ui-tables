@@ -28,6 +28,7 @@ export function byteLength(string) {
  */
 export function encodeUint16(number) {
     const bytes = new Uint8Array(2);
+
     new DataView(bytes.buffer).setUint16(0, number, true);
 
     return bytes;
@@ -40,6 +41,7 @@ export function encodeUint16(number) {
  */
 export function encodeUint32(number) {
     const bytes = new Uint8Array(4);
+
     new DataView(bytes.buffer).setUint32(0, number, true);
 
     return bytes;

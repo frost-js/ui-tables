@@ -293,7 +293,7 @@ const all = table.getData({ scope: 'all' });
 
 `addRows()` preserves the current page; an empty batch does nothing. `setData()` resets to page one by default. With `resetPage: false`, it retains the page and clamps it when the new results have fewer pages. Both preserve global search, column filters, the row predicate, ordering, visibility, and page length.
 
-Invalid batches leave rows and the current view intact. Rows must be arrays or plain objects; sparse row collections are rejected. Copies isolate each row container, while nested objects remain shared, matching the existing single-row APIs. Validation and copying finish before rows are changed; renderer or predicate errors during the subsequent recalculation do not roll back an accepted dataset.
+Invalid batches leave rows and the current view intact. Rows must be arrays or plain objects; sparse row collections are rejected. Copies isolate each row container, while nested objects remain shared, matching the existing single-row APIs. Initial `data` supplied through options is first cloned by Frost UI’s shared option handling; getters share nested values with that loaded copy. Validation and copying finish before rows are changed; renderer or predicate errors during the subsequent recalculation do not roll back an accepted dataset.
 
 `setData([])` removes all rows while keeping search and filter state. Use `clear()` to clear those settings too. Replacing DOM-ingested rows discards their original cell metadata; replacement rows follow JavaScript data rules. Disposal still restores the original table markup.
 
@@ -749,7 +749,7 @@ Calling `Table.init()` again for the same element returns its existing instance.
 
 An instance exposes its original element as `instance.node` and its shallow-frozen resolved configuration as `instance.options`. Both become `null` after disposal.
 
-`dispose()` releases resources owned by the component and removes its registered instance. Repeated disposal is safe and does not affect a new instance initialized on the same element. Use a new instance before calling other methods after disposal.
+`dispose()` releases resources owned by the component and removes its registered instance. It removes component-added classes while preserving unrelated application classes. Repeated disposal is safe and does not affect a new instance initialized on the same element. Use a new instance before calling other methods after disposal.
 
 ## Events
 
@@ -816,7 +816,7 @@ Calling the plugin on an uninitialized table initializes it first. Mutators retu
 
 Tables consumes `--ui-primary`, `--ui-secondary-color`, `--ui-border-color-translucent` and `--ui-border-width`. Its `.btn-table` class supplies UI 4 button state/focus tokens. Configure `inputStyle`, column `class`, or `Table.classes` for markup styling.
 
-`$table-sort-right` retains its existing name but controls the logical inline end. See Installation for a custom Sass build.
+`$table-sort-offset` controls the sort arrows’ distance from the logical inline end of the heading. See [Custom Sass builds](#custom-sass-builds) for configuration.
 
 ### Custom Sass builds
 
@@ -831,7 +831,7 @@ npm i -D sass
 ```scss
 @use "@fr0st/ui-tables/src/scss/tables" with (
     $table-sort-size: .4rem,
-    $table-sort-right: .75rem,
+    $table-sort-offset: .75rem,
     $btn-table-color: var(--ui-primary)
 );
 ```

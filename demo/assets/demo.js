@@ -123,6 +123,7 @@ $.ready(() => {
 
         return `<ul class="mb-0">${items.join('')}</ul>`;
     };
+
     let dataTable;
     const initializeData = () => {
         dataTable?.dispose();
@@ -296,6 +297,7 @@ $.ready(() => {
                 if (shouldFail || request.term?.toLowerCase() === 'error') {
                     logRequest(`#${id}: failed`);
                     reject(new Error('Simulated request failure. Press Retry to try again.'));
+
                     return;
                 }
 
@@ -394,6 +396,7 @@ $.ready(() => {
             if (method === 'init') {
                 methodTable = initMethods();
                 $.setText(node('method-output'), 'Initialized.');
+
                 return;
             }
 

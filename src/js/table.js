@@ -8,8 +8,11 @@ import {
 import { buildTable, getDomData, getDomHeadings, getFooterCells } from './dom.js';
 
 /** @typedef {Array<*>|Record<string, *>} TableRow */
+
 /** @typedef {string|number} TableRowId */
+
 /** @typedef {[number, 'asc'|'desc']} TableOrder */
+
 /**
  * @typedef {object} TableState
  * @property {1} version The snapshot schema version.
@@ -20,12 +23,14 @@ import { buildTable, getDomData, getDomHeadings, getFooterCells } from './dom.js
  * @property {number} page The one-based page, or one when paging is disabled.
  * @property {Array<{data: string|number, name: string|null, visible: boolean}>} columns Column identity and visibility.
  */
+
 /**
  * @typedef {object} TableFilter
  * @property {number} column The original column index.
  * @property {'contains'|'equals'|'gt'|'gte'|'lt'|'lte'|'between'} operator The comparison.
  * @property {string|number|boolean|null|Array<string|number>} value The scalar value or inclusive bounds.
  */
+
 /**
  * @typedef {object} TableValueContext
  * @property {'display'|'sort'|'filter'|'export'} purpose The operation requesting a value.
@@ -33,6 +38,7 @@ import { buildTable, getDomData, getDomHeadings, getFooterCells } from './dom.js
  * @property {number} column The original column index.
  * @property {number} rowIndex The loaded-data index.
  */
+
 /**
  * @typedef {object} TableColumn
  * @property {string|number} [data] The row key or dot path; defaults to the column index.
@@ -50,6 +56,7 @@ import { buildTable, getDomData, getDomHeadings, getFooterCells } from './dom.js
  * @property {TableCompareCallback} [compare] Compares resolved sort values in ascending order.
  * @property {TableCreatedCellCallback} [createdCell] Receives a created cell.
  */
+
 /**
  * @typedef {object} TableDetailColumn
  * @property {number} column The original column index.
@@ -57,11 +64,13 @@ import { buildTable, getDomData, getDomHeadings, getFooterCells } from './dom.js
  * @property {string} title The plain heading text or localized fallback.
  * @property {string} html The sanitized display value.
  */
+
 /**
  * @typedef {object} TableDetailContext
  * @property {number} rowIndex The loaded-data index.
  * @property {TableDetailColumn[]} columns The collapsed, configured-visible columns in original order.
  */
+
 /**
  * @typedef {object} TableButton
  * @property {string} [type] The registered button type.
@@ -72,6 +81,7 @@ import { buildTable, getDomData, getDomHeadings, getFooterCells } from './dom.js
  * @property {boolean} [escapeFormulae=true] Prefixes formula-like CSV strings with an apostrophe.
  * @property {TableButtonCallback} [callback] Runs with the table as its receiver.
  */
+
 /**
  * @typedef {object} TableRequest
  * @property {string} [term] The search term, omitted when empty.
@@ -81,12 +91,14 @@ import { buildTable, getDomData, getDomHeadings, getFooterCells } from './dom.js
  * @property {number} [offset] The zero-based offset when paging is enabled.
  * @property {number} [limit] The page length when paging is enabled.
  */
+
 /**
  * @typedef {object} TableResults
  * @property {TableRow[]} results The rows for the requested page.
  * @property {number} total The total number of rows before filtering.
  * @property {number} filtered The total number of matching rows.
  */
+
 /**
  * @typedef {object} TableLanguage
  * @property {string} [column] The fallback heading label, containing {column}.
@@ -121,30 +133,36 @@ import { buildTable, getDomData, getDomHeadings, getFooterCells } from './dom.js
  * @property {string} [selection.page] The select page label.
  * @property {string} [selection.row] The row selection label, containing {id}.
  */
+
 /** @typedef {(TableResults|PromiseLike<TableResults>) & {cancel?: Function}} TablePendingResults */
+
 /**
  * @callback TableGetResultsCallback
  * @this {Table}
  * @param {TableRequest} request The search, filter, ordering, and pagination state.
  * @returns {TablePendingResults} Results or a promise, optionally exposing a cancel method.
  */
+
 /**
  * @callback TableRowIdCallback
  * @this {Table}
  * @param {TableRow} row The source row.
  * @returns {TableRowId} A stable, unique row ID.
  */
+
 /**
  * @callback TableSanitizeCallback
  * @param {string} html The heading, cell, or custom detail HTML.
  * @returns {string} The sanitized HTML.
  */
+
 /**
  * @callback TableFormatter
  * @this {Table}
  * @param {*} value The raw cell value.
  * @returns {*} The display value, converted to a string and sanitized.
  */
+
 /**
  * @callback TableRenderer
  * @this {Table}
@@ -152,6 +170,7 @@ import { buildTable, getDomData, getDomHeadings, getFooterCells } from './dom.js
  * @param {TableValueContext} context The operation and source row information.
  * @returns {*} The operation-specific value; display values are converted to strings and sanitized.
  */
+
 /**
  * @callback TableCompareCallback
  * @this {Table}
@@ -160,6 +179,7 @@ import { buildTable, getDomData, getDomHeadings, getFooterCells } from './dom.js
  * @param {{column: number}} context The original column index.
  * @returns {number} A negative number, zero, or a positive number for ascending ordering.
  */
+
 /**
  * @callback TableCreatedCellCallback
  * @this {Table}
@@ -170,6 +190,7 @@ import { buildTable, getDomData, getDomHeadings, getFooterCells } from './dom.js
  * @param {number} columnIndex The original column index.
  * @returns {void}
  */
+
 /**
  * @callback TableDetailRenderer
  * @this {Table}
@@ -177,11 +198,13 @@ import { buildTable, getDomData, getDomHeadings, getFooterCells } from './dom.js
  * @param {TableDetailContext} context The collapsed columns and loaded-data index.
  * @returns {string} Synchronous detail HTML, sanitized before insertion.
  */
+
 /**
  * @callback TableButtonCallback
  * @this {Table}
  * @returns {void}
  */
+
 /**
  * @callback TableCreatedRowCallback
  * @this {Table}
@@ -190,6 +213,7 @@ import { buildTable, getDomData, getDomHeadings, getFooterCells } from './dom.js
  * @param {number} rowIndex The zero-based page row index.
  * @returns {void}
  */
+
 /**
  * @callback TableRowCallback
  * @this {Table}
@@ -200,6 +224,7 @@ import { buildTable, getDomData, getDomHeadings, getFooterCells } from './dom.js
  * @param {number} dataRowIndex The loaded-data index.
  * @returns {void}
  */
+
 /**
  * @callback TableHeaderCallback
  * @this {Table}
@@ -210,6 +235,7 @@ import { buildTable, getDomData, getDomHeadings, getFooterCells } from './dom.js
  * @param {number[]} indexes The loaded-data indexes of the displayed rows.
  * @returns {void}
  */
+
 /**
  * @callback TableFooterCallback
  * @this {Table}
@@ -220,6 +246,7 @@ import { buildTable, getDomData, getDomHeadings, getFooterCells } from './dom.js
  * @param {number[]} indexes The loaded-data indexes of the displayed rows.
  * @returns {void}
  */
+
 /**
  * @callback TableInfoCallback
  * @this {Table}
@@ -230,16 +257,19 @@ import { buildTable, getDomData, getDomHeadings, getFooterCells } from './dom.js
  * @param {string} text The default result count text.
  * @returns {string} The result count text.
  */
+
 /**
  * @callback TablePreDrawCallback
  * @this {Table}
  * @returns {boolean|void} False to retain the current DOM; otherwise continue drawing.
  */
+
 /**
  * @callback TableDrawCallback
  * @this {Table}
  * @returns {void}
  */
+
 /**
  * @typedef {object} TableOptions
  * @property {TableRow[]} [data] Local data; otherwise read the table body.
@@ -306,6 +336,7 @@ export default class Table extends BaseComponent {
 
             const { headings, rows } = data;
             const table = buildTable(headings, rows, $.css(this.node, 'direction'));
+
             print(options, table, $.getAttribute(this.node, 'class'));
         },
     };
@@ -456,6 +487,7 @@ export default class Table extends BaseComponent {
         },
     };
 
+    #addedClasses = [];
     #collapsedColumns = new Set();
     #columnPickers = [];
     #columns = [];
@@ -563,6 +595,7 @@ export default class Table extends BaseComponent {
 
             if (!this.options.getResults) {
                 const data = this.options.data ?? getDomData(node, this.#domValues);
+
                 validateRows(data);
 
                 if (!this.#setData(data.slice())) {
@@ -571,6 +604,7 @@ export default class Table extends BaseComponent {
             }
 
             const headings = getDomHeadings(node);
+
             this.#columns = normalizeColumns(this.options.columns, headings);
             this.#headings = headings;
 
@@ -616,7 +650,7 @@ export default class Table extends BaseComponent {
 
     /**
      * Adds a row to the data array.
-     * @param {Array|object} row The row to add.
+     * @param {TableRow} row The row to add.
      */
     addRow(row) {
         if (!this.node) {
@@ -624,6 +658,7 @@ export default class Table extends BaseComponent {
         }
 
         validateRows([row]);
+
         const data = [...this.#data, Array.isArray(row) ? [...row] : { ...row }];
 
         if (!this.#setData(data)) {
@@ -725,11 +760,13 @@ export default class Table extends BaseComponent {
         this.#requestVersion++;
         this.#loadResults?.cancel();
         this.#responsiveObserver?.disconnect();
+
         if (this.#responsiveFrame !== null) {
             cancelAnimationFrame(this.#responsiveFrame);
         }
 
         const pending = this.#pending;
+
         this.#pending = null;
 
         // Clear the instance first so DOM removal events cannot dispose it again.
@@ -756,8 +793,14 @@ export default class Table extends BaseComponent {
             $.removeAttribute(node, 'id');
         }
 
+        $.removeClass(node, this.#addedClasses);
+        this.#addedClasses = [];
+
+        if (this.#originalClass === null && !node.getAttribute('class')) {
+            $.removeAttribute(node, 'class');
+        }
+
         for (const [attribute, value] of [
-            ['class', this.#originalClass],
             ['aria-describedby', this.#originalDescription],
             ['aria-busy', this.#originalBusy],
         ]) {
@@ -827,7 +870,7 @@ export default class Table extends BaseComponent {
 
     /**
      * Gets values for a single column.
-     * @param {string} key The key to retrieve.
+     * @param {string|number} key The key to retrieve.
      * @param {object} [options] Options for getting the column.
      * @param {boolean} [options.modified=true] Whether to use modified indexes.
      * @returns {Array} The column values.
@@ -867,6 +910,7 @@ export default class Table extends BaseComponent {
         }
 
         const version = this.#drawVersion;
+
         columns ??= this.#getVisibleColumns();
 
         if (!Array.isArray(columns)) {
@@ -888,6 +932,7 @@ export default class Table extends BaseComponent {
         // Exports contain text, even when the displayed headings contain HTML.
         const headings = columns.map((index) => {
             const container = $.create('div');
+
             $.setHtml(container, $.sanitize(String(this.#headings[index].text)));
 
             return $.getText(container);
@@ -997,7 +1042,7 @@ export default class Table extends BaseComponent {
     /**
      * Gets a single value from a row.
      * @param {number} index The row index to retrieve.
-     * @param {string} key The key to retrieve.
+     * @param {string|number} key The key to retrieve.
      * @param {object} [options] Options for getting the row index.
      * @param {boolean} [options.modified=true] Whether to use modified indexes.
      * @returns {*} The value.
@@ -1075,7 +1120,7 @@ export default class Table extends BaseComponent {
 
     /**
      * Sets the Table order data.
-     * @param {Array} order The order data.
+     * @param {TableOrder[]} order The column indexes and sort directions.
      */
     order(order) {
         if (!this.node || !this.options.ordering) {
@@ -1106,6 +1151,7 @@ export default class Table extends BaseComponent {
         }
 
         const pages = Math.max(1, Math.ceil(this.#filtered / this.#limit));
+
         this.#offset = (Math.min(pages, Math.max(1, page)) - 1) * this.#limit;
         $.triggerEvent(this.node, 'page.ui.table');
 
@@ -1123,7 +1169,7 @@ export default class Table extends BaseComponent {
 
     /**
      * Reloads the Table data.
-     * @param {object} [options] Options for reloading the data
+     * @param {object} [options] Options for reloading the data.
      * @param {boolean} [options.reset=false] Whether to reset the offset.
      */
     reload({ reset = false } = {}) {
@@ -1202,8 +1248,8 @@ export default class Table extends BaseComponent {
 
     /**
      * Sets values for a single column.
-     * @param {string} key The key to set.
-     * @param {Array} column The column values.
+     * @param {string|number} key The key to set.
+     * @param {Array<*>} column The replacement column values.
      * @param {object} [options] Options for getting the row index.
      * @param {boolean} [options.modified=true] Whether to use modified indexes.
      */
@@ -1233,6 +1279,7 @@ export default class Table extends BaseComponent {
         }
 
         validateRows(rows);
+
         const data = rows.map((row) => Array.isArray(row) ? [...row] : { ...row });
 
         if (!this.#setData(data)) {
@@ -1272,14 +1319,17 @@ export default class Table extends BaseComponent {
     /**
      * Sets values for a single row.
      * @param {number} index The row index to set.
-     * @param {Array|object} row The row values.
+     * @param {TableRow} row The row values.
      * @param {object} [options] Options for getting the row index.
      * @param {boolean} [options.modified=true] Whether to use modified indexes.
      */
     setRow(index, row, { modified = true } = {}) {
         const rowIndex = this.#getIndex(index, { modified });
+
         validateRows([row]);
+
         const data = [...this.#data];
+
         data[rowIndex] = Array.isArray(row) ? [...row] : { ...row };
 
         if (this.#setData(data, { preserveIds: true })) {
@@ -1375,6 +1425,7 @@ export default class Table extends BaseComponent {
         }
 
         const normalized = normalizeState(state, this.#columns, this.options);
+
         this.#searchHandler?.cancel();
 
         this.#term = normalized.search;
@@ -1399,13 +1450,14 @@ export default class Table extends BaseComponent {
     /**
      * Sets a single value for a row.
      * @param {number} index The row index to set.
-     * @param {string} key The key to set.
+     * @param {string|number} key The key to set.
      * @param {*} value The value to set.
      * @param {object} [options] Options for getting the row index.
      * @param {boolean} [options.modified=true] Whether to use modified indexes.
      */
     setValue(index, key, value, { modified = true } = {}) {
         const rowIndex = this.#getIndex(index, { modified });
+
         this.#setValues([rowIndex], String(key), [value]);
     }
 
@@ -1425,8 +1477,11 @@ export default class Table extends BaseComponent {
      */
     #cancelRequest() {
         const version = ++this.#requestVersion;
+
         this.#loadResults?.cancel();
+
         const pending = this.#pending;
+
         this.#pending = null;
 
         try {
@@ -1445,6 +1500,7 @@ export default class Table extends BaseComponent {
         if (this.#lengthSelect) {
             $.addEvent(this.#lengthSelect, 'change.ui.table', () => {
                 const length = $.getValue(this.#lengthSelect);
+
                 this.length(length);
             });
         }
@@ -2064,9 +2120,13 @@ export default class Table extends BaseComponent {
         const loaderIcon = $.create('span', {
             class: this.constructor.classes.loaderIcon,
         });
+
         $.append(this.#loader, loaderIcon);
 
+        const originalClasses = new Set(this.node.classList);
+
         $.addClass(this.node, this.constructor.classes.table);
+        this.#addedClasses = [...this.node.classList].filter((name) => !originalClasses.has(name));
 
         const caption = $.findOne('caption', this.#original);
 
@@ -2075,6 +2135,7 @@ export default class Table extends BaseComponent {
         }
 
         const thead = $.create('thead');
+
         $.append(this.node, thead);
 
         this.#theadRow = $.create('tr');
@@ -2267,7 +2328,9 @@ export default class Table extends BaseComponent {
 
         for (const index of columns) {
             const heading = $.create('div');
+
             $.setHtml(heading, $.sanitize(String(this.#headings[index].text)));
+
             const text = $.getText(heading).trim() || this.options.lang.column.replace('{column}', index + 1);
 
             const label = $.create('label', { class: this.constructor.classes.columnPickerLabel });
@@ -2289,6 +2352,7 @@ export default class Table extends BaseComponent {
         }
 
         const dropdown = Dropdown.init(button, { autoClose: 'outside' });
+
         this.#columnPickers.push({ dropdown, inputs });
 
         $.addEvent(button, 'keydown.ui.table', (event) => {
@@ -2424,6 +2488,7 @@ export default class Table extends BaseComponent {
      */
     #renderInfo() {
         const version = this.#drawVersion;
+
         $.empty(this.#infoContainer);
 
         const start = this.#results.length ? this.#offset + 1 : 0;
@@ -2454,6 +2519,7 @@ export default class Table extends BaseComponent {
         const text = $.create('small', {
             text: infoText,
         });
+
         $.append(this.#infoContainer, text);
     }
 
@@ -2482,7 +2548,7 @@ export default class Table extends BaseComponent {
 
     /**
      * Renders a layout row in a container.
-     * @param {Array} columns The columns to render.
+     * @param {string} columns The comma-separated layout columns and pipe-separated controls.
      * @param {string} rowClass The row class.
      */
     #renderLayoutRow(columns, rowClass) {
@@ -2535,12 +2601,14 @@ export default class Table extends BaseComponent {
         const label = $.create('label', {
             class: this.constructor.classes.lengthLabel,
         });
+
         $.append(lengthContainer, label);
 
         const labelText = $.create('small', {
             class: this.constructor.classes.lengthLabelText,
             text: this.options.lang.perPage,
         });
+
         $.append(label, labelText);
 
         const inputContainer = $.create('div', {
@@ -2549,6 +2617,7 @@ export default class Table extends BaseComponent {
                 width: 'initial',
             },
         });
+
         $.append(label, inputContainer);
 
         this.#lengthSelect = $.create('select', {
@@ -2576,8 +2645,8 @@ export default class Table extends BaseComponent {
 
     /**
      * Renders a pagination item.
-     * @param {object} options Options for rendering the pagnination item.
-     * @returns {HTMLElement} The pagnination item.
+     * @param {object} options Options for rendering the pagination item.
+     * @returns {HTMLElement} The pagination item.
      */
     #renderPageItem(options) {
         const label = options.text ?
@@ -2601,6 +2670,7 @@ export default class Table extends BaseComponent {
                 uiPage: options.page,
             },
         });
+
         $.append(container, link);
 
         return container;
@@ -2612,6 +2682,7 @@ export default class Table extends BaseComponent {
     #renderPagination() {
         const setDisabled = (container, disabled) => {
             const link = $.findOne(':scope > [data-ui-page]', container);
+
             $.setProperty(link, { disabled });
 
             if (disabled) {
@@ -2730,6 +2801,7 @@ export default class Table extends BaseComponent {
         const paginationContainer = $.create('div', {
             class: this.constructor.classes.paginationContainer,
         });
+
         $.append(container, paginationContainer);
 
         this.#pagination = $.create('div', {
@@ -2794,6 +2866,7 @@ export default class Table extends BaseComponent {
         const version = this.#drawVersion;
         const expanded = this.#expandedRows.has(entry.key);
         const label = this.options.lang.responsive[expanded ? 'hide' : 'show'];
+
         $.setAttribute(entry.button, {
             'aria-expanded': expanded,
             'aria-label': label.replace('{row}', String(this.options.rowId === null ? entry.pageIndex + 1 : entry.key)),
@@ -2816,7 +2889,9 @@ export default class Table extends BaseComponent {
             }
 
             const heading = $.create('div');
+
             $.setHtml(heading, $.sanitize(String(this.#headings[index].text)));
+
             const text = $.getText(heading).trim() || this.options.lang.column.replace('{column}', index + 1);
             const value = this.#getValue(entry.index, index, 'display');
 
@@ -2887,6 +2962,7 @@ export default class Table extends BaseComponent {
         // User callbacks may dispose the table or draw again. Stop an older draw after each callback.
         const version = ++this.#drawVersion;
         const active = () => this.node && version === this.#drawVersion;
+
         this.#syncColumnPickers();
         this.#syncSelection();
         this.#notifySelectionChange();
@@ -2922,10 +2998,16 @@ export default class Table extends BaseComponent {
             this.#expandedRows.clear();
         } else {
             const ids = new Set(this.#rowIndexes.map((index) => this.#rowIds[index]));
+
             this.#expandedRows = new Set([...this.#expandedRows].filter((id) => ids.has(id)));
         }
 
         this.#renderHeadings();
+
+        if (!active()) {
+            return;
+        }
+
         this.#syncResponsiveColumns();
 
         if (!active()) {
@@ -2933,6 +3015,7 @@ export default class Table extends BaseComponent {
         }
 
         const end = this.#offset + this.#results.length;
+
         this.options.headerCallback?.call(this, this.#theadRow, this.#data, this.#offset, end, [...this.#rowIndexes]);
 
         if (!active()) {
@@ -2953,6 +3036,7 @@ export default class Table extends BaseComponent {
 
         if (!this.#results.length) {
             const row = $.create('tr');
+
             this.#emptyCell = $.create('td', {
                 class: this.constructor.classes.emptyCell,
                 text: this.#term || this.#filters.length || this.#rowFilter ? this.options.lang.noResults : this.options.lang.noData,
@@ -3028,6 +3112,7 @@ export default class Table extends BaseComponent {
                 },
                 dataset: { uiSelectRow: index },
             });
+
             this.#selectionInputs.set(input, id);
             $.setProperty(input, 'checked', this.#selectedIds.has(id));
             $.append(cell, input);
@@ -3085,6 +3170,7 @@ export default class Table extends BaseComponent {
                 html,
                 class: column.class || '',
             });
+
             responsive?.cells.set(index, cell);
             column.createdCell?.call(this, cell, value, data, rowIndex, index);
 
@@ -3117,6 +3203,7 @@ export default class Table extends BaseComponent {
                 width: '200px',
             },
         });
+
         $.append(searchContainer, inputContainer);
 
         this.#searchInput = $.create('input', {
@@ -3260,6 +3347,7 @@ export default class Table extends BaseComponent {
             for (const [offset, index] of indexes.entries()) {
                 if (metadata[offset]) {
                     const copy = new Map(metadata[offset]);
+
                     copy.delete(key);
                     this.#domValues.set(data[index], copy);
                 }
@@ -3340,6 +3428,7 @@ export default class Table extends BaseComponent {
                 } else {
                     const aText = String(aValue.value ?? '').toLocaleLowerCase();
                     const bText = String(bValue.value ?? '').toLocaleLowerCase();
+
                     difference = aText.localeCompare(bText);
                 }
 
@@ -3376,6 +3465,7 @@ export default class Table extends BaseComponent {
     #syncFooter() {
         for (const { cell, columns, hidden } of this.#footerCells) {
             const count = columns.filter((index) => this.#columns[index]?.visible && !this.#collapsedColumns.has(index)).length;
+
             $.setProperty(cell, 'hidden', hidden || !count);
             $.setProperty(cell, 'colSpan', Math.max(1, count));
         }
@@ -3397,6 +3487,7 @@ export default class Table extends BaseComponent {
                 value: this.#limit,
                 text: this.#limit,
             });
+
             $.append(this.#lengthSelect, option);
         }
 
@@ -3570,6 +3661,7 @@ export default class Table extends BaseComponent {
 
         if (this.options.paging) {
             const lastOffset = Math.max(0, (Math.ceil(indexes.length / this.#limit) - 1) * this.#limit);
+
             this.#offset = Math.min(this.#offset, lastOffset);
             indexes = indexes.slice(this.#offset, this.#offset + this.#limit);
         } else {
@@ -3659,10 +3751,6 @@ export default class Table extends BaseComponent {
                     }
 
                     $.focus(entry.row);
-
-                    if (tabIndex === null && $.getAttribute(entry.row, 'tabindex') === '-1') {
-                        $.removeAttribute(entry.row, 'tabindex');
-                    }
 
                     if (!active()) {
                         return;

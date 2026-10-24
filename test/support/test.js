@@ -11,6 +11,7 @@ const test = base.extend({
     uiPage: [
         async ({ page, mockClock, expectedBrowserErrors }, use, testInfo) => {
             const errors = [];
+
             page.on('pageerror', (error) => errors.push(error.message));
 
             if (collectCoverage) {
@@ -42,6 +43,7 @@ const test = base.extend({
 
             await page.waitForFunction(() => {
                 const node = document.createElement('div');
+
                 node.className = 'table-sort text-center';
                 document.body.append(node);
 
@@ -50,6 +52,7 @@ const test = base.extend({
                     style.textAlign === 'center';
 
                 node.remove();
+
                 return ready;
             });
 
@@ -57,6 +60,7 @@ const test = base.extend({
 
             if (collectCoverage) {
                 const coverage = await page.coverage.stopJSCoverage();
+
                 await addCoverageReport(coverage, testInfo);
             }
 

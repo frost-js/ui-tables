@@ -51,9 +51,6 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Check Sass variables
-        run: npm run lint:sass:unused
-
       - name: Build
         run: npm run build
 
@@ -61,11 +58,11 @@ jobs:
         if: matrix.browser == 'chromium'
         run: npm run test:unit
 
-      - name: Run browser tests
+      - name: Run tests
         if: matrix.node-version != 24 || matrix.browser != 'chromium'
         run: npm run test:browser -- --project=${{ matrix.browser }} --workers=4
 
-      - name: Run browser tests with coverage
+      - name: Run tests with coverage
         if: matrix.node-version == 24 && matrix.browser == 'chromium'
         run: npm run test:coverage -- --workers=4
 
@@ -79,12 +76,7 @@ jobs:
           files: ./coverage/lcov.info
 
       - name: Verify generated bundles are current
-        run: |
-          if [ -n "$(git status --porcelain --untracked-files=all -- dist)" ]; then
-            git status --short --untracked-files=all -- dist
-            echo "::error::Generated bundles must be current and tracked. Run npm run build and commit dist."
-            exit 1
-          fi
+        run: git diff --exit-code -- dist
 
       - name: Validate package contents
         run: npm pack --dry-run

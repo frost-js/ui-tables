@@ -23,6 +23,7 @@ const server = createServer(async (request, response) => {
             'Content-Type': 'text/plain; charset=utf-8',
         });
         response.end('Not found');
+
         return;
     }
 

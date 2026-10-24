@@ -27,12 +27,15 @@ export function readZip(bytes) {
         assert.equal(data.length, buffer.readUInt32LE(offset + 22));
 
         let crc = 0xffffffff;
+
         for (const byte of data) {
             crc ^= byte;
+
             for (let bit = 0; bit < 8; bit++) {
                 crc = crc & 1 ? (crc >>> 1) ^ 0xedb88320 : crc >>> 1;
             }
         }
+
         assert.equal((crc ^ 0xffffffff) >>> 0, buffer.readUInt32LE(offset + 14));
         files.set(name, {
             text: data.toString('utf8'),
@@ -51,6 +54,7 @@ export function readZip(bytes) {
     while (buffer.readUInt32LE(offset) === 0x02014b50) {
         const length = buffer.readUInt16LE(offset + 28);
         const name = buffer.toString('utf8', offset + 46, offset + 46 + length);
+
         assert.equal(buffer.readUInt32LE(offset + 42), files.get(name).offset);
         offset += 46 + length + buffer.readUInt16LE(offset + 30) + buffer.readUInt16LE(offset + 32);
         count++;
@@ -92,6 +96,7 @@ export function readCsv(text) {
 
     for (let index = 0; index < text.length; index++) {
         const char = text[index];
+
         if (char === '"') {
             if (quoted && text[index + 1] === '"') {
                 field += '"';
@@ -102,10 +107,12 @@ export function readCsv(text) {
         } else if (!quoted && (char === ',' || char === '\r' || char === '\n')) {
             rows.at(-1).push(field);
             field = '';
+
             if (char !== ',') {
                 if (char === '\r' && text[index + 1] === '\n') {
                     index++;
                 }
+
                 rows.push([]);
             }
         } else {
@@ -115,6 +122,7 @@ export function readCsv(text) {
 
     rows.at(-1).push(field);
     assert.equal(quoted, false);
+
     return rows;
 }
 

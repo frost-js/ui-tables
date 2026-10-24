@@ -1,4 +1,5 @@
 /** @import { Page } from '@playwright/test'; */
+
 /**
  * Installs and pauses the test clock at a fixed time.
  * @param {Page} page The test page.

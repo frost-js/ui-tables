@@ -124,7 +124,7 @@ test.describe('Table bulk data', () => {
                     order: [],
                 });
                 const rows = table.getData({ scope: 'all' });
-                const shared = rows[0].nested === nested;
+                const shared = rows[0].nested === table.options.data[0].nested;
 
                 rows[0].name = 'Changed';
                 rows.pop();

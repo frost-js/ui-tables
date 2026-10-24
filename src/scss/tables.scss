@@ -4,7 +4,7 @@
 
 .table-sort {
     position: relative;
-    padding-inline-end: (vars.$table-sort-right * 2) + (vars.$table-sort-size * 2) !important;
+    padding-inline-end: (vars.$table-sort-offset * 2) + (vars.$table-sort-size * 2) !important;
     cursor: pointer;
 
     &:focus-visible {
@@ -23,7 +23,7 @@
 
     &::before {
         inset-block-start: calc(50% - (#{vars.$table-border-width} * 2));
-        inset-inline-end: vars.$table-sort-right;
+        inset-inline-end: vars.$table-sort-offset;
         border-width: 0 vars.$table-sort-size vars.$table-sort-size;
         border-bottom-color: vars.$table-sort-border-color;
         transform: translateY(-100%);
@@ -31,7 +31,7 @@
 
     &::after {
         inset-block-end: calc(50% - (#{vars.$table-border-width} * 2));
-        inset-inline-end: vars.$table-sort-right;
+        inset-inline-end: vars.$table-sort-offset;
         border-width: vars.$table-sort-size vars.$table-sort-size 0;
         border-top-color: vars.$table-sort-border-color;
         transform: translateY(100%);

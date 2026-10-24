@@ -78,6 +78,7 @@ function getLengthCodeTable() {
 
         for (let i = 3; i <= 258; i++) {
             const codes = generateLengthCodes(i);
+
             // Pack the symbol into 16 bits, followed by the extra value and bit count in 8 bits each.
             lengthCodeTable[i] = (codes[2] << 24) | (codes[1] << 16) | codes[0];
         }

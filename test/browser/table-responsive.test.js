@@ -352,13 +352,13 @@ test.describe('Table responsive details', () => {
                     renderDetails(row, context) {
                         window.calls.push({ row, ...context, receiver: this === window.table });
 
-                        return `<section>${context.columns.map(({ html }) => html).join(' ')}<img src="data:," onerror="window.unsafe = true"></section>`;
+                        return `<div>${context.columns.map(({ html }) => html).join(' ')}<img src="data:," onerror="window.unsafe = true"></div>`;
                     },
                 });
             });
             expect(await page.evaluate(() => window.calls)).toEqual([]);
             await page.getByRole('button', { name: 'Show details for row Alice', exact: true }).click();
-            await expect(page.locator('.table-details section')).toHaveText('Engineering 90');
+            await expect(page.locator('.table-details div')).toHaveText('Engineering 90');
             await expect(page.locator('.table-details strong')).toHaveText('90');
             await expect(page.locator('.table-details [onerror], .table-details dl')).toHaveCount(0);
             expect(await page.evaluate(() => window.calls)).toEqual([{

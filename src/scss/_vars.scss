@@ -1,6 +1,6 @@
 $table-border-width: var(--ui-border-width) !default;
 $table-sort-size: .35rem !default;
-$table-sort-right: .5rem !default;
+$table-sort-offset: .5rem !default;
 $table-sort-border-color: var(--ui-border-color-translucent) !default;
 $table-sort-active-border-color: var(--ui-primary) !default;
 $table-sort-focus-box-shadow: inset 0 0 0 9999px color-mix(in srgb, var(--ui-primary) 20%, transparent) !default;
