@@ -7,6 +7,9 @@ import {
 } from './data.js';
 import { buildTable, getDomData, getDomHeadings, getFooterCells } from './dom.js';
 
+const document = $.getContext();
+const window = $.getWindow();
+
 /** @typedef {Array<*>|Record<string, *>} TableRow */
 
 /** @typedef {string|number} TableRowId */
@@ -551,6 +554,7 @@ export default class Table extends BaseComponent {
      * Creates a Table.
      * @param {HTMLTableElement} node The input table.
      * @param {TableOptions} [options] The component options.
+     * @throws {TypeError} When the input is not a table element or the configuration is invalid.
      */
     constructor(node, options) {
         if (!$._isElement(node) || !$.is(node, 'table')) {
@@ -762,7 +766,7 @@ export default class Table extends BaseComponent {
         this.#responsiveObserver?.disconnect();
 
         if (this.#responsiveFrame !== null) {
-            cancelAnimationFrame(this.#responsiveFrame);
+            window.cancelAnimationFrame(this.#responsiveFrame);
         }
 
         const pending = this.#pending;
@@ -873,7 +877,7 @@ export default class Table extends BaseComponent {
      * @param {string|number} key The key to retrieve.
      * @param {object} [options] Options for getting the column.
      * @param {boolean} [options.modified=true] Whether to use modified indexes.
-     * @returns {Array} The column values.
+     * @returns {Array<*>} The column values.
      */
     getColumn(key, { modified = true } = {}) {
         return modified ?
@@ -1350,7 +1354,7 @@ export default class Table extends BaseComponent {
 
     /**
      * Sets a local row predicate and resets to the first page.
-     * @param {function(TableRow): boolean|null} predicate The predicate, or null to clear it.
+     * @param {((row: TableRow) => boolean)|null} predicate The predicate, or null to clear it.
      */
     setRowFilter(predicate) {
         if (!this.node || !this.options.searching) {
@@ -1569,7 +1573,7 @@ export default class Table extends BaseComponent {
         }
 
         if (this.options.responsive) {
-            this.#responsiveObserver = new ResizeObserver(([entry]) => {
+            this.#responsiveObserver = new window.ResizeObserver(([entry]) => {
                 if (entry.contentRect.width !== this.#responsiveWidth) {
                     this.#responsiveWidth = entry.contentRect.width;
                     this.#scheduleResponsive();
@@ -1837,7 +1841,7 @@ export default class Table extends BaseComponent {
 
     /**
      * Expands alternate sort columns, which were validated during initialization.
-     * @returns {Array} The column ordering data.
+     * @returns {TableOrder[]} The column ordering data.
      */
     #getOrder() {
         return this.#order.flatMap(([index, direction]) => {
@@ -1920,7 +1924,7 @@ export default class Table extends BaseComponent {
 
     /**
      * Gets the visible columns.
-     * @returns {Array} The visible columns.
+     * @returns {number[]} The visible column indexes.
      */
     #getVisibleColumns() {
         const columns = [];
@@ -3253,7 +3257,7 @@ export default class Table extends BaseComponent {
             return;
         }
 
-        this.#responsiveFrame = requestAnimationFrame(() => {
+        this.#responsiveFrame = window.requestAnimationFrame(() => {
             this.#responsiveFrame = null;
             this.#updateResponsive();
         });

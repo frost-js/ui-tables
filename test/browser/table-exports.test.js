@@ -258,7 +258,7 @@ test.describe('Table export data', () => {
                         try {
                             UI.Table.buttons[type].call(table, { scope });
                         } catch (error) {
-                            errors.push(error.name);
+                            errors.push({ name: `${type} (${scope})`, error: error.name });
                         }
                     }
                 }
@@ -274,7 +274,14 @@ test.describe('Table export data', () => {
                 headings: ['Name', 'Score'],
                 rows: [['Remote', 1]],
             });
-            expect(result.errors).toEqual(Array(6).fill('RangeError'));
+            expect(result.errors).toEqual([
+                { name: 'csv (filtered)', error: 'RangeError' },
+                { name: 'excel (filtered)', error: 'RangeError' },
+                { name: 'print (filtered)', error: 'RangeError' },
+                { name: 'csv (all)', error: 'RangeError' },
+                { name: 'excel (all)', error: 'RangeError' },
+                { name: 'print (all)', error: 'RangeError' },
+            ]);
             expect(result.calls).toBe(0);
         });
     });

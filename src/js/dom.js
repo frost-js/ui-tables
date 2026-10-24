@@ -1,5 +1,8 @@
 import $ from '@fr0st/query';
 
+const document = $.getContext();
+const window = $.getWindow();
+
 /**
  * Builds a text-only table from export data.
  * @param {string[]} headings The column headings.
@@ -156,6 +159,6 @@ export function saveBlob(blob, filename) {
         $.click(link);
     } finally {
         $.detach(link);
-        setTimeout(() => URL.revokeObjectURL(url), 0);
+        window.setTimeout(() => URL.revokeObjectURL(url), 0);
     }
 }

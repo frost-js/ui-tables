@@ -214,14 +214,14 @@ test.describe('Table remote results', () => {
                 const table = UI.Table.init($.findOne('#table'));
                 const errors = [];
 
-                for (const update of [
-                    () => table.setRowFilter(() => true),
-                    () => table.setFilters([{ column: 2, operator: 'equals', value: 'Invalid' }]),
+                for (const [name, update] of [
+                    ['row predicate for remote data', () => table.setRowFilter(() => true)],
+                    ['unknown filter column', () => table.setFilters([{ column: 2, operator: 'equals', value: 'Invalid' }])],
                 ]) {
                     try {
                         update();
                     } catch (error) {
-                        errors.push(error.name);
+                        errors.push({ name, error: error.name });
                     }
                 }
 
@@ -230,7 +230,10 @@ test.describe('Table remote results', () => {
                 return errors;
             });
 
-            expect(errors).toEqual(['TypeError', 'RangeError']);
+            expect(errors).toEqual([
+                { name: 'row predicate for remote data', error: 'TypeError' },
+                { name: 'unknown filter column', error: 'RangeError' },
+            ]);
             await expect(page.locator('tbody td')).toHaveText('Original request');
             await expect(page.locator('body')).toHaveAttribute('data-requests', '1');
         });
@@ -654,7 +657,7 @@ test.describe('Table remote results', () => {
                         try {
                             window.table[method]({ scope });
                         } catch (error) {
-                            errors.push(error.name);
+                            errors.push({ name: `${method} (${scope})`, error: error.name });
                         }
                     }
                 }
@@ -669,7 +672,12 @@ test.describe('Table remote results', () => {
             });
 
             expect(result.selected).toEqual(['One', 'Unloaded']);
-            expect(result.errors).toEqual(Array(4).fill('RangeError'));
+            expect(result.errors).toEqual([
+                { name: 'selectRows (filtered)', error: 'RangeError' },
+                { name: 'selectRows (all)', error: 'RangeError' },
+                { name: 'deselectRows (filtered)', error: 'RangeError' },
+                { name: 'deselectRows (all)', error: 'RangeError' },
+            ]);
             expect(result.requests).toBe(2);
             expect(result.absent).toBeNull();
             expect(result.loaded).toEqual(['Three']);

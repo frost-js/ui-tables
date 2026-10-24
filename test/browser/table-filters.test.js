@@ -270,11 +270,14 @@ test.describe('Table filters', () => {
                 const table = window.createTable();
                 const errors = [];
 
-                for (const predicate of [true, () => 1]) {
+                for (const [name, predicate] of [
+                    ['non-function predicate', true],
+                    ['non-boolean predicate result', () => 1],
+                ]) {
                     try {
                         table.setRowFilter(predicate);
                     } catch (error) {
-                        errors.push(error.name);
+                        errors.push({ name, error: error.name });
                     }
                 }
 
@@ -283,7 +286,10 @@ test.describe('Table filters', () => {
                 return errors;
             });
 
-            expect(errors).toEqual(['TypeError', 'TypeError']);
+            expect(errors).toEqual([
+                { name: 'non-function predicate', error: 'TypeError' },
+                { name: 'non-boolean predicate result', error: 'TypeError' },
+            ]);
             await expect(page.locator('#table')).toHaveAttribute('aria-busy', 'false');
             await expect(page.locator('tbody td')).toHaveText(['A', '1', 'A', '3']);
         });

@@ -4,6 +4,9 @@ import $ from '@fr0st/query';
 import { saveBlob } from './dom.js';
 import Workbook from './workbook/workbook.js';
 
+const document = $.getContext();
+const window = $.getWindow();
+
 /**
  * Downloads the selected rows as CSV, escaping delimiters, quotes and line breaks.
  * @param {TableButton} options The button options.

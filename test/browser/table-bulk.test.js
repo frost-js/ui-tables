@@ -297,11 +297,15 @@ test.describe('Table bulk data', () => {
 
                     const errors = [];
 
-                    for (const rows of [null, [['Valid', 5], null], new Array(2)]) {
+                    for (const [name, rows] of [
+                        ['null batch', null],
+                        ['batch with null row', [['Valid', 5], null]],
+                        ['sparse batch', new Array(2)],
+                    ]) {
                         try {
                             table[method](rows);
                         } catch (error) {
-                            errors.push(error.name);
+                            errors.push({ name, error: error.name });
                         }
                     }
 
@@ -312,7 +316,11 @@ test.describe('Table bulk data', () => {
                     };
                 }, method);
 
-                expect(result.errors).toEqual(['TypeError', 'TypeError', 'TypeError']);
+                expect(result.errors).toEqual([
+                    { name: 'null batch', error: 'TypeError' },
+                    { name: 'batch with null row', error: 'TypeError' },
+                    { name: 'sparse batch', error: 'TypeError' },
+                ]);
                 expect(result.rows).toEqual([['B', 2], ['C', 4]]);
                 expect(result.total).toBe(4);
             });
@@ -379,16 +387,16 @@ test.describe('Table bulk data', () => {
                 const table = UI.Table.init($.findOne('#table'));
                 const errors = [];
 
-                for (const action of [
-                    () => table.addRows([]),
-                    () => table.setData([]),
-                    () => table.getData({ scope: 'filtered' }),
-                    () => table.getData({ scope: 'all' }),
+                for (const [name, action] of [
+                    ['addRows', () => table.addRows([])],
+                    ['setData', () => table.setData([])],
+                    ['getData filtered', () => table.getData({ scope: 'filtered' })],
+                    ['getData all', () => table.getData({ scope: 'all' })],
                 ]) {
                     try {
                         action();
                     } catch (error) {
-                        errors.push(error.name);
+                        errors.push({ name, error: error.name });
                     }
                 }
 
@@ -403,7 +411,12 @@ test.describe('Table bulk data', () => {
                 };
             });
 
-            expect(result.errors).toEqual(['TypeError', 'TypeError', 'RangeError', 'RangeError']);
+            expect(result.errors).toEqual([
+                { name: 'addRows', error: 'TypeError' },
+                { name: 'setData', error: 'TypeError' },
+                { name: 'getData filtered', error: 'RangeError' },
+                { name: 'getData all', error: 'RangeError' },
+            ]);
             expect(result.rows).toEqual([['Remote', 1]]);
             expect(result.total).toBe(50);
         });

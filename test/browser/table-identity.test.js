@@ -50,29 +50,25 @@ test.describe('Table row identity', () => {
             });
         }
 
-        test('rejects duplicate identities and invalid accessors', async ({ page }) => {
-            const errors = await page.evaluate(() => {
-                const errors = [];
-
-                for (const options of [
-                    { rowId: 1, data: [['A', 1], ['B', 1]] },
-                    { rowId: '' },
-                    { rowId: -1 },
-                    { rowId: true },
-                    { rowId: {} },
-                ]) {
+        for (const { name, options } of [
+            { name: 'duplicate IDs', options: { rowId: 1, data: [['A', 1], ['B', 1]] } },
+            { name: 'empty accessor', options: { rowId: '' } },
+            { name: 'negative accessor', options: { rowId: -1 } },
+            { name: 'boolean accessor', options: { rowId: true } },
+            { name: 'object accessor', options: { rowId: {} } },
+        ]) {
+            test(`rejects ${name}`, async ({ page }) => {
+                const error = await page.evaluate((options) => {
                     try {
                         window.createTable(options);
                     } catch (error) {
-                        errors.push(error.name);
+                        return error.name;
                     }
-                }
+                }, options);
 
-                return errors;
+                expect(error).toBe('TypeError');
             });
-
-            expect(errors).toEqual(Array(5).fill('TypeError'));
-        });
+        }
 
         test('supports nested accessors and pure callbacks with the table as receiver', async ({ page }) => {
             const result = await page.evaluate(() => {
@@ -157,26 +153,32 @@ test.describe('Table row identity', () => {
             const errors = await page.evaluate(() => {
                 let table = window.createTable();
                 const errors = [];
-                const attempt = (callback) => {
+                const attempt = (name, callback) => {
                     try {
                         callback();
                     } catch (error) {
-                        errors.push(error.name);
+                        errors.push({ name, error: error.name });
                     }
                 };
 
-                attempt(() => table.getRowById(1));
-                attempt(() => table.getRowId(0));
+                attempt('getRowById without identity', () => table.getRowById(1));
+                attempt('getRowId without identity', () => table.getRowId(0));
                 table.dispose();
                 table = window.createTable({ rowId: 1 });
-                attempt(() => table.getRowById(null));
-                attempt(() => table.setRowById('missing', ['Missing', 9]));
-                attempt(() => table.removeRowById('missing'));
+                attempt('getRowById with null ID', () => table.getRowById(null));
+                attempt('setRowById with missing ID', () => table.setRowById('missing', ['Missing', 9]));
+                attempt('removeRowById with missing ID', () => table.removeRowById('missing'));
 
                 return errors;
             });
 
-            expect(errors).toEqual(['TypeError', 'TypeError', 'TypeError', 'RangeError', 'RangeError']);
+            expect(errors).toEqual([
+                { name: 'getRowById without identity', error: 'TypeError' },
+                { name: 'getRowId without identity', error: 'TypeError' },
+                { name: 'getRowById with null ID', error: 'TypeError' },
+                { name: 'setRowById with missing ID', error: 'RangeError' },
+                { name: 'removeRowById with missing ID', error: 'RangeError' },
+            ]);
         });
     });
 
@@ -198,19 +200,19 @@ test.describe('Table row identity', () => {
 
                 const errors = [];
 
-                for (const mutate of [
-                    () => table.addRow(['Duplicate', 1]),
-                    () => table.addRows([['New', 5], ['Duplicate', 1]]),
-                    () => table.setData([['New', 5], ['Duplicate', 5]]),
-                    () => table.setRow(0, ['Changed', 8]),
-                    () => table.setRowById(1, ['Changed', 8]),
-                    () => table.setValue(0, 1, 8),
-                    () => table.setColumn(1, [1, 8]),
+                for (const [name, mutate] of [
+                    ['addRow with duplicate ID', () => table.addRow(['Duplicate', 1])],
+                    ['addRows with duplicate ID', () => table.addRows([['New', 5], ['Duplicate', 1]])],
+                    ['setData with duplicate IDs', () => table.setData([['New', 5], ['Duplicate', 5]])],
+                    ['setRow changing ID', () => table.setRow(0, ['Changed', 8])],
+                    ['setRowById changing ID', () => table.setRowById(1, ['Changed', 8])],
+                    ['setValue changing ID', () => table.setValue(0, 1, 8)],
+                    ['setColumn changing ID', () => table.setColumn(1, [1, 8])],
                 ]) {
                     try {
                         mutate();
                     } catch (error) {
-                        errors.push(error.name);
+                        errors.push({ name, error: error.name });
                     }
                 }
 
@@ -223,7 +225,15 @@ test.describe('Table row identity', () => {
                 };
             });
 
-            expect(result.errors).toEqual(Array(7).fill('TypeError'));
+            expect(result.errors).toEqual([
+                { name: 'addRow with duplicate ID', error: 'TypeError' },
+                { name: 'addRows with duplicate ID', error: 'TypeError' },
+                { name: 'setData with duplicate IDs', error: 'TypeError' },
+                { name: 'setRow changing ID', error: 'TypeError' },
+                { name: 'setRowById changing ID', error: 'TypeError' },
+                { name: 'setValue changing ID', error: 'TypeError' },
+                { name: 'setColumn changing ID', error: 'TypeError' },
+            ]);
             expect(result.draws).toBe(0);
             expect(result.events).toBe(0);
             expect(result.selected).toEqual([1]);
@@ -240,11 +250,15 @@ test.describe('Table row identity', () => {
                 });
                 const errors = [];
 
-                for (const [key, value] of [['person.id', 'b'], ['person', { id: 'b' }], ['*.id', 'b']]) {
+                for (const [name, key, value] of [
+                    ['nested identity', 'person.id', 'b'],
+                    ['parent object', 'person', { id: 'b' }],
+                    ['wildcard identity', '*.id', 'b'],
+                ]) {
                     try {
                         table.setValue(0, key, value);
                     } catch (error) {
-                        errors.push(error.name);
+                        errors.push({ name, error: error.name });
                     }
                 }
 
@@ -257,7 +271,11 @@ test.describe('Table row identity', () => {
                 };
             });
 
-            expect(result.errors).toEqual(Array(3).fill('TypeError'));
+            expect(result.errors).toEqual([
+                { name: 'nested identity', error: 'TypeError' },
+                { name: 'parent object', error: 'TypeError' },
+                { name: 'wildcard identity', error: 'TypeError' },
+            ]);
             expect(result.source).toEqual({
                 person: { id: 'a', name: 'Alice' },
                 score: 1,

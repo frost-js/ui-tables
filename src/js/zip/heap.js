@@ -8,7 +8,7 @@ export default class Heap {
 
     /**
      * Creates a Heap.
-     * @param {number} [length] The size of the heap.
+     * @param {number} length The size of the heap.
      */
     constructor(length) {
         // Each heap entry stores a frequency followed by its symbol index.
@@ -26,7 +26,7 @@ export default class Heap {
 
     /**
      * Pops the top value off the heap.
-     * @returns {object} The top value from the heap.
+     * @returns {{index: number, value: number}} The symbol index and frequency.
      */
     pop() {
         const value = this.#buffer[0];

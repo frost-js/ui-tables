@@ -319,18 +319,25 @@ test.describe('Table responsive details', () => {
     });
 
     test.describe('custom renderers', () => {
-        test('rejects invalid renderer options', async ({ page }) => {
-            const errors = await page.evaluate(() => [false, 'html', 42, {}].map((renderDetails) => {
-                try {
-                    window.createResponsive({ renderDetails });
-                } catch (error) {
-                    return error.name;
-                }
-            }));
+        for (const { name, renderDetails } of [
+            { name: 'boolean', renderDetails: false },
+            { name: 'string', renderDetails: 'html' },
+            { name: 'number', renderDetails: 42 },
+            { name: 'object', renderDetails: {} },
+        ]) {
+            test(`rejects a ${name} renderer`, async ({ page }) => {
+                const error = await page.evaluate((renderDetails) => {
+                    try {
+                        window.createResponsive({ renderDetails });
+                    } catch (error) {
+                        return error.name;
+                    }
+                }, renderDetails);
 
-            expect(errors).toEqual(['TypeError', 'TypeError', 'TypeError', 'TypeError']);
-            await expect(page.locator('.table-responsive')).toHaveCount(0);
-        });
+                expect(error).toBe('TypeError');
+                await expect(page.locator('.table-responsive')).toHaveCount(0);
+            });
+        }
 
         test('provides source indexes and collapsed display metadata and sanitizes custom output', async ({ page }) => {
             await page.evaluate(() => {

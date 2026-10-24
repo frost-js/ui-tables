@@ -2,6 +2,8 @@ import { BaseComponent, Dropdown, generateId, initComponent } from "@fr0st/ui";
 import $ from "@fr0st/query";
 
 //#region src/js/dom.js
+var document$2 = $.getContext();
+var window$2 = $.getWindow();
 /**
 * Builds a text-only table from export data.
 * @param {string[]} headings The column headings.
@@ -109,11 +111,11 @@ function saveBlob(blob, filename) {
 		download: filename
 	} });
 	try {
-		$.append(document.body, link);
+		$.append(document$2.body, link);
 		$.click(link);
 	} finally {
 		$.detach(link);
-		setTimeout(() => URL.revokeObjectURL(url), 0);
+		window$2.setTimeout(() => URL.revokeObjectURL(url), 0);
 	}
 }
 
@@ -269,7 +271,7 @@ var BitStream = class {
 	/**
 	* Creates a BitStream.
 	* @param {Uint8Array} buffer The buffer to write to.
-	* @param {number} [index] The index to start writing at.
+	* @param {number} [index=0] The index to start writing at.
 	*/
 	constructor(buffer, index = 0) {
 		this.#buffer = buffer;
@@ -335,7 +337,7 @@ var Heap = class {
 	#length;
 	/**
 	* Creates a Heap.
-	* @param {number} [length] The size of the heap.
+	* @param {number} length The size of the heap.
 	*/
 	constructor(length) {
 		this.#buffer = new Uint16Array(length * 2);
@@ -350,7 +352,7 @@ var Heap = class {
 	}
 	/**
 	* Pops the top value off the heap.
-	* @returns {object} The top value from the heap.
+	* @returns {{index: number, value: number}} The symbol index and frequency.
 	*/
 	pop() {
 		const value = this.#buffer[0];
@@ -1573,6 +1575,8 @@ var Workbook = class {
 //#endregion
 //#region src/js/buttons.js
 /** @import { TableButton } from './table.js'; */
+var document$1 = $.getContext();
+var window$1 = $.getWindow();
 /**
 * Downloads the selected rows as CSV, escaping delimiters, quotes and line breaks.
 * @param {TableButton} options The button options.
@@ -1581,7 +1585,7 @@ var Workbook = class {
 * @param {Array<Array<*>>} data.rows The selected rows.
 */
 function csv(options, { headings, rows }) {
-	const title = options.title || document.title;
+	const title = options.title || document$1.title;
 	const lines = [headings, ...rows].map((row) => {
 		return row.map((value) => {
 			let text = String(value ?? "");
@@ -1606,7 +1610,7 @@ function excel(options, { headings, rows }) {
 		header: headings,
 		rows
 	});
-	saveBlob(workbook.create(), `${options.title || document.title}.xlsx`);
+	saveBlob(workbook.create(), `${options.title || document$1.title}.xlsx`);
 }
 /**
 * Opens a text-only print view and waits for its styles and fonts.
@@ -1616,11 +1620,11 @@ function excel(options, { headings, rows }) {
 * @returns {Promise<void>} Completion of print preparation, or nothing when blocked.
 */
 async function print(options, table, classes) {
-	const win = window.open("", "_blank");
+	const win = window$1.open("", "_blank");
 	if (!win) return;
-	const title = options.title || document.title;
+	const title = options.title || document$1.title;
 	win.document.title = title;
-	win.document.documentElement.dir = $.getProperty(table, "dir") || document.documentElement.dir;
+	win.document.documentElement.dir = $.getProperty(table, "dir") || document$1.documentElement.dir;
 	const heading = win.document.createElement("h1");
 	$.setText(heading, title);
 	$.addClass(table, classes || "");
@@ -1908,6 +1912,8 @@ function validateRows(rows) {
 
 //#endregion
 //#region src/js/table.js
+var document = $.getContext();
+var window = $.getWindow();
 /** @typedef {Array<*>|Record<string, *>} TableRow */
 /** @typedef {string|number} TableRowId */
 /** @typedef {[number, 'asc'|'desc']} TableOrder */
@@ -2410,6 +2416,7 @@ var Table = class extends BaseComponent {
 	* Creates a Table.
 	* @param {HTMLTableElement} node The input table.
 	* @param {TableOptions} [options] The component options.
+	* @throws {TypeError} When the input is not a table element or the configuration is invalid.
 	*/
 	constructor(node, options) {
 		if (!$._isElement(node) || !$.is(node, "table")) throw new TypeError("Table must be created on a table element.");
@@ -2527,7 +2534,7 @@ var Table = class extends BaseComponent {
 		this.#requestVersion++;
 		this.#loadResults?.cancel();
 		this.#responsiveObserver?.disconnect();
-		if (this.#responsiveFrame !== null) cancelAnimationFrame(this.#responsiveFrame);
+		if (this.#responsiveFrame !== null) window.cancelAnimationFrame(this.#responsiveFrame);
 		const pending = this.#pending;
 		this.#pending = null;
 		super.dispose();
@@ -2601,7 +2608,7 @@ var Table = class extends BaseComponent {
 	* @param {string|number} key The key to retrieve.
 	* @param {object} [options] Options for getting the column.
 	* @param {boolean} [options.modified=true] Whether to use modified indexes.
-	* @returns {Array} The column values.
+	* @returns {Array<*>} The column values.
 	*/
 	getColumn(key, { modified = true } = {}) {
 		return modified ? this.#rowIndexes.map((rowIndex) => $._getDot(this.#data[rowIndex], `${key}`)) : this.#data.map((row) => $._getDot(row, `${key}`));
@@ -2925,7 +2932,7 @@ var Table = class extends BaseComponent {
 	}
 	/**
 	* Sets a local row predicate and resets to the first page.
-	* @param {function(TableRow): boolean|null} predicate The predicate, or null to clear it.
+	* @param {((row: TableRow) => boolean)|null} predicate The predicate, or null to clear it.
 	*/
 	setRowFilter(predicate) {
 		if (!this.node || !this.options.searching) return;
@@ -3050,7 +3057,7 @@ var Table = class extends BaseComponent {
 			});
 		}
 		if (this.options.responsive) {
-			this.#responsiveObserver = new ResizeObserver(([entry]) => {
+			this.#responsiveObserver = new window.ResizeObserver(([entry]) => {
 				if (entry.contentRect.width !== this.#responsiveWidth) {
 					this.#responsiveWidth = entry.contentRect.width;
 					this.#scheduleResponsive();
@@ -3211,7 +3218,7 @@ var Table = class extends BaseComponent {
 	}
 	/**
 	* Expands alternate sort columns, which were validated during initialization.
-	* @returns {Array} The column ordering data.
+	* @returns {TableOrder[]} The column ordering data.
 	*/
 	#getOrder() {
 		return this.#order.flatMap(([index, direction]) => {
@@ -3269,7 +3276,7 @@ var Table = class extends BaseComponent {
 	}
 	/**
 	* Gets the visible columns.
-	* @returns {Array} The visible columns.
+	* @returns {number[]} The visible column indexes.
 	*/
 	#getVisibleColumns() {
 		const columns = [];
@@ -4096,7 +4103,7 @@ var Table = class extends BaseComponent {
 	*/
 	#scheduleResponsive() {
 		if (!this.node || !this.options.responsive || this.#responsiveFrame !== null) return;
-		this.#responsiveFrame = requestAnimationFrame(() => {
+		this.#responsiveFrame = window.requestAnimationFrame(() => {
 			this.#responsiveFrame = null;
 			this.#updateResponsive();
 		});

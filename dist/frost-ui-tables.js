@@ -34,7 +34,9 @@ Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' });
 _fr0st_query = __toESM(_fr0st_query, 1);
 
 //#region src/js/dom.js
-/**
+	var document$2 = _fr0st_query.default.getContext();
+	var window$2 = _fr0st_query.default.getWindow();
+	/**
 	* Builds a text-only table from export data.
 	* @param {string[]} headings The column headings.
 	* @param {Array<Array<*>>} rows The selected rows.
@@ -141,11 +143,11 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			download: filename
 		} });
 		try {
-			_fr0st_query.default.append(document.body, link);
+			_fr0st_query.default.append(document$2.body, link);
 			_fr0st_query.default.click(link);
 		} finally {
 			_fr0st_query.default.detach(link);
-			setTimeout(() => URL.revokeObjectURL(url), 0);
+			window$2.setTimeout(() => URL.revokeObjectURL(url), 0);
 		}
 	}
 
@@ -301,7 +303,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		/**
 		* Creates a BitStream.
 		* @param {Uint8Array} buffer The buffer to write to.
-		* @param {number} [index] The index to start writing at.
+		* @param {number} [index=0] The index to start writing at.
 		*/
 		constructor(buffer, index = 0) {
 			this.#buffer = buffer;
@@ -367,7 +369,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		#length;
 		/**
 		* Creates a Heap.
-		* @param {number} [length] The size of the heap.
+		* @param {number} length The size of the heap.
 		*/
 		constructor(length) {
 			this.#buffer = new Uint16Array(length * 2);
@@ -382,7 +384,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		}
 		/**
 		* Pops the top value off the heap.
-		* @returns {object} The top value from the heap.
+		* @returns {{index: number, value: number}} The symbol index and frequency.
 		*/
 		pop() {
 			const value = this.#buffer[0];
@@ -1605,6 +1607,8 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 //#endregion
 //#region src/js/buttons.js
 /** @import { TableButton } from './table.js'; */
+	var document$1 = _fr0st_query.default.getContext();
+	var window$1 = _fr0st_query.default.getWindow();
 	/**
 	* Downloads the selected rows as CSV, escaping delimiters, quotes and line breaks.
 	* @param {TableButton} options The button options.
@@ -1613,7 +1617,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 	* @param {Array<Array<*>>} data.rows The selected rows.
 	*/
 	function csv(options, { headings, rows }) {
-		const title = options.title || document.title;
+		const title = options.title || document$1.title;
 		const lines = [headings, ...rows].map((row) => {
 			return row.map((value) => {
 				let text = String(value ?? "");
@@ -1638,7 +1642,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			header: headings,
 			rows
 		});
-		saveBlob(workbook.create(), `${options.title || document.title}.xlsx`);
+		saveBlob(workbook.create(), `${options.title || document$1.title}.xlsx`);
 	}
 	/**
 	* Opens a text-only print view and waits for its styles and fonts.
@@ -1648,11 +1652,11 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 	* @returns {Promise<void>} Completion of print preparation, or nothing when blocked.
 	*/
 	async function print(options, table, classes) {
-		const win = window.open("", "_blank");
+		const win = window$1.open("", "_blank");
 		if (!win) return;
-		const title = options.title || document.title;
+		const title = options.title || document$1.title;
 		win.document.title = title;
-		win.document.documentElement.dir = _fr0st_query.default.getProperty(table, "dir") || document.documentElement.dir;
+		win.document.documentElement.dir = _fr0st_query.default.getProperty(table, "dir") || document$1.documentElement.dir;
 		const heading = win.document.createElement("h1");
 		_fr0st_query.default.setText(heading, title);
 		_fr0st_query.default.addClass(table, classes || "");
@@ -1940,7 +1944,9 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 
 //#endregion
 //#region src/js/table.js
-/** @typedef {Array<*>|Record<string, *>} TableRow */
+	var document = _fr0st_query.default.getContext();
+	var window = _fr0st_query.default.getWindow();
+	/** @typedef {Array<*>|Record<string, *>} TableRow */
 	/** @typedef {string|number} TableRowId */
 	/** @typedef {[number, 'asc'|'desc']} TableOrder */
 	/**
@@ -2442,6 +2448,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		* Creates a Table.
 		* @param {HTMLTableElement} node The input table.
 		* @param {TableOptions} [options] The component options.
+		* @throws {TypeError} When the input is not a table element or the configuration is invalid.
 		*/
 		constructor(node, options) {
 			if (!_fr0st_query.default._isElement(node) || !_fr0st_query.default.is(node, "table")) throw new TypeError("Table must be created on a table element.");
@@ -2559,7 +2566,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			this.#requestVersion++;
 			this.#loadResults?.cancel();
 			this.#responsiveObserver?.disconnect();
-			if (this.#responsiveFrame !== null) cancelAnimationFrame(this.#responsiveFrame);
+			if (this.#responsiveFrame !== null) window.cancelAnimationFrame(this.#responsiveFrame);
 			const pending = this.#pending;
 			this.#pending = null;
 			super.dispose();
@@ -2633,7 +2640,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		* @param {string|number} key The key to retrieve.
 		* @param {object} [options] Options for getting the column.
 		* @param {boolean} [options.modified=true] Whether to use modified indexes.
-		* @returns {Array} The column values.
+		* @returns {Array<*>} The column values.
 		*/
 		getColumn(key, { modified = true } = {}) {
 			return modified ? this.#rowIndexes.map((rowIndex) => _fr0st_query.default._getDot(this.#data[rowIndex], `${key}`)) : this.#data.map((row) => _fr0st_query.default._getDot(row, `${key}`));
@@ -2957,7 +2964,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		}
 		/**
 		* Sets a local row predicate and resets to the first page.
-		* @param {function(TableRow): boolean|null} predicate The predicate, or null to clear it.
+		* @param {((row: TableRow) => boolean)|null} predicate The predicate, or null to clear it.
 		*/
 		setRowFilter(predicate) {
 			if (!this.node || !this.options.searching) return;
@@ -3082,7 +3089,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 				});
 			}
 			if (this.options.responsive) {
-				this.#responsiveObserver = new ResizeObserver(([entry]) => {
+				this.#responsiveObserver = new window.ResizeObserver(([entry]) => {
 					if (entry.contentRect.width !== this.#responsiveWidth) {
 						this.#responsiveWidth = entry.contentRect.width;
 						this.#scheduleResponsive();
@@ -3243,7 +3250,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		}
 		/**
 		* Expands alternate sort columns, which were validated during initialization.
-		* @returns {Array} The column ordering data.
+		* @returns {TableOrder[]} The column ordering data.
 		*/
 		#getOrder() {
 			return this.#order.flatMap(([index, direction]) => {
@@ -3301,7 +3308,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		}
 		/**
 		* Gets the visible columns.
-		* @returns {Array} The visible columns.
+		* @returns {number[]} The visible column indexes.
 		*/
 		#getVisibleColumns() {
 			const columns = [];
@@ -4128,7 +4135,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		*/
 		#scheduleResponsive() {
 			if (!this.node || !this.options.responsive || this.#responsiveFrame !== null) return;
-			this.#responsiveFrame = requestAnimationFrame(() => {
+			this.#responsiveFrame = window.requestAnimationFrame(() => {
 				this.#responsiveFrame = null;
 				this.#updateResponsive();
 			});

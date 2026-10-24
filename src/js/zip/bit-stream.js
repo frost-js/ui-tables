@@ -12,7 +12,7 @@ export default class BitStream {
     /**
      * Creates a BitStream.
      * @param {Uint8Array} buffer The buffer to write to.
-     * @param {number} [index] The index to start writing at.
+     * @param {number} [index=0] The index to start writing at.
      */
     constructor(buffer, index = 0) {
         this.#buffer = buffer;

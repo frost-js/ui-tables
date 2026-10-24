@@ -4,39 +4,7 @@ import { setupTable } from '../setup/table.js';
 test.describe('Table selection', () => {
     test.beforeEach(setupTable);
 
-    test.describe('selection API', () => {
-        test('requires configured identity and a supported mode', async ({ page }) => {
-            const result = await page.evaluate(() => {
-                const errors = [];
-
-                for (const options of [{ selection: 'multiple' }, { rowId: 1, selection: true }]) {
-                    try {
-                        window.createTable(options);
-                    } catch (error) {
-                        errors.push(error.name);
-                    }
-                }
-
-                const table = window.createTable({ rowId: 1 });
-
-                for (const method of ['setSelectedIds', 'selectRows', 'deselectRows']) {
-                    try {
-                        table[method]([]);
-                    } catch (error) {
-                        errors.push(error.name);
-                    }
-                }
-
-                return {
-                    errors,
-                    ids: table.getSelectedIds(),
-                };
-            });
-
-            expect(result.errors).toEqual(Array(5).fill('TypeError'));
-            expect(result.ids).toEqual([]);
-        });
-
+    test.describe('#selectRows and #deselectRows', () => {
         test('combines page, filtered, and all scopes without changing view or drawing', async ({ page }) => {
             const result = await page.evaluate(() => {
                 const table = window.createTable({
@@ -82,7 +50,9 @@ test.describe('Table selection', () => {
             });
             expect(result.selected).toEqual([2, 4]);
         });
+    });
 
+    test.describe('#setSelectedIds and #getSelectedIds', () => {
         test('validates the complete selection and retains insertion order for equivalent sets', async ({ page }) => {
             const result = await page.evaluate(() => {
                 const table = window.createTable({
@@ -97,11 +67,17 @@ test.describe('Table selection', () => {
 
                 const errors = [];
 
-                for (const ids of [null, [1, 9], [1, null], [true], [1, '1']]) {
+                for (const [name, ids] of [
+                    ['null selection', null],
+                    ['unknown ID', [1, 9]],
+                    ['null ID', [1, null]],
+                    ['boolean ID', [true]],
+                    ['string ID instead of numeric ID', [1, '1']],
+                ]) {
                     try {
                         table.setSelectedIds(ids);
                     } catch (error) {
-                        errors.push(error.name);
+                        errors.push({ name, error: error.name });
                     }
                 }
 
@@ -121,9 +97,99 @@ test.describe('Table selection', () => {
             expect(result.ids).toEqual([3, 1]);
             expect(result.count).toBe(1);
             expect(result.added).toEqual([3, 1]);
-            expect(result.errors).toEqual(['TypeError', 'RangeError', 'TypeError', 'TypeError', 'RangeError']);
+            expect(result.errors).toEqual([
+                { name: 'null selection', error: 'TypeError' },
+                { name: 'unknown ID', error: 'RangeError' },
+                { name: 'null ID', error: 'TypeError' },
+                { name: 'boolean ID', error: 'TypeError' },
+                { name: 'string ID instead of numeric ID', error: 'RangeError' },
+            ]);
         });
 
+        test('rejects multiple final IDs in single mode without changing the previous selection', async ({ page }) => {
+            const result = await page.evaluate(() => {
+                const table = window.createTable({
+                    rowId: 1,
+                    selection: 'single',
+                });
+
+                table.setSelectedIds([2]);
+
+                const errors = [];
+
+                for (const [name, update] of [
+                    ['setSelectedIds', () => table.setSelectedIds([1, 3])],
+                    ['selectRows', () => table.selectRows()],
+                ]) {
+                    try {
+                        update();
+                    } catch (error) {
+                        errors.push({ name, error: error.name });
+                    }
+                }
+
+                return {
+                    errors,
+                    selected: table.getSelectedIds(),
+                };
+            });
+
+            expect(result.errors).toEqual([
+                { name: 'setSelectedIds', error: 'RangeError' },
+                { name: 'selectRows', error: 'RangeError' },
+            ]);
+            expect(result.selected).toEqual([2]);
+        });
+    });
+
+    test.describe('selection option', () => {
+        test('requires configured identity and a supported mode', async ({ page }) => {
+            const result = await page.evaluate(() => {
+                const errors = [];
+
+                for (const [name, options] of [
+                    ['missing identity', { selection: 'multiple' }],
+                    ['unsupported selection mode', { rowId: 1, selection: true }],
+                ]) {
+                    try {
+                        window.createTable(options);
+                    } catch (error) {
+                        errors.push({ name, error: error.name });
+                    }
+                }
+
+                const table = window.createTable({ rowId: 1 });
+
+                for (const [name, method] of [
+                    ['setSelectedIds', 'setSelectedIds'],
+                    ['selectRows', 'selectRows'],
+                    ['deselectRows', 'deselectRows'],
+                ]) {
+                    try {
+                        table[method]([]);
+                    } catch (error) {
+                        errors.push({ name, error: error.name });
+                    }
+                }
+
+                return {
+                    errors,
+                    ids: table.getSelectedIds(),
+                };
+            });
+
+            expect(result.errors).toEqual([
+                { name: 'missing identity', error: 'TypeError' },
+                { name: 'unsupported selection mode', error: 'TypeError' },
+                { name: 'setSelectedIds', error: 'TypeError' },
+                { name: 'selectRows', error: 'TypeError' },
+                { name: 'deselectRows', error: 'TypeError' },
+            ]);
+            expect(result.ids).toEqual([]);
+        });
+    });
+
+    test.describe('data changes', () => {
         test('preserves hidden selections and view restoration, pruning only removed local IDs', async ({ page }) => {
             const result = await page.evaluate(() => {
                 const table = window.createTable({
@@ -160,35 +226,6 @@ test.describe('Table selection', () => {
                 { selectedIds: [3], addedIds: [], removedIds: [1] },
                 { selectedIds: [], addedIds: [], removedIds: [3] },
             ]);
-        });
-
-        test('rejects multiple final IDs in single mode without changing the previous selection', async ({ page }) => {
-            const result = await page.evaluate(() => {
-                const table = window.createTable({
-                    rowId: 1,
-                    selection: 'single',
-                });
-
-                table.setSelectedIds([2]);
-
-                const errors = [];
-
-                for (const update of [() => table.setSelectedIds([1, 3]), () => table.selectRows()]) {
-                    try {
-                        update();
-                    } catch (error) {
-                        errors.push(error.name);
-                    }
-                }
-
-                return {
-                    errors,
-                    selected: table.getSelectedIds(),
-                };
-            });
-
-            expect(result.errors).toEqual(['RangeError', 'RangeError']);
-            expect(result.selected).toEqual([2]);
         });
     });
 
