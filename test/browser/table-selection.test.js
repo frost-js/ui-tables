@@ -169,6 +169,72 @@ test.describe('Table selection', () => {
             expect(await page.evaluate(() => window.table.getSelectedIds())).toEqual([]);
         });
 
+        test('selects mounted rows when a page draw is cancelled and follows the next completed draw', async ({ page }) => {
+            await page.evaluate(() => {
+                window.cancelDraw = false;
+                window.table = window.createTable({
+                    rowId: 1,
+                    selection: 'multiple',
+                    preDrawCallback: () => !window.cancelDraw,
+                });
+                window.table.setSelectedIds([1, 2]);
+                window.cancelDraw = true;
+                window.table.page(2);
+            });
+
+            const header = page.getByRole('checkbox', { name: 'Select all rows on this page' });
+            await expect(page.locator('tbody td:last-child')).toHaveText(['1', '3']);
+            expect(await header.evaluate((input) => input.indeterminate)).toBe(true);
+
+            await header.check();
+            expect(await page.evaluate(() => window.table.getSelectedIds())).toEqual([1, 2, 3]);
+            await expect(page.getByRole('checkbox', { name: 'Select row 3', exact: true })).toBeChecked();
+            await header.uncheck();
+            expect(await page.evaluate(() => window.table.getSelectedIds())).toEqual([2]);
+
+            await page.evaluate(() => {
+                window.cancelDraw = false;
+                window.table.refresh();
+            });
+
+            await expect(page.locator('tbody td:last-child')).toHaveText(['2', '4']);
+            expect(await header.evaluate((input) => input.indeterminate)).toBe(true);
+            await header.check();
+            expect(await page.evaluate(() => window.table.getSelectedIds())).toEqual([2, 4]);
+        });
+
+        test('excludes removed mounted rows from header selection after a cancelled draw', async ({ page }) => {
+            await page.evaluate(() => {
+                window.cancelDraw = false;
+                window.table = window.createTable({
+                    rowId: 1,
+                    selection: 'multiple',
+                    preDrawCallback: () => !window.cancelDraw,
+                });
+                window.cancelDraw = true;
+                window.table.setData([['A', 3], ['New', 5]]);
+                window.table.setSelectedIds([3, 5]);
+            });
+
+            const header = page.getByRole('checkbox', { name: 'Select all rows on this page' });
+            await expect(page.locator('tbody td:last-child')).toHaveText(['1', '3']);
+            await expect(page.getByRole('checkbox', { name: 'Select row 1', exact: true })).toBeDisabled();
+            await expect(header).toBeChecked();
+            expect(await header.evaluate((input) => input.indeterminate)).toBe(false);
+
+            await header.uncheck();
+            expect(await page.evaluate(() => window.table.getSelectedIds())).toEqual([5]);
+            await header.check();
+            expect(await page.evaluate(() => window.table.getSelectedIds())).toEqual([5, 3]);
+
+            await page.evaluate(() => window.table.setData([]));
+
+            await expect(header).toBeDisabled();
+            await expect(header).not.toBeChecked();
+            expect(await header.evaluate((input) => input.indeterminate)).toBe(false);
+            expect(await page.evaluate(() => window.table.getSelectedIds())).toEqual([]);
+        });
+
         test('uses radios to replace single selection and keeps controls out of data operations', async ({ page }) => {
             await page.evaluate(() => window.table = window.createTable({ rowId: 1, selection: 'single' }));
             await expect(page.getByRole('checkbox')).toHaveCount(0);

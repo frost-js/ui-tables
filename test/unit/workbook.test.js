@@ -39,6 +39,7 @@ test.describe('Workbook', () => {
             { name: 'an invalid date', value: '2024-02-30', encoded: '2024-02-30' },
             { name: 'an invalid time', value: '25:00:00', encoded: '25:00:00' },
             { name: 'formula-like text', value: '=1+1', encoded: '=1+1' },
+            { name: 'replacement tokens', value: '$$ $& $` $\'', encoded: '$$ $&amp; $` $&apos;' },
         ]) {
             test(`preserves ${name} as text`, async () => {
                 const workbook = new Workbook();
@@ -60,6 +61,7 @@ test.describe('Workbook', () => {
         for (const { name, value, encoded } of [
             { name: 'long text', value: 'x'.repeat(200), encoded: 'x'.repeat(200) },
             { name: 'long XML punctuation', value: 'A & < B > C'.repeat(20), encoded: 'A &amp; &lt; B &gt; C'.repeat(20) },
+            { name: 'long replacement tokens', value: '$$ $& $` $\''.repeat(20), encoded: '$$ $&amp; $` $&apos;'.repeat(20) },
         ]) {
             test(`stores ${name} inline`, async () => {
                 const workbook = new Workbook();
@@ -95,6 +97,17 @@ test.describe('Workbook', () => {
     });
 
     test.describe('archive creation', () => {
+        test('preserves replacement tokens in sheet names', async () => {
+            const workbook = new Workbook();
+            workbook.addSheet({ rows: [['Value']] }, '$$ $& $` $\' name');
+
+            const files = readZip(new Uint8Array(await workbook.create().arrayBuffer()));
+            const xml = files.get('xl/workbook.xml').text;
+            const names = [...xml.matchAll(/<sheet name="([^"]+)"/g)].map((match) => match[1]);
+
+            expect(names).toEqual(['$$ $&amp; $` $&apos; name']);
+        });
+
         test('escapes duplicate sheet names and recreates the archive without stale strings', async () => {
             const workbook = new Workbook();
             workbook.addSheet({ rows: [['first', 'first']] }, 'A & "B"');

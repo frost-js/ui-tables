@@ -1451,7 +1451,7 @@ var Workbook = class {
 				}
 				case "xl/workbook.xml": {
 					const sheets = this.#sheets.map((sheet, index) => `<sheet name="${escape(sheet.name)}" sheetId="${index + 1}" state="visible" r:id="rId${index + 2}"/>`).join("");
-					template = template.replace("{sheets}", sheets);
+					template = template.replace("{sheets}", () => sheets);
 					break;
 				}
 				case "docProps/core.xml": {
@@ -1461,7 +1461,7 @@ var Workbook = class {
 				}
 				case "xl/sharedStrings.xml": {
 					const strings = this.#strings.map((string) => `<si><t xml:space="preserve">${string}</t></si>`).join("\r\n");
-					template = template.replace("{cnt}", String(this.#stringCount)).replace("{unique}", String(this.#strings.length)).replace("{strings}", strings);
+					template = template.replace("{cnt}", String(this.#stringCount)).replace("{unique}", String(this.#strings.length)).replace("{strings}", () => strings);
 					break;
 				}
 				case "xl/worksheets/sheet1.xml":
@@ -1566,7 +1566,7 @@ var Workbook = class {
 			return `<col min="${column}" max="${column}" width="${Math.min(width + 5, 60)}"/>`;
 		});
 		const reference = rows.length && widths.length ? `A1:${colName(widths.length)}${rows.length}` : "A1";
-		return template.replace("{ref}", reference).replace("{cols}", columns.join("")).replace("{rows}", rows.join(""));
+		return template.replace("{ref}", reference).replace("{cols}", columns.join("")).replace("{rows}", () => rows.join(""));
 	}
 };
 
@@ -3062,8 +3062,15 @@ var Table = class extends BaseComponent {
 		}
 		if (this.options.selection) {
 			$.addEventDelegate(this.#theadRow, "change.ui.table", "[data-ui-select-page]", (event) => {
-				if ($.getProperty(event.currentTarget, "checked")) this.selectRows();
-				else this.deselectRows();
+				const selected = $.getProperty(event.currentTarget, "checked");
+				const ids = new Set(this.#selectedIds);
+				for (const input of $.find("[data-ui-select-row]", this.#tbody)) {
+					const id = this.#selectionInputs.get(input);
+					if (!this.#rowIdIndexes.has(id)) continue;
+					if (selected) ids.add(id);
+					else ids.delete(id);
+				}
+				this.setSelectedIds([...ids]);
 			});
 			$.addEventDelegate(this.#tbody, "change.ui.table", "[data-ui-select-row]", (event) => {
 				const id = this.#selectionInputs.get(event.currentTarget);
@@ -4252,19 +4259,25 @@ var Table = class extends BaseComponent {
 	*/
 	#syncSelection() {
 		if (!this.node || !this.options.selection) return;
+		let count = 0;
+		let total = 0;
 		for (const input of $.find("[data-ui-select-row]", this.#tbody ?? [])) {
 			const id = this.#selectionInputs.get(input);
 			const selected = this.#selectedIds.has(id);
+			const available = this.#rowIdIndexes.has(id);
 			$.setProperty(input, "checked", selected);
-			$.setProperty(input, "disabled", !this.#rowIdIndexes.has(id));
+			$.setProperty(input, "disabled", !available);
 			$[selected ? "addClass" : "removeClass"]($.closest(input, "tr")[0], this.constructor.classes.selectedRow);
+			if (available) {
+				total++;
+				count += Number(selected);
+			}
 		}
 		const header = $.findOne("[data-ui-select-page]", this.#selectionHeading ?? []);
 		if (header) {
-			const count = this.#rowIndexes.filter((index) => this.#selectedIds.has(this.#rowIds[index])).length;
-			$.setProperty(header, "checked", count > 0 && count === this.#rowIndexes.length);
-			$.setProperty(header, "indeterminate", count > 0 && count < this.#rowIndexes.length);
-			$.setProperty(header, "disabled", !this.#rowIndexes.length);
+			$.setProperty(header, "checked", count > 0 && count === total);
+			$.setProperty(header, "indeterminate", count > 0 && count < total);
+			$.setProperty(header, "disabled", !total);
 		}
 		if (this.#selectionCount) {
 			const text = this.options.lang.selection.count.replace("{count}", this.#selectedIds.size);

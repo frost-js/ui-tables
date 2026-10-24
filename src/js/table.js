@@ -1525,11 +1525,25 @@ export default class Table extends BaseComponent {
 
         if (this.options.selection) {
             $.addEventDelegate(this.#theadRow, 'change.ui.table', '[data-ui-select-page]', (event) => {
-                if ($.getProperty(event.currentTarget, 'checked')) {
-                    this.selectRows();
-                } else {
-                    this.deselectRows();
+                const selected = $.getProperty(event.currentTarget, 'checked');
+                const ids = new Set(this.#selectedIds);
+
+                // A cancelled draw can leave different rows mounted than the current data page.
+                for (const input of $.find('[data-ui-select-row]', this.#tbody)) {
+                    const id = this.#selectionInputs.get(input);
+
+                    if (!this.#rowIdIndexes.has(id)) {
+                        continue;
+                    }
+
+                    if (selected) {
+                        ids.add(id);
+                    } else {
+                        ids.delete(id);
+                    }
                 }
+
+                this.setSelectedIds([...ids]);
             });
 
             $.addEventDelegate(this.#tbody, 'change.ui.table', '[data-ui-select-row]', (event) => {
@@ -3432,21 +3446,30 @@ export default class Table extends BaseComponent {
             return;
         }
 
+        let count = 0;
+        let total = 0;
+
         for (const input of $.find('[data-ui-select-row]', this.#tbody ?? [])) {
             const id = this.#selectionInputs.get(input);
             const selected = this.#selectedIds.has(id);
+            const available = this.#rowIdIndexes.has(id);
+
             $.setProperty(input, 'checked', selected);
-            $.setProperty(input, 'disabled', !this.#rowIdIndexes.has(id));
+            $.setProperty(input, 'disabled', !available);
             $[selected ? 'addClass' : 'removeClass']($.closest(input, 'tr')[0], this.constructor.classes.selectedRow);
+
+            if (available) {
+                total++;
+                count += Number(selected);
+            }
         }
 
         const header = $.findOne('[data-ui-select-page]', this.#selectionHeading ?? []);
 
         if (header) {
-            const count = this.#rowIndexes.filter((index) => this.#selectedIds.has(this.#rowIds[index])).length;
-            $.setProperty(header, 'checked', count > 0 && count === this.#rowIndexes.length);
-            $.setProperty(header, 'indeterminate', count > 0 && count < this.#rowIndexes.length);
-            $.setProperty(header, 'disabled', !this.#rowIndexes.length);
+            $.setProperty(header, 'checked', count > 0 && count === total);
+            $.setProperty(header, 'indeterminate', count > 0 && count < total);
+            $.setProperty(header, 'disabled', !total);
         }
 
         if (this.#selectionCount) {

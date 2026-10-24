@@ -367,6 +367,8 @@ Selection survives search, filters, ordering, page/length changes, and column vi
 
 Multiple selection uses native checkboxes. The header checkbox controls only the current page: checked for every page row, indeterminate for some, and disabled on an empty page. It does not represent selections on other pages. Single selection uses native radios in a table-specific group and has no header selection control. Row clicks and links do not select rows. Selection-only updates preserve focus and do not redraw rows, recalculate results, change the view, or load remote data.
 
+If `preDrawCallback` cancels a draw, the header checkbox continues to control the rows still displayed, excluding IDs no longer present in the loaded data. The selection APIs continue to use the current data scopes.
+
 The optional `selection` layout control shows the total selected count and a clear button. Hiding it does not disable selection. Labels are configured through `lang.selection`; `row` accepts `{id}` and `count` accepts `{count}`. Selection owns the `Table.classes.selectedRow` class (`table-active` by default); use a different callback class when styling rows independently. Utility cells are present in rendered header/body/footer DOM, so callbacks inspecting child positions must account for them. Their data and index arguments remain unchanged.
 
 #### Remote selection

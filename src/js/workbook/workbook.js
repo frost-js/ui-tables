@@ -109,7 +109,7 @@ export default class Workbook {
                         `state="visible" r:id="rId${index + 2}"/>`,
                     ).join('');
 
-                    template = template.replace('{sheets}', sheets);
+                    template = template.replace('{sheets}', () => sheets);
 
                     break;
                 }
@@ -127,7 +127,7 @@ export default class Workbook {
                     template = template
                         .replace('{cnt}', String(this.#stringCount))
                         .replace('{unique}', String(this.#strings.length))
-                        .replace('{strings}', strings);
+                        .replace('{strings}', () => strings);
 
                     break;
                 }
@@ -303,6 +303,6 @@ export default class Workbook {
         return template
             .replace('{ref}', reference)
             .replace('{cols}', columns.join(''))
-            .replace('{rows}', rows.join(''));
+            .replace('{rows}', () => rows.join(''));
     }
 }

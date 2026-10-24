@@ -1483,7 +1483,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 					}
 					case "xl/workbook.xml": {
 						const sheets = this.#sheets.map((sheet, index) => `<sheet name="${escape(sheet.name)}" sheetId="${index + 1}" state="visible" r:id="rId${index + 2}"/>`).join("");
-						template = template.replace("{sheets}", sheets);
+						template = template.replace("{sheets}", () => sheets);
 						break;
 					}
 					case "docProps/core.xml": {
@@ -1493,7 +1493,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 					}
 					case "xl/sharedStrings.xml": {
 						const strings = this.#strings.map((string) => `<si><t xml:space="preserve">${string}</t></si>`).join("\r\n");
-						template = template.replace("{cnt}", String(this.#stringCount)).replace("{unique}", String(this.#strings.length)).replace("{strings}", strings);
+						template = template.replace("{cnt}", String(this.#stringCount)).replace("{unique}", String(this.#strings.length)).replace("{strings}", () => strings);
 						break;
 					}
 					case "xl/worksheets/sheet1.xml":
@@ -1598,7 +1598,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 				return `<col min="${column}" max="${column}" width="${Math.min(width + 5, 60)}"/>`;
 			});
 			const reference = rows.length && widths.length ? `A1:${colName(widths.length)}${rows.length}` : "A1";
-			return template.replace("{ref}", reference).replace("{cols}", columns.join("")).replace("{rows}", rows.join(""));
+			return template.replace("{ref}", reference).replace("{cols}", columns.join("")).replace("{rows}", () => rows.join(""));
 		}
 	};
 
@@ -3094,8 +3094,15 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			}
 			if (this.options.selection) {
 				_fr0st_query.default.addEventDelegate(this.#theadRow, "change.ui.table", "[data-ui-select-page]", (event) => {
-					if (_fr0st_query.default.getProperty(event.currentTarget, "checked")) this.selectRows();
-					else this.deselectRows();
+					const selected = _fr0st_query.default.getProperty(event.currentTarget, "checked");
+					const ids = new Set(this.#selectedIds);
+					for (const input of _fr0st_query.default.find("[data-ui-select-row]", this.#tbody)) {
+						const id = this.#selectionInputs.get(input);
+						if (!this.#rowIdIndexes.has(id)) continue;
+						if (selected) ids.add(id);
+						else ids.delete(id);
+					}
+					this.setSelectedIds([...ids]);
 				});
 				_fr0st_query.default.addEventDelegate(this.#tbody, "change.ui.table", "[data-ui-select-row]", (event) => {
 					const id = this.#selectionInputs.get(event.currentTarget);
@@ -4284,19 +4291,25 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		*/
 		#syncSelection() {
 			if (!this.node || !this.options.selection) return;
+			let count = 0;
+			let total = 0;
 			for (const input of _fr0st_query.default.find("[data-ui-select-row]", this.#tbody ?? [])) {
 				const id = this.#selectionInputs.get(input);
 				const selected = this.#selectedIds.has(id);
+				const available = this.#rowIdIndexes.has(id);
 				_fr0st_query.default.setProperty(input, "checked", selected);
-				_fr0st_query.default.setProperty(input, "disabled", !this.#rowIdIndexes.has(id));
+				_fr0st_query.default.setProperty(input, "disabled", !available);
 				_fr0st_query.default[selected ? "addClass" : "removeClass"](_fr0st_query.default.closest(input, "tr")[0], this.constructor.classes.selectedRow);
+				if (available) {
+					total++;
+					count += Number(selected);
+				}
 			}
 			const header = _fr0st_query.default.findOne("[data-ui-select-page]", this.#selectionHeading ?? []);
 			if (header) {
-				const count = this.#rowIndexes.filter((index) => this.#selectedIds.has(this.#rowIds[index])).length;
-				_fr0st_query.default.setProperty(header, "checked", count > 0 && count === this.#rowIndexes.length);
-				_fr0st_query.default.setProperty(header, "indeterminate", count > 0 && count < this.#rowIndexes.length);
-				_fr0st_query.default.setProperty(header, "disabled", !this.#rowIndexes.length);
+				_fr0st_query.default.setProperty(header, "checked", count > 0 && count === total);
+				_fr0st_query.default.setProperty(header, "indeterminate", count > 0 && count < total);
+				_fr0st_query.default.setProperty(header, "disabled", !total);
 			}
 			if (this.#selectionCount) {
 				const text = this.options.lang.selection.count.replace("{count}", this.#selectedIds.size);
