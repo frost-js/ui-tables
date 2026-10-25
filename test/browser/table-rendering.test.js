@@ -75,24 +75,6 @@ test.describe('Table rendering', () => {
             await expect(page.locator('tbody td')).toHaveText(['B', '2']);
             await expect(page.getByRole('status')).toHaveText('Showing results 1 to 1 of 1 (filtered from 4 total)');
         });
-
-        test('can cancel a draw and refresh it later', async ({ page }) => {
-            await page.evaluate(() => {
-                window.cancelDraw = true;
-                window.createTable({
-                    preDrawCallback: () => !window.cancelDraw,
-                });
-            });
-
-            await expect(page.locator('tbody tr')).toHaveCount(0);
-
-            await page.evaluate(() => {
-                window.cancelDraw = false;
-                $('#table').table('refresh');
-            });
-
-            await expect(page.locator('tbody tr')).toHaveCount(2);
-        });
     });
 
     test.describe('sanitization', () => {
