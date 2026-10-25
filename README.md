@@ -148,11 +148,11 @@ Use methods to update active instances. Set `Table.defaults` and `Table.classes`
 | `buttons` | `array` | `[]` | Export/custom button configurations. |
 | `columns` | `array \| null` | `null` | Column definitions, one per heading; see below. |
 | `createdRow` | `function \| null` | `null` | Customize each inserted row. |
-| `data` | `array` | Not set | Local rows; otherwise read `<tbody>` cell HTML. |
+| `data` | `array \| null` | `null` | Local rows; otherwise read `<tbody>` cell HTML. |
 | `debounce` | `number` | `250` | Local input-search / remote-request delay in milliseconds. |
 | `drawCallback` | `function \| null` | `null` | After inserting the displayed rows. |
 | `footerCallback` | `function \| null` | `null` | Customize the cloned original footer. |
-| `getResults` | `function` | Not set | Remote loader; takes precedence over local data. |
+| `getResults` | `function \| null` | `null` | Remote loader; takes precedence over local data. |
 | `headerCallback` | `function \| null` | `null` | Customize the heading row. |
 | `icons` | `object` | See below | Trusted HTML for pagination icons. |
 | `info` | `boolean` | `true` | Render the result-count status. |
