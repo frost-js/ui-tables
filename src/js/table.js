@@ -5,7 +5,7 @@ import {
     copyRowValue, matchesFilter, normalizeColumns, normalizeFilters, normalizeOrder, normalizePageLength, normalizeSortValue,
     normalizeState, validateColumnIndex, validateRowId, validateRows,
 } from './data.js';
-import { buildTable, getDomData, getDomHeadings, getFooterCells } from './dom.js';
+import { buildTable, getDomData, getDomHeadings, getFooterCells, getTextFromHtml } from './dom.js';
 
 const document = $.getContext();
 const window = $.getWindow();
@@ -536,7 +536,6 @@ export default class Table extends BaseComponent {
     #responsiveObserver = null;
     #responsiveRows = [];
     #responsiveWidth = null;
-    #results = [];
     #rowFilter = null;
     #rowIdIndexes = new Map();
     #rowIds = [];
@@ -728,7 +727,6 @@ export default class Table extends BaseComponent {
         this.#rowIds = [];
         this.#selectedIds.clear();
         this.#domValues = new WeakMap();
-        this.#results = [];
         this.#rowIndexes = [];
         this.#offset = 0;
         this.#total = 0;
@@ -861,7 +859,6 @@ export default class Table extends BaseComponent {
         this.#rowIds = [];
         this.#selectedIds.clear();
         this.#domValues = new WeakMap();
-        this.#results = [];
         this.#rowIndexes = [];
 
         this.#filteredIndexes = [];
@@ -942,13 +939,7 @@ export default class Table extends BaseComponent {
         }
 
         // Exports contain text, even when the displayed headings contain HTML.
-        const headings = columns.map((index) => {
-            const container = $.create('div');
-
-            $.setHtml(container, $.sanitize(String(this.#headings[index].text)));
-
-            return $.getText(container);
-        });
+        const headings = columns.map((index) => getTextFromHtml(this.#headings[index].text));
 
         const rows = [];
 
@@ -1081,7 +1072,7 @@ export default class Table extends BaseComponent {
      */
     info() {
         return {
-            end: this.#offset + this.#results.length,
+            end: this.#offset + this.#rowIndexes.length,
             filtered: this.#filtered,
             start: this.#offset,
             total: this.#total,
@@ -1301,7 +1292,6 @@ export default class Table extends BaseComponent {
         this.#domValues = new WeakMap();
         this.#filteredIndexes = [];
         this.#rowIndexes = [];
-        this.#results = [];
 
         if (resetPage) {
             this.#offset = 0;
@@ -2097,7 +2087,7 @@ export default class Table extends BaseComponent {
     }
 
     /**
-     * Refreshes the results.
+     * Refreshes pagination and remote row indexes.
      */
     #refreshResults() {
         this.#page = this.options.paging ? 1 + this.#offset / this.#limit : 1;
@@ -2106,8 +2096,6 @@ export default class Table extends BaseComponent {
         if (this.options.getResults) {
             this.#rowIndexes = this.#data.map((_, index) => index);
         }
-
-        this.#results = this.#rowIndexes.map((index) => this.#data[index]);
     }
 
     /**
@@ -2339,11 +2327,8 @@ export default class Table extends BaseComponent {
         const inputs = new Map();
 
         for (const index of columns) {
-            const heading = $.create('div');
-
-            $.setHtml(heading, $.sanitize(String(this.#headings[index].text)));
-
-            const text = $.getText(heading).trim() || this.options.lang.column.replace('{column}', index + 1);
+            const text = getTextFromHtml(this.#headings[index].text).trim() ||
+                this.options.lang.column.replace('{column}', index + 1);
 
             const label = $.create('label', { class: this.constructor.classes.columnPickerLabel });
             const input = $.create('input', {
@@ -2503,8 +2488,8 @@ export default class Table extends BaseComponent {
 
         $.empty(this.#infoContainer);
 
-        const start = this.#results.length ? this.#offset + 1 : 0;
-        const end = this.#offset + this.#results.length;
+        const start = this.#rowIndexes.length ? this.#offset + 1 : 0;
+        const end = this.#offset + this.#rowIndexes.length;
         let infoText = this.#filtered < this.#total ?
             this.options.lang.infoFiltered :
             this.options.lang.info;
@@ -2900,11 +2885,8 @@ export default class Table extends BaseComponent {
                 continue;
             }
 
-            const heading = $.create('div');
-
-            $.setHtml(heading, $.sanitize(String(this.#headings[index].text)));
-
-            const text = $.getText(heading).trim() || this.options.lang.column.replace('{column}', index + 1);
+            const text = getTextFromHtml(this.#headings[index].text).trim() ||
+                this.options.lang.column.replace('{column}', index + 1);
             const value = this.#getValue(entry.index, index, 'display');
 
             if (!this.node || version !== this.#drawVersion) {
@@ -3026,7 +3008,7 @@ export default class Table extends BaseComponent {
             return;
         }
 
-        const end = this.#offset + this.#results.length;
+        const end = this.#offset + this.#rowIndexes.length;
 
         this.options.headerCallback?.call(this, this.#theadRow, this.#data, this.#offset, end, [...this.#rowIndexes]);
 
@@ -3046,7 +3028,7 @@ export default class Table extends BaseComponent {
             return;
         }
 
-        if (!this.#results.length) {
+        if (!this.#rowIndexes.length) {
             const row = $.create('tr');
 
             this.#emptyCell = $.create('td', {
@@ -3059,14 +3041,15 @@ export default class Table extends BaseComponent {
             $.append(row, this.#emptyCell);
             $.append(this.#tbody, row);
         } else {
-            for (const [index, result] of this.#results.entries()) {
+            for (const [index, rowIndex] of this.#rowIndexes.entries()) {
+                const result = this.#data[rowIndex];
                 const row = this.#renderRow(result, index);
 
                 if (!active()) {
                     return;
                 }
 
-                this.options.rowCallback?.call(this, row, result, index, this.#offset + index, this.#rowIndexes[index]);
+                this.options.rowCallback?.call(this, row, result, index, this.#offset + index, rowIndex);
 
                 if (!active()) {
                     return;
@@ -3383,6 +3366,10 @@ export default class Table extends BaseComponent {
         const version = this.#drawVersion;
         const active = () => this.node && version === this.#drawVersion;
         const order = this.options.ordering ? this.#getOrder() : [];
+
+        if (!order.length) {
+            return indexes;
+        }
 
         // Resolve keys once per row so sorting does not repeatedly invoke renderers.
         const values = new Map();

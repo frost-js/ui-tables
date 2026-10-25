@@ -100,6 +100,16 @@ function getFooterCells(footer) {
 	return cells;
 }
 /**
+* Extracts plain text from sanitized HTML, preserving whitespace.
+* @param {string} html The HTML to convert.
+* @returns {string} The plain text.
+*/
+function getTextFromHtml(html) {
+	const container = $.create("div");
+	$.setHtml(container, $.sanitize(String(html)));
+	return $.getText(container);
+}
+/**
 * Downloads a blob.
 * @param {Blob} blob The blob to save.
 * @param {string} filename The filename.
@@ -2398,7 +2408,6 @@ var Table = class extends BaseComponent {
 	#responsiveObserver = null;
 	#responsiveRows = [];
 	#responsiveWidth = null;
-	#results = [];
 	#rowFilter = null;
 	#rowIdIndexes = /* @__PURE__ */ new Map();
 	#rowIds = [];
@@ -2510,7 +2519,6 @@ var Table = class extends BaseComponent {
 		this.#rowIds = [];
 		this.#selectedIds.clear();
 		this.#domValues = /* @__PURE__ */ new WeakMap();
-		this.#results = [];
 		this.#rowIndexes = [];
 		this.#offset = 0;
 		this.#total = 0;
@@ -2598,7 +2606,6 @@ var Table = class extends BaseComponent {
 		this.#rowIds = [];
 		this.#selectedIds.clear();
 		this.#domValues = /* @__PURE__ */ new WeakMap();
-		this.#results = [];
 		this.#rowIndexes = [];
 		this.#filteredIndexes = [];
 		this.#filters = [];
@@ -2648,11 +2655,7 @@ var Table = class extends BaseComponent {
 		for (const index of columns) validateColumnIndex(index, this.#columns.length);
 		const indexes = this.#getDataIndexes(scope);
 		if (!this.node || version !== this.#drawVersion) return null;
-		const headings = columns.map((index) => {
-			const container = $.create("div");
-			$.setHtml(container, $.sanitize(String(this.#headings[index].text)));
-			return $.getText(container);
-		});
+		const headings = columns.map((index) => getTextFromHtml(this.#headings[index].text));
 		const rows = [];
 		for (const rowIndex of indexes) {
 			const row = [];
@@ -2757,7 +2760,7 @@ var Table = class extends BaseComponent {
 	*/
 	info() {
 		return {
-			end: this.#offset + this.#results.length,
+			end: this.#offset + this.#rowIndexes.length,
 			filtered: this.#filtered,
 			start: this.#offset,
 			total: this.#total
@@ -2900,7 +2903,6 @@ var Table = class extends BaseComponent {
 		this.#domValues = /* @__PURE__ */ new WeakMap();
 		this.#filteredIndexes = [];
 		this.#rowIndexes = [];
-		this.#results = [];
 		if (resetPage) this.#offset = 0;
 		this.#load();
 	}
@@ -3376,13 +3378,12 @@ var Table = class extends BaseComponent {
 		$.triggerEvent(this.node, "statechange.ui.table", { detail: { state } });
 	}
 	/**
-	* Refreshes the results.
+	* Refreshes pagination and remote row indexes.
 	*/
 	#refreshResults() {
 		this.#page = this.options.paging ? 1 + this.#offset / this.#limit : 1;
 		this.#totalPages = this.options.paging ? Math.max(1, Math.ceil(this.#filtered / this.#limit)) : 1;
 		if (this.options.getResults) this.#rowIndexes = this.#data.map((_, index) => index);
-		this.#results = this.#rowIndexes.map((index) => this.#data[index]);
 	}
 	/**
 	* Renders the Table.
@@ -3527,9 +3528,7 @@ var Table = class extends BaseComponent {
 		$.append(container, group);
 		const inputs = /* @__PURE__ */ new Map();
 		for (const index of columns) {
-			const heading = $.create("div");
-			$.setHtml(heading, $.sanitize(String(this.#headings[index].text)));
-			const text = $.getText(heading).trim() || this.options.lang.column.replace("{column}", index + 1);
+			const text = getTextFromHtml(this.#headings[index].text).trim() || this.options.lang.column.replace("{column}", index + 1);
 			const label = $.create("label", { class: this.constructor.classes.columnPickerLabel });
 			const input = $.create("input", {
 				class: this.constructor.classes.columnPickerInput,
@@ -3632,8 +3631,8 @@ var Table = class extends BaseComponent {
 	#renderInfo() {
 		const version = this.#drawVersion;
 		$.empty(this.#infoContainer);
-		const start = this.#results.length ? this.#offset + 1 : 0;
-		const end = this.#offset + this.#results.length;
+		const start = this.#rowIndexes.length ? this.#offset + 1 : 0;
+		const end = this.#offset + this.#rowIndexes.length;
 		let infoText = this.#filtered < this.#total ? this.options.lang.infoFiltered : this.options.lang.info;
 		const replacements = {
 			start,
@@ -3892,9 +3891,7 @@ var Table = class extends BaseComponent {
 		const columns = [];
 		for (const index of this.#getVisibleColumns()) {
 			if (!this.#collapsedColumns.has(index)) continue;
-			const heading = $.create("div");
-			$.setHtml(heading, $.sanitize(String(this.#headings[index].text)));
-			const text = $.getText(heading).trim() || this.options.lang.column.replace("{column}", index + 1);
+			const text = getTextFromHtml(this.#headings[index].text).trim() || this.options.lang.column.replace("{column}", index + 1);
 			const value = this.#getValue(entry.index, index, "display");
 			if (!this.node || version !== this.#drawVersion) return;
 			const html = this.options.sanitize(String(value ?? ""));
@@ -3963,13 +3960,13 @@ var Table = class extends BaseComponent {
 		if (!active()) return;
 		this.#syncResponsiveColumns();
 		if (!active()) return;
-		const end = this.#offset + this.#results.length;
+		const end = this.#offset + this.#rowIndexes.length;
 		this.options.headerCallback?.call(this, this.#theadRow, this.#data, this.#offset, end, [...this.#rowIndexes]);
 		if (!active()) return;
 		if (this.#pagination) this.#renderPagination();
 		if (this.#infoContainer) this.#renderInfo();
 		if (!active()) return;
-		if (!this.#results.length) {
+		if (!this.#rowIndexes.length) {
 			const row = $.create("tr");
 			this.#emptyCell = $.create("td", {
 				class: this.constructor.classes.emptyCell,
@@ -3978,10 +3975,11 @@ var Table = class extends BaseComponent {
 			});
 			$.append(row, this.#emptyCell);
 			$.append(this.#tbody, row);
-		} else for (const [index, result] of this.#results.entries()) {
+		} else for (const [index, rowIndex] of this.#rowIndexes.entries()) {
+			const result = this.#data[rowIndex];
 			const row = this.#renderRow(result, index);
 			if (!active()) return;
-			this.options.rowCallback?.call(this, row, result, index, this.#offset + index, this.#rowIndexes[index]);
+			this.options.rowCallback?.call(this, row, result, index, this.#offset + index, rowIndex);
 			if (!active()) return;
 			$.append(this.#tbody, row);
 			this.options.createdRow?.call(this, row, result, index);
@@ -4182,6 +4180,7 @@ var Table = class extends BaseComponent {
 		const version = this.#drawVersion;
 		const active = () => this.node && version === this.#drawVersion;
 		const order = this.options.ordering ? this.#getOrder() : [];
+		if (!order.length) return indexes;
 		const values = /* @__PURE__ */ new Map();
 		for (const rowIndex of indexes) {
 			const row = [];

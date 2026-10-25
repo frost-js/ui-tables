@@ -132,6 +132,16 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		return cells;
 	}
 	/**
+	* Extracts plain text from sanitized HTML, preserving whitespace.
+	* @param {string} html The HTML to convert.
+	* @returns {string} The plain text.
+	*/
+	function getTextFromHtml(html) {
+		const container = _fr0st_query.default.create("div");
+		_fr0st_query.default.setHtml(container, _fr0st_query.default.sanitize(String(html)));
+		return _fr0st_query.default.getText(container);
+	}
+	/**
 	* Downloads a blob.
 	* @param {Blob} blob The blob to save.
 	* @param {string} filename The filename.
@@ -2430,7 +2440,6 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		#responsiveObserver = null;
 		#responsiveRows = [];
 		#responsiveWidth = null;
-		#results = [];
 		#rowFilter = null;
 		#rowIdIndexes = /* @__PURE__ */ new Map();
 		#rowIds = [];
@@ -2542,7 +2551,6 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			this.#rowIds = [];
 			this.#selectedIds.clear();
 			this.#domValues = /* @__PURE__ */ new WeakMap();
-			this.#results = [];
 			this.#rowIndexes = [];
 			this.#offset = 0;
 			this.#total = 0;
@@ -2630,7 +2638,6 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			this.#rowIds = [];
 			this.#selectedIds.clear();
 			this.#domValues = /* @__PURE__ */ new WeakMap();
-			this.#results = [];
 			this.#rowIndexes = [];
 			this.#filteredIndexes = [];
 			this.#filters = [];
@@ -2680,11 +2687,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			for (const index of columns) validateColumnIndex(index, this.#columns.length);
 			const indexes = this.#getDataIndexes(scope);
 			if (!this.node || version !== this.#drawVersion) return null;
-			const headings = columns.map((index) => {
-				const container = _fr0st_query.default.create("div");
-				_fr0st_query.default.setHtml(container, _fr0st_query.default.sanitize(String(this.#headings[index].text)));
-				return _fr0st_query.default.getText(container);
-			});
+			const headings = columns.map((index) => getTextFromHtml(this.#headings[index].text));
 			const rows = [];
 			for (const rowIndex of indexes) {
 				const row = [];
@@ -2789,7 +2792,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		*/
 		info() {
 			return {
-				end: this.#offset + this.#results.length,
+				end: this.#offset + this.#rowIndexes.length,
 				filtered: this.#filtered,
 				start: this.#offset,
 				total: this.#total
@@ -2932,7 +2935,6 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			this.#domValues = /* @__PURE__ */ new WeakMap();
 			this.#filteredIndexes = [];
 			this.#rowIndexes = [];
-			this.#results = [];
 			if (resetPage) this.#offset = 0;
 			this.#load();
 		}
@@ -3408,13 +3410,12 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			_fr0st_query.default.triggerEvent(this.node, "statechange.ui.table", { detail: { state } });
 		}
 		/**
-		* Refreshes the results.
+		* Refreshes pagination and remote row indexes.
 		*/
 		#refreshResults() {
 			this.#page = this.options.paging ? 1 + this.#offset / this.#limit : 1;
 			this.#totalPages = this.options.paging ? Math.max(1, Math.ceil(this.#filtered / this.#limit)) : 1;
 			if (this.options.getResults) this.#rowIndexes = this.#data.map((_, index) => index);
-			this.#results = this.#rowIndexes.map((index) => this.#data[index]);
 		}
 		/**
 		* Renders the Table.
@@ -3559,9 +3560,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			_fr0st_query.default.append(container, group);
 			const inputs = /* @__PURE__ */ new Map();
 			for (const index of columns) {
-				const heading = _fr0st_query.default.create("div");
-				_fr0st_query.default.setHtml(heading, _fr0st_query.default.sanitize(String(this.#headings[index].text)));
-				const text = _fr0st_query.default.getText(heading).trim() || this.options.lang.column.replace("{column}", index + 1);
+				const text = getTextFromHtml(this.#headings[index].text).trim() || this.options.lang.column.replace("{column}", index + 1);
 				const label = _fr0st_query.default.create("label", { class: this.constructor.classes.columnPickerLabel });
 				const input = _fr0st_query.default.create("input", {
 					class: this.constructor.classes.columnPickerInput,
@@ -3664,8 +3663,8 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		#renderInfo() {
 			const version = this.#drawVersion;
 			_fr0st_query.default.empty(this.#infoContainer);
-			const start = this.#results.length ? this.#offset + 1 : 0;
-			const end = this.#offset + this.#results.length;
+			const start = this.#rowIndexes.length ? this.#offset + 1 : 0;
+			const end = this.#offset + this.#rowIndexes.length;
 			let infoText = this.#filtered < this.#total ? this.options.lang.infoFiltered : this.options.lang.info;
 			const replacements = {
 				start,
@@ -3924,9 +3923,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			const columns = [];
 			for (const index of this.#getVisibleColumns()) {
 				if (!this.#collapsedColumns.has(index)) continue;
-				const heading = _fr0st_query.default.create("div");
-				_fr0st_query.default.setHtml(heading, _fr0st_query.default.sanitize(String(this.#headings[index].text)));
-				const text = _fr0st_query.default.getText(heading).trim() || this.options.lang.column.replace("{column}", index + 1);
+				const text = getTextFromHtml(this.#headings[index].text).trim() || this.options.lang.column.replace("{column}", index + 1);
 				const value = this.#getValue(entry.index, index, "display");
 				if (!this.node || version !== this.#drawVersion) return;
 				const html = this.options.sanitize(String(value ?? ""));
@@ -3995,13 +3992,13 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			if (!active()) return;
 			this.#syncResponsiveColumns();
 			if (!active()) return;
-			const end = this.#offset + this.#results.length;
+			const end = this.#offset + this.#rowIndexes.length;
 			this.options.headerCallback?.call(this, this.#theadRow, this.#data, this.#offset, end, [...this.#rowIndexes]);
 			if (!active()) return;
 			if (this.#pagination) this.#renderPagination();
 			if (this.#infoContainer) this.#renderInfo();
 			if (!active()) return;
-			if (!this.#results.length) {
+			if (!this.#rowIndexes.length) {
 				const row = _fr0st_query.default.create("tr");
 				this.#emptyCell = _fr0st_query.default.create("td", {
 					class: this.constructor.classes.emptyCell,
@@ -4010,10 +4007,11 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 				});
 				_fr0st_query.default.append(row, this.#emptyCell);
 				_fr0st_query.default.append(this.#tbody, row);
-			} else for (const [index, result] of this.#results.entries()) {
+			} else for (const [index, rowIndex] of this.#rowIndexes.entries()) {
+				const result = this.#data[rowIndex];
 				const row = this.#renderRow(result, index);
 				if (!active()) return;
-				this.options.rowCallback?.call(this, row, result, index, this.#offset + index, this.#rowIndexes[index]);
+				this.options.rowCallback?.call(this, row, result, index, this.#offset + index, rowIndex);
 				if (!active()) return;
 				_fr0st_query.default.append(this.#tbody, row);
 				this.options.createdRow?.call(this, row, result, index);
@@ -4214,6 +4212,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			const version = this.#drawVersion;
 			const active = () => this.node && version === this.#drawVersion;
 			const order = this.options.ordering ? this.#getOrder() : [];
+			if (!order.length) return indexes;
 			const values = /* @__PURE__ */ new Map();
 			for (const rowIndex of indexes) {
 				const row = [];

@@ -141,6 +141,19 @@ export function getFooterCells(footer) {
 }
 
 /**
+ * Extracts plain text from sanitized HTML, preserving whitespace.
+ * @param {string} html The HTML to convert.
+ * @returns {string} The plain text.
+ */
+export function getTextFromHtml(html) {
+    const container = $.create('div');
+
+    $.setHtml(container, $.sanitize(String(html)));
+
+    return $.getText(container);
+}
+
+/**
  * Downloads a blob.
  * @param {Blob} blob The blob to save.
  * @param {string} filename The filename.
