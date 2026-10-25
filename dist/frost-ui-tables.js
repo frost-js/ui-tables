@@ -2581,17 +2581,30 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		/** @inheritdoc */
 		dispose() {
 			if (!this.node) return;
-			const node = this.node;
 			this.#drawVersion++;
 			this.#searchHandler?.cancel();
-			this.#requestVersion++;
-			this.#loadResults?.cancel();
+			this.#cancelRequest();
+			if (!this.node) return;
 			this.#responsiveObserver?.disconnect();
 			if (this.#responsiveFrame !== null) window.cancelAnimationFrame(this.#responsiveFrame);
-			const pending = this.#pending;
-			this.#pending = null;
-			super.dispose();
 			for (const { dropdown } of this.#columnPickers) dropdown.dispose();
+			if (this.#id) _fr0st_query.default.removeAttribute(this.node, "id");
+			_fr0st_query.default.removeClass(this.node, this.#addedClasses);
+			if (this.#originalClass === null && !_fr0st_query.default.getAttribute(this.node, "class")) _fr0st_query.default.removeAttribute(this.node, "class");
+			for (const [attribute, value] of [["aria-describedby", this.#originalDescription], ["aria-busy", this.#originalBusy]]) {
+				if (value === void 0) continue;
+				if (value === null) _fr0st_query.default.removeAttribute(this.node, attribute);
+				else _fr0st_query.default.setAttribute(this.node, { [attribute]: value });
+			}
+			if (this.#container) {
+				_fr0st_query.default.before(this.#container, this.node);
+				_fr0st_query.default.remove(this.#container);
+			}
+			if (this.#original) {
+				_fr0st_query.default.empty(this.node);
+				_fr0st_query.default.append(this.node, this.#original);
+			}
+			this.#addedClasses = [];
 			this.#collapsedColumns.clear();
 			this.#columnPickers = [];
 			this.#emptyCell = null;
@@ -2604,23 +2617,6 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			this.#responsiveRows = [];
 			this.#responsiveWidth = null;
 			this.#tableContainer = null;
-			if (this.#id) _fr0st_query.default.removeAttribute(node, "id");
-			_fr0st_query.default.removeClass(node, this.#addedClasses);
-			this.#addedClasses = [];
-			if (this.#originalClass === null && !_fr0st_query.default.getAttribute(node, "class")) _fr0st_query.default.removeAttribute(node, "class");
-			for (const [attribute, value] of [["aria-describedby", this.#originalDescription], ["aria-busy", this.#originalBusy]]) {
-				if (value === void 0) continue;
-				if (value === null) _fr0st_query.default.removeAttribute(node, attribute);
-				else _fr0st_query.default.setAttribute(node, { [attribute]: value });
-			}
-			if (this.#container) {
-				_fr0st_query.default.before(this.#container, node);
-				_fr0st_query.default.remove(this.#container);
-			}
-			if (this.#original) {
-				_fr0st_query.default.empty(node);
-				_fr0st_query.default.append(node, this.#original);
-			}
 			this.#original = null;
 			this.#container = null;
 			this.#loader = null;
@@ -2651,9 +2647,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			this.#loadResults = null;
 			this.#searchHandler = null;
 			this.#stateKey = null;
-			try {
-				pending?.cancel?.();
-			} catch {}
+			super.dispose();
 		}
 		/**
 		* Gets values for a single column.

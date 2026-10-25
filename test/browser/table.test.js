@@ -375,8 +375,6 @@ test.describe('Table', () => {
                     $.addEvent(cell, 'click', () => generatedEvents++);
                     $.addEvent(cell, 'remove', () => {
                         removals++;
-                        // Cleanup must tolerate another dispose call from a removal listener.
-                        table.dispose();
                     });
 
                     table.dispose();

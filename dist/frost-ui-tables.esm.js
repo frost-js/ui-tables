@@ -2549,17 +2549,30 @@ var Table = class extends BaseComponent {
 	/** @inheritdoc */
 	dispose() {
 		if (!this.node) return;
-		const node = this.node;
 		this.#drawVersion++;
 		this.#searchHandler?.cancel();
-		this.#requestVersion++;
-		this.#loadResults?.cancel();
+		this.#cancelRequest();
+		if (!this.node) return;
 		this.#responsiveObserver?.disconnect();
 		if (this.#responsiveFrame !== null) window.cancelAnimationFrame(this.#responsiveFrame);
-		const pending = this.#pending;
-		this.#pending = null;
-		super.dispose();
 		for (const { dropdown } of this.#columnPickers) dropdown.dispose();
+		if (this.#id) $.removeAttribute(this.node, "id");
+		$.removeClass(this.node, this.#addedClasses);
+		if (this.#originalClass === null && !$.getAttribute(this.node, "class")) $.removeAttribute(this.node, "class");
+		for (const [attribute, value] of [["aria-describedby", this.#originalDescription], ["aria-busy", this.#originalBusy]]) {
+			if (value === void 0) continue;
+			if (value === null) $.removeAttribute(this.node, attribute);
+			else $.setAttribute(this.node, { [attribute]: value });
+		}
+		if (this.#container) {
+			$.before(this.#container, this.node);
+			$.remove(this.#container);
+		}
+		if (this.#original) {
+			$.empty(this.node);
+			$.append(this.node, this.#original);
+		}
+		this.#addedClasses = [];
 		this.#collapsedColumns.clear();
 		this.#columnPickers = [];
 		this.#emptyCell = null;
@@ -2572,23 +2585,6 @@ var Table = class extends BaseComponent {
 		this.#responsiveRows = [];
 		this.#responsiveWidth = null;
 		this.#tableContainer = null;
-		if (this.#id) $.removeAttribute(node, "id");
-		$.removeClass(node, this.#addedClasses);
-		this.#addedClasses = [];
-		if (this.#originalClass === null && !$.getAttribute(node, "class")) $.removeAttribute(node, "class");
-		for (const [attribute, value] of [["aria-describedby", this.#originalDescription], ["aria-busy", this.#originalBusy]]) {
-			if (value === void 0) continue;
-			if (value === null) $.removeAttribute(node, attribute);
-			else $.setAttribute(node, { [attribute]: value });
-		}
-		if (this.#container) {
-			$.before(this.#container, node);
-			$.remove(this.#container);
-		}
-		if (this.#original) {
-			$.empty(node);
-			$.append(node, this.#original);
-		}
 		this.#original = null;
 		this.#container = null;
 		this.#loader = null;
@@ -2619,9 +2615,7 @@ var Table = class extends BaseComponent {
 		this.#loadResults = null;
 		this.#searchHandler = null;
 		this.#stateKey = null;
-		try {
-			pending?.cancel?.();
-		} catch {}
+		super.dispose();
 	}
 	/**
 	* Gets values for a single column.

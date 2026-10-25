@@ -751,6 +751,8 @@ An instance exposes its original element as `instance.node` and its shallow-froz
 
 `dispose()` releases resources owned by the component and removes its registered instance. It removes component-added classes while preserving unrelated application classes. Repeated disposal is safe and does not affect a new instance initialized on the same element. Use a new instance before calling other methods after disposal.
 
+Disposal cancels pending work before restoring the DOM and unregistering the instance. Initialize a replacement after `dispose()` returns.
+
 ## Events
 
 Events originate on the original table:

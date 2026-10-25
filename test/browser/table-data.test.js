@@ -165,13 +165,13 @@ test.describe('Table remote results', () => {
     });
 
     test.describe('cancellation', () => {
-        test('restores the table before a cancellation hook reinitializes it', async ({ page }) => {
+        test('cancels pending work and allows reinitialization after disposal', async ({ page }) => {
             await page.evaluate(() => window.startRemote({
                 getResults() {
                     return {
                         then() {},
                         cancel() {
-                            UI.Table.init($.findOne('#table'), { data: [['Reinitialized']] });
+                            $.setDataset(document.body, 'cancelled', 'true');
                         },
                     };
                 },
@@ -180,6 +180,13 @@ test.describe('Table remote results', () => {
             await page.clock.runFor(25);
 
             await page.evaluate(() => $('#table').table('dispose'));
+
+            await expect(page.locator('body')).toHaveAttribute('data-cancelled', 'true');
+            await expect(page.locator('tbody td')).toHaveText('Original');
+            await expect(page.locator('.table-responsive')).toHaveCount(0);
+            expect(await page.evaluate(() => $.hasData('#table', 'table'))).toBe(false);
+
+            await page.evaluate(() => UI.Table.init($.findOne('#table'), { data: [['Reinitialized']] }));
 
             await expect(page.locator('tbody td')).toHaveText('Reinitialized');
             await expect(page.locator('.table-responsive')).toHaveCount(1);
