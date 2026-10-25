@@ -116,24 +116,27 @@ export function getDomHeadings(element) {
 export function getFooterCells(footer) {
     const cells = [];
     const occupied = [];
+    const rows = $.getProperty(footer, 'rows');
 
-    for (const [rowIndex, row] of [...footer.rows].entries()) {
+    for (const [rowIndex, row] of [...rows].entries()) {
         let index = 0;
 
-        for (const cell of row.cells) {
+        for (const cell of $.getProperty(row, 'cells')) {
             while (occupied[index] > rowIndex) {
                 index++;
             }
 
-            const columns = Array.from({ length: cell.colSpan }, (_, offset) => index + offset);
-            const end = cell.rowSpan ? rowIndex + cell.rowSpan : footer.rows.length;
+            const colSpan = $.getProperty(cell, 'colSpan');
+            const rowSpan = $.getProperty(cell, 'rowSpan');
+            const columns = Array.from({ length: colSpan }, (_, offset) => index + offset);
+            const end = rowSpan ? rowIndex + rowSpan : rows.length;
 
             for (const column of columns) {
                 occupied[column] = end;
             }
 
-            cells.push({ cell, columns, hidden: cell.hidden });
-            index += cell.colSpan;
+            cells.push({ cell, columns, hidden: $.getProperty(cell, 'hidden') });
+            index += colSpan;
         }
     }
 

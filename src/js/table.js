@@ -283,8 +283,8 @@ const window = $.getWindow();
 
 /**
  * @typedef {object} TableOptions
- * @property {TableRow[]} [data] Local data; otherwise read the table body.
- * @property {TableGetResultsCallback} [getResults] Loads remote rows.
+ * @property {TableRow[]|null} [data=null] Local data; otherwise read the table body.
+ * @property {TableGetResultsCallback|null} [getResults=null] Loads remote rows.
  * @property {string|number|TableRowIdCallback|null} [rowId=null] The stable row identity accessor.
  * @property {false|'single'|'multiple'} [selection=false] The row selection mode; requires rowId.
  * @property {TableColumn[]|null} [columns=null] The column definitions.
@@ -370,6 +370,7 @@ export default class Table extends BaseComponent {
         detailList: 'table-details-list',
         detailRow: 'table-details',
         emptyCell: 'text-center py-3',
+        hide: 'visually-hidden',
         infoContainer: 'text-center text-md-start w-100',
         lengthContainer: 'd-flex justify-content-center justify-content-md-start w-100',
         lengthInputContainer: 'form-input',
@@ -454,6 +455,8 @@ export default class Table extends BaseComponent {
         },
         sanitize: (html) => $.sanitize(html),
         inputStyle: 'filled',
+        data: null,
+        getResults: null,
         createdRow: null,
         drawCallback: null,
         footerCallback: null,
@@ -2123,10 +2126,10 @@ export default class Table extends BaseComponent {
 
         $.append(this.#loader, loaderIcon);
 
-        const originalClasses = new Set(this.node.classList);
+        const originalClasses = new Set($.getProperty(this.node, 'classList'));
 
         $.addClass(this.node, this.constructor.classes.table);
-        this.#addedClasses = [...this.node.classList].filter((name) => !originalClasses.has(name));
+        this.#addedClasses = [...$.getProperty(this.node, 'classList')].filter((name) => !originalClasses.has(name));
 
         const caption = $.findOne('caption', this.#original);
 
@@ -2828,7 +2831,7 @@ export default class Table extends BaseComponent {
         });
 
         $.append(entry.button, $.create('span', {
-            class: 'visually-hidden',
+            class: this.constructor.classes.hide,
             text: this.options.lang.responsive.details,
         }));
 
@@ -3675,14 +3678,19 @@ export default class Table extends BaseComponent {
      * Measures visible columns and reconciles responsive details without a data redraw.
      */
     #updateResponsive() {
-        if (!this.node || !this.options.responsive || !this.#tableContainer.clientWidth) {
+        if (!this.node || !this.options.responsive) {
+            return;
+        }
+
+        const width = $.width(this.#tableContainer);
+
+        if (!width) {
             return;
         }
 
         const version = this.#drawVersion;
         const active = () => this.node && version === this.#drawVersion;
 
-        const width = this.#tableContainer.clientWidth;
         const previous = this.#collapsedColumns;
 
         const focused = document.activeElement;
@@ -3771,7 +3779,7 @@ export default class Table extends BaseComponent {
             }
 
             if (entry === focusedEntry && this.#collapsedColumns.size && !$.isSame(focused, document.activeElement)) {
-                $.focus(focused.isConnected ? focused : entry.button);
+                $.focus($.getProperty(focused, 'isConnected') ? focused : entry.button);
 
                 if (!active()) {
                     return;

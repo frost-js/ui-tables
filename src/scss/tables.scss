@@ -72,16 +72,16 @@
     --ui-btn-active-border-color: transparent;
     --ui-btn-active-box-shadow: none;
 
-    width: 1.5rem;
-    height: 1.5rem;
+    width: vars.$table-details-toggle-size;
+    height: vars.$table-details-toggle-size;
     padding: 0;
 
     &::before {
-        width: .4rem;
-        height: .4rem;
+        width: vars.$table-details-toggle-icon-size;
+        height: vars.$table-details-toggle-icon-size;
         content: "";
-        border-block-end: 2px solid currentcolor;
-        border-inline-end: 2px solid currentcolor;
+        border-block-end: vars.$table-details-toggle-icon-border-width solid currentcolor;
+        border-inline-end: vars.$table-details-toggle-icon-border-width solid currentcolor;
         transform: rotate(-45deg);
     }
 
@@ -101,7 +101,7 @@
 .table-details-list {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
-    gap: .5rem 1rem;
+    gap: vars.$table-details-list-gap;
     margin: 0;
     overflow-wrap: anywhere;
 

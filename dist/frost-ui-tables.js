@@ -114,19 +114,22 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 	function getFooterCells(footer) {
 		const cells = [];
 		const occupied = [];
-		for (const [rowIndex, row] of [...footer.rows].entries()) {
+		const rows = _fr0st_query.default.getProperty(footer, "rows");
+		for (const [rowIndex, row] of [...rows].entries()) {
 			let index = 0;
-			for (const cell of row.cells) {
+			for (const cell of _fr0st_query.default.getProperty(row, "cells")) {
 				while (occupied[index] > rowIndex) index++;
-				const columns = Array.from({ length: cell.colSpan }, (_, offset) => index + offset);
-				const end = cell.rowSpan ? rowIndex + cell.rowSpan : footer.rows.length;
+				const colSpan = _fr0st_query.default.getProperty(cell, "colSpan");
+				const rowSpan = _fr0st_query.default.getProperty(cell, "rowSpan");
+				const columns = Array.from({ length: colSpan }, (_, offset) => index + offset);
+				const end = rowSpan ? rowIndex + rowSpan : rows.length;
 				for (const column of columns) occupied[column] = end;
 				cells.push({
 					cell,
 					columns,
-					hidden: cell.hidden
+					hidden: _fr0st_query.default.getProperty(cell, "hidden")
 				});
-				index += cell.colSpan;
+				index += colSpan;
 			}
 		}
 		return cells;
@@ -2198,8 +2201,8 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 	*/
 	/**
 	* @typedef {object} TableOptions
-	* @property {TableRow[]} [data] Local data; otherwise read the table body.
-	* @property {TableGetResultsCallback} [getResults] Loads remote rows.
+	* @property {TableRow[]|null} [data=null] Local data; otherwise read the table body.
+	* @property {TableGetResultsCallback|null} [getResults=null] Loads remote rows.
 	* @property {string|number|TableRowIdCallback|null} [rowId=null] The stable row identity accessor.
 	* @property {false|'single'|'multiple'} [selection=false] The row selection mode; requires rowId.
 	* @property {TableColumn[]|null} [columns=null] The column definitions.
@@ -2271,6 +2274,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			detailList: "table-details-list",
 			detailRow: "table-details",
 			emptyCell: "text-center py-3",
+			hide: "visually-hidden",
 			infoContainer: "text-center text-md-start w-100",
 			lengthContainer: "d-flex justify-content-center justify-content-md-start w-100",
 			lengthInputContainer: "form-input",
@@ -2355,6 +2359,8 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			},
 			sanitize: (html) => _fr0st_query.default.sanitize(html),
 			inputStyle: "filled",
+			data: null,
+			getResults: null,
 			createdRow: null,
 			drawCallback: null,
 			footerCallback: null,
@@ -3433,9 +3439,9 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 			});
 			const loaderIcon = _fr0st_query.default.create("span", { class: this.constructor.classes.loaderIcon });
 			_fr0st_query.default.append(this.#loader, loaderIcon);
-			const originalClasses = new Set(this.node.classList);
+			const originalClasses = new Set(_fr0st_query.default.getProperty(this.node, "classList"));
 			_fr0st_query.default.addClass(this.node, this.constructor.classes.table);
-			this.#addedClasses = [...this.node.classList].filter((name) => !originalClasses.has(name));
+			this.#addedClasses = [..._fr0st_query.default.getProperty(this.node, "classList")].filter((name) => !originalClasses.has(name));
 			const caption = _fr0st_query.default.findOne("caption", this.#original);
 			if (caption) _fr0st_query.default.append(this.node, _fr0st_query.default.clone(caption));
 			const thead = _fr0st_query.default.create("thead");
@@ -3886,7 +3892,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 				}
 			});
 			_fr0st_query.default.append(entry.button, _fr0st_query.default.create("span", {
-				class: "visually-hidden",
+				class: this.constructor.classes.hide,
 				text: this.options.lang.responsive.details
 			}));
 			_fr0st_query.default.addEvent(entry.button, "click.ui.table", () => {
@@ -4390,10 +4396,11 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 		* Measures visible columns and reconciles responsive details without a data redraw.
 		*/
 		#updateResponsive() {
-			if (!this.node || !this.options.responsive || !this.#tableContainer.clientWidth) return;
+			if (!this.node || !this.options.responsive) return;
+			const width = _fr0st_query.default.width(this.#tableContainer);
+			if (!width) return;
 			const version = this.#drawVersion;
 			const active = () => this.node && version === this.#drawVersion;
-			const width = this.#tableContainer.clientWidth;
 			const previous = this.#collapsedColumns;
 			const focused = document.activeElement;
 			const focusedEntry = this.#responsiveRows.find((entry) => _fr0st_query.default.isSame(entry.button, focused) || entry.detail && _fr0st_query.default.hasDescendent(entry.detail, focused));
@@ -4436,7 +4443,7 @@ _fr0st_query = __toESM(_fr0st_query, 1);
 				else _fr0st_query.default.setProperty(entry.detail, "hidden", false);
 				if (!active()) return;
 				if (entry === focusedEntry && this.#collapsedColumns.size && !_fr0st_query.default.isSame(focused, document.activeElement)) {
-					_fr0st_query.default.focus(focused.isConnected ? focused : entry.button);
+					_fr0st_query.default.focus(_fr0st_query.default.getProperty(focused, "isConnected") ? focused : entry.button);
 					if (!active()) return;
 				}
 			}
