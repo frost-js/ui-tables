@@ -1,6 +1,4 @@
-section[id],
-.row > [id],
-.demo-anchor {
+section[id] {
     scroll-margin-top: 6rem;
 }
 

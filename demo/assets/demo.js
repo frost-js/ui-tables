@@ -125,117 +125,10 @@ $.ready(() => {
     };
 
     let dataTable;
-    const initializeData = () => {
-        dataTable?.dispose();
-
-        const objects = $.getValue(node('data-source')) === 'objects';
-        const customDetails = $.getProperty(node('data-details'), 'checked');
-        const options = objects ? {
-            data: detailRows.map(([name, team, score, email, notes]) => ({
-                person: { name, team, email },
-                score,
-                notes,
-            })),
-            rowId: 'person.name',
-            columns: [
-                { data: 'person.name', responsivePriority: null },
-                { data: 'person.team', responsivePriority: 1 },
-                { data: 'score', class: 'text-end', responsivePriority: 2 },
-                { data: 'person.email', responsivePriority: 3 },
-                { data: 'notes', responsivePriority: 4 },
-            ],
-        } : {
-            data: detailRows,
-            rowId: 0,
-            columns: [
-                { responsivePriority: null },
-                { responsivePriority: 1 },
-                { class: 'text-end', responsivePriority: 2 },
-                { responsivePriority: 3 },
-                { responsivePriority: 4 },
-            ],
-        };
-
-        dataTable = init('data-table', {
-            ...options,
-            responsive: true,
-            renderDetails: customDetails ? renderDetails : null,
-            buttons: [{ type: 'columns' }],
-            order: [[1, 'asc'], [2, 'desc']],
-        });
-
-        $.setText(node('data-config'), objects ?
-            `Table.init(table, {
-    data: [{ person: { name: 'Alice', team: 'Design', email: 'alice@example.com' }, score: 80, notes: 'Available for reviews' }],
-    rowId: 'person.name',
-    responsive: true,${customDetails ? `\n    renderDetails: ${renderDetails.toString()},` : ''}
-    columns: [
-        { data: 'person.name', responsivePriority: null },
-        { data: 'person.team', responsivePriority: 1 },
-        { data: 'score', class: 'text-end', responsivePriority: 2 },
-        { data: 'person.email', responsivePriority: 3 },
-        { data: 'notes', responsivePriority: 4 },
-    ],
-    buttons: [{ type: 'columns' }],
-    order: [[1, 'asc'], [2, 'desc']],
-});` :
-            `Table.init(table, {
-    data: [['Alice', 'Design', 80, 'alice@example.com', 'Available for reviews']],
-    rowId: 0,
-    responsive: true,${customDetails ? `\n    renderDetails: ${renderDetails.toString()},` : ''}
-    columns: [
-        { responsivePriority: null },
-        { responsivePriority: 1 },
-        { class: 'text-end', responsivePriority: 2 },
-        { responsivePriority: 3 },
-        { responsivePriority: 4 },
-    ],
-    buttons: [{ type: 'columns' }],
-    order: [[1, 'asc'], [2, 'desc']],
-});`);
-    };
-
-    $.addEvent(node('data-source'), 'change', initializeData);
-    $.addEvent(node('data-details'), 'change', initializeData);
-    $.addEvent(node('data-width'), 'change', () => {
-        $.setStyle(node('data-preview'), {
-            'max-width': $.getValue(node('data-width')) === 'narrow' ? '20rem' : 'none',
-        });
-    });
-
-    initializeData();
-
-    const callbackTable = init('callback-table', {
-        data: rows,
-        columns: [
-            {},
-            {},
-            {
-                class: 'text-end',
-                type: 'number',
-                render: (value, { purpose }) => purpose === 'display' ? `<strong>${Number(value)}</strong>` : value,
-                createdCell(cell, value) {
-                    if (value >= 90) {
-                        $.addClass(cell, 'text-success', 'fw-bold');
-                    }
-                },
-            },
-        ],
-        rowCallback(row, data) {
-            $[data[2] >= 90 ? 'addClass' : 'removeClass'](row, 'table-active');
-        },
-        footerCallback(footer) {
-            $.setText($.findOne('td:last-child', footer), this.getColumn(2).reduce((sum, value) => sum + Number(value), 0));
-        },
-        drawCallback() {
-            $.setText(node('callback-summary'), `${this.info().filtered} matching rows. Scores of 90 or more are highlighted.`);
-        },
-    });
-
     const filterScores = () => {
         const filters = [];
-        const team = $.getValue(node('callback-team'));
-        const score = $.getValue(node('callback-score'));
+        const team = $.getValue(node('data-team'));
+        const score = $.getValue(node('data-score'));
 
         if (team) {
             filters.push({ column: 1, operator: 'equals', value: team });
@@ -245,21 +138,81 @@ $.ready(() => {
             filters.push({ column: 2, operator: 'gte', value: Number(score) });
         }
 
-        callbackTable.setFilters(filters);
+        dataTable.setFilters(filters);
     };
 
-    $.addEvent(node('callback-team'), 'change', filterScores);
-    $.addEvent(node('callback-score'), 'change', filterScores);
+    const initializeData = () => {
+        dataTable?.dispose();
 
-    init('export-table', {
-        data: rows,
-        buttons: [
-            { type: 'columns' },
-            { type: 'csv', scope: 'filtered', title: 'Matching team scores' },
-            { type: 'excel', scope: 'all', title: 'All team scores' },
-            { type: 'print', scope: 'page', title: 'Team scores' },
-        ],
+        const objects = $.getValue(node('data-source')) === 'objects';
+        const keys = objects ? ['person.name', 'person.team', 'score', 'person.email', 'notes'] : [0, 1, 2, 3, 4];
+        const options = {
+            data: objects ? detailRows.map(([name, team, score, email, notes]) => ({
+                person: { name, team, email },
+                score,
+                notes,
+            })) : detailRows,
+            rowId: keys[0],
+            responsive: true,
+            renderDetails: $.getProperty(node('data-details'), 'checked') ? renderDetails : null,
+            columns: [
+                { data: keys[0], responsivePriority: null },
+                { data: keys[1], responsivePriority: 2 },
+                {
+                    data: keys[2],
+                    class: 'text-end',
+                    type: 'number',
+                    responsivePriority: 1,
+                    render: (value, { purpose }) => purpose === 'display' ? `<strong>${Number(value)}</strong>` : value,
+                    createdCell(cell, value) {
+                        if (value >= 90) {
+                            $.addClass(cell, 'text-success', 'fw-bold');
+                        }
+                    },
+                },
+                { data: keys[3], responsivePriority: 3 },
+                { data: keys[4], responsivePriority: 4 },
+            ],
+            buttons: [
+                { type: 'columns' },
+                { type: 'csv', scope: 'filtered', title: 'Matching team scores' },
+                { type: 'excel', scope: 'all', title: 'All team scores' },
+                { type: 'print', scope: 'page', title: 'Team scores' },
+            ],
+            order: [[1, 'asc'], [2, 'desc']],
+            rowCallback(row, data) {
+                const score = objects ? data.score : data[2];
+
+                $[score >= 90 ? 'addClass' : 'removeClass'](row, 'table-active');
+            },
+            footerCallback(footer) {
+                const total = this.getColumn(keys[2]).reduce((sum, value) => sum + Number(value), 0);
+
+                $.setText($.findOne('[data-demo-total]', footer), total);
+            },
+        };
+
+        dataTable = init('data-table', options);
+        filterScores();
+
+        $.setText(node('data-config'), JSON.stringify({
+            data: options.data.slice(0, 1),
+            rowId: options.rowId,
+            columns: options.columns.map(({ data, type }) => ({ data, type })),
+        }, null, 4));
+    };
+
+    $.addEvent(node('data-source'), 'change', initializeData);
+    $.addEvent(node('data-details'), 'change', initializeData);
+    $.addEvent(node('data-team'), 'change', filterScores);
+    $.addEvent(node('data-score'), 'change', filterScores);
+    $.addEvent(node('data-width'), 'change', () => {
+        $.setStyle(node('data-preview'), {
+            'max-width': $.getValue(node('data-width')) === 'narrow' ? '20rem' : 'none',
+        });
     });
+
+    initializeData();
 
     let requestId = 0;
     let failNext = false;
@@ -383,6 +336,7 @@ $.ready(() => {
 
     let savedState = null;
     const initMethods = () => init('method-table', {
+        data: rows.slice(0, 6),
         rowId: 0,
         selection: 'multiple',
         layout: { top: 'selection,search|length', bottom: 'info,pagination' },

@@ -40,8 +40,8 @@
                 <p class="lead text-body-secondary mb-4">Search, sort, format and export. Explore local data, asynchronous results and the table API.</p>
                 <nav class="d-flex flex-wrap gap-2" aria-label="Demo sections">
                     <a class="btn btn-primary ripple" href="#basic">Start here</a>
-                    <a class="btn btn-secondary ripple" href="#data">Data &amp; formatting</a>
-                    <a class="btn btn-outline-primary ripple" href="#exports-remote">Exports &amp; remote</a>
+                    <a class="btn btn-secondary ripple" href="#data">Local data &amp; exports</a>
+                    <a class="btn btn-outline-primary ripple" href="#remote">Remote results</a>
                     <a class="btn btn-outline-primary ripple" href="#methods-events">API &amp; events</a>
                 </nav>
             </div>
@@ -52,7 +52,7 @@
                 <h2 class="h3 mb-1" id="basic-title">Search, sort, and choose your controls</h2>
                 <p class="text-body-secondary mb-0">Start with an HTML table. Sort a heading with click, Enter or Space; hold Shift to add another sort key.</p>
             </header>
-            <div class="card card-body p-4">
+            <div class="card card-body p-3 p-md-4">
                 <div class="d-flex flex-wrap align-items-center gap-3 mb-4" id="controls" role="group" aria-label="Table options" aria-controls="basic-table">
                     <label><input type="checkbox" id="allow-search" checked> Searching</label>
                     <label><input type="checkbox" id="allow-order" checked> Sorting</label>
@@ -68,8 +68,7 @@
                     <button id="toggle-direction" class="btn btn-outline-primary btn-sm ripple" type="button" aria-pressed="false" aria-controls="direction-host">Right-to-left layout</button>
                 </div>
                 <div class="demo-table" id="direction-host">
-                    <table id="basic-table">
-                        <caption>Team scores</caption>
+                    <table id="basic-table" aria-label="Team scores">
                         <thead>
                             <tr>
                                 <th>Name</th>
@@ -116,150 +115,115 @@
 
         <section class="mb-5" id="data" aria-labelledby="data-title">
             <header class="border-bottom pb-3 mb-4">
-                <h2 class="h3 mb-1" id="data-title">Local data and rendering</h2>
-                <p class="text-body-secondary mb-0">Supply JavaScript rows, map nested object paths, and format the displayed results.</p>
+                <h2 class="h3 mb-1" id="data-title">Local data, filters, and exports</h2>
+                <p class="text-body-secondary mb-0">Explore one dataset from end to end: switch its shape, filter the scores, choose columns, and export the results.</p>
             </header>
-            <div class="row g-4">
-                <div class="col-xl-6">
-                    <div class="card card-body h-100 p-4">
-                        <h3 class="h5">Arrays and nested objects</h3>
-                        <p class="text-body-secondary">Switch data sources or narrow the preview. Details reveal collapsed fields; try the custom list layout or use Columns to choose which fields are included.</p>
-                        <label class="mb-2" for="data-source">Data source</label>
-                        <select class="input-outline mb-3" id="data-source" aria-controls="data-table data-config">
+            <div class="card card-body p-3 p-md-4">
+                <div class="row g-3 mb-3">
+                    <div class="col-md-4">
+                        <label class="d-block mb-2" for="data-source">Data source</label>
+                        <select class="input-outline w-100" id="data-source" aria-controls="data-table data-config">
                             <option value="arrays">Arrays</option>
                             <option value="objects">Nested objects</option>
                         </select>
-                        <label class="mb-2" for="data-width">Preview width</label>
-                        <select class="input-outline mb-3" id="data-width" aria-controls="data-preview">
-                            <option value="full">Available width</option>
-                            <option value="narrow">Narrow</option>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="d-block mb-2" for="data-team">Team</label>
+                        <select class="input-outline w-100" id="data-team" aria-controls="data-table">
+                            <option value="">All teams</option>
+                            <option>Design</option>
+                            <option>Engineering</option>
+                            <option>Support</option>
                         </select>
-                        <label class="form-check mb-3">
-                            <input class="input-check" type="checkbox" id="data-details" aria-controls="data-table data-config">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="d-block mb-2" for="data-score">Minimum score</label>
+                        <select class="input-outline w-100" id="data-score" aria-controls="data-table">
+                            <option value="">Any score</option>
+                            <option value="85">85</option>
+                            <option value="90">90</option>
+                        </select>
+                    </div>
+                </div>
+                <details class="mb-3">
+                    <summary>Responsive preview</summary>
+                    <div class="d-flex flex-wrap align-items-center gap-3 mt-3">
+                        <div class="d-flex align-items-center gap-2">
+                            <label class="mb-0" for="data-width">Preview width</label>
+                            <select class="input-outline input-sm w-auto" id="data-width" aria-controls="data-preview">
+                                <option value="full">Full width</option>
+                                <option value="narrow">Narrow (320px)</option>
+                            </select>
+                        </div>
+                        <label class="form-check mb-0">
+                            <input class="input-check" type="checkbox" id="data-details" aria-controls="data-table">
                             <span class="form-check-label">Custom details list</span>
                         </label>
-                        <div class="demo-table" id="data-preview">
-                            <table id="data-table">
-                                <caption>Local team scores</caption>
-                                <thead>
-                                    <tr>
-                                        <th>Name</th>
-                                        <th>Team</th>
-                                        <th>Score</th>
-                                        <th>Email</th>
-                                        <th>Notes</th>
-                                    </tr>
-                                </thead>
-                                <tbody></tbody>
-                            </table>
-                        </div>
-                        <details class="mt-3">
-                            <summary>Initialization</summary>
-                            <pre class="bg-body-tertiary p-3 rounded mt-2 mb-0"><code id="data-config"></code></pre>
-                        </details>
                     </div>
+                    <p class="form-text mb-0">Narrow the preview to collapse lower-priority columns into expandable row details.</p>
+                </details>
+                <div class="demo-table" id="data-preview">
+                    <table id="data-table" aria-label="Team directory">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Team</th>
+                                <th>Score</th>
+                                <th>Email</th>
+                                <th>Notes</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                        <tfoot>
+                            <tr>
+                                <td colspan="2">Page total</td>
+                                <td class="text-end" data-demo-total></td>
+                                <td colspan="2"></td>
+                            </tr>
+                        </tfoot>
+                    </table>
                 </div>
-                <div class="col-xl-6" id="callbacks">
-                    <div class="card card-body h-100 p-4">
-                        <h3 class="h5">Filters and formatting</h3>
-                        <p class="text-body-secondary">Filter by team and minimum score, then format and total the matching page.</p>
-                        <div class="row g-2 mb-3">
-                            <div class="col-sm-6">
-                                <label class="d-block mb-2" for="callback-team">Team</label>
-                                <select class="input-outline w-100" id="callback-team" aria-controls="callback-table">
-                                    <option value="">All teams</option>
-                                    <option>Design</option>
-                                    <option>Engineering</option>
-                                    <option>Support</option>
-                                </select>
-                            </div>
-                            <div class="col-sm-6">
-                                <label class="d-block mb-2" for="callback-score">Minimum score</label>
-                                <select class="input-outline w-100" id="callback-score" aria-controls="callback-table">
-                                    <option value="">Any score</option>
-                                    <option value="85">85</option>
-                                    <option value="90">90</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="demo-table">
-                            <table id="callback-table">
-                                <caption>Formatted team scores</caption>
-                                <thead>
-                                    <tr>
-                                        <th>Name</th>
-                                        <th>Team</th>
-                                        <th>Score</th>
-                                    </tr>
-                                </thead>
-                                <tbody></tbody>
-                                <tfoot>
-                                    <tr>
-                                        <td colspan="2">Displayed score total</td>
-                                        <td class="text-end"></td>
-                                    </tr>
-                                </tfoot>
-                            </table>
-                        </div>
-                        <p id="callback-summary" class="form-text mb-0" aria-live="polite"></p>
-                    </div>
-                </div>
+                <p class="form-text mb-2">Scores of 90 or more are highlighted; the footer totals the current page.</p>
+                <p class="form-text mb-0">CSV exports matching rows, Excel exports all rows, and Print uses the current page. Use Columns to choose the export fields.</p>
+                <details class="mt-3">
+                    <summary>Data and column mapping</summary>
+                    <p class="form-text mt-2 mb-0">First row shown; the table includes 12 records.</p>
+                    <pre class="bg-body-tertiary p-3 rounded mt-2 mb-0"><code id="data-config"></code></pre>
+                </details>
             </div>
         </section>
 
-        <section class="mb-5" id="exports-remote" aria-labelledby="exports-remote-title">
+        <section class="mb-5" id="remote" aria-labelledby="remote-title">
             <header class="border-bottom pb-3 mb-4">
-                <h2 class="h3 mb-1" id="exports-remote-title">Exports and remote results</h2>
-                <p class="text-body-secondary mb-0">Export the current page or load rows from an asynchronous source.</p>
+                <h2 class="h3 mb-1" id="remote-title">Remote results</h2>
+                <p class="text-body-secondary mb-0">A simulated service responds after 600 ms. Try a failure, retry, or replace a pending search.</p>
             </header>
-            <div class="row g-4">
-                <div class="col-xl-6" id="exports">
-                    <div class="card card-body h-100 p-4">
-                        <h3 class="h5">CSV, Excel, and print</h3>
-                        <p class="text-body-secondary">CSV exports all matching rows, Excel exports every row, and Print uses the current page. Use Columns to choose which fields appear in the table and its exports.</p>
-                        <div class="demo-table">
-                            <table id="export-table">
-                                <caption>Exportable scores</caption>
-                                <thead>
-                                    <tr>
-                                        <th>Name</th>
-                                        <th>Team</th>
-                                        <th>Score</th>
-                                    </tr>
-                                </thead>
-                                <tbody></tbody>
-                            </table>
-                        </div>
-                    </div>
+            <div class="card card-body p-3 p-md-4">
+                <div class="d-flex flex-wrap gap-2 mb-3">
+                    <button id="fail-request" class="btn btn-outline-primary ripple" type="button">Fail next request</button>
+                    <button id="retry-request" class="btn btn-primary ripple" type="button">Retry</button>
+                    <button id="replace-request" class="btn btn-outline-primary ripple" type="button">Replace pending search</button>
                 </div>
-                <div class="col-xl-6" id="remote">
-                    <div class="card card-body h-100 p-4">
-                        <h3 class="h5">Asynchronous results</h3>
-                        <p class="text-body-secondary">A simulated service responds after 600 ms. Try a failure, retry, or replace a pending search.</p>
-                        <div class="d-flex flex-wrap gap-2 mb-3">
-                            <button id="fail-request" class="btn btn-outline-primary ripple" type="button">Fail next request</button>
-                            <button id="retry-request" class="btn btn-primary ripple" type="button">Retry</button>
-                            <button id="replace-request" class="btn btn-outline-primary ripple" type="button">Replace pending search</button>
-                        </div>
-                        <p id="remote-message" class="form-text" aria-live="polite">Waiting for results…</p>
-                        <div class="demo-table">
-                            <table id="remote-table">
-                                <caption>Remote team scores</caption>
-                                <thead>
-                                    <tr>
-                                        <th>Name</th>
-                                        <th>Team</th>
-                                        <th>Score</th>
-                                    </tr>
-                                </thead>
-                                <tbody></tbody>
-                            </table>
-                        </div>
-                        <details class="mt-3">
-                            <summary>Request log</summary>
-                            <ol id="request-log" class="demo-request-log overflow-auto small font-monospace mb-0 mt-2" aria-label="Request log"></ol>
-                        </details>
-                    </div>
+                <p id="remote-message" class="form-text" aria-live="polite">Waiting for results…</p>
+                <div class="demo-table">
+                    <table id="remote-table" aria-label="Remote team scores">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Team</th>
+                                <th>Score</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h3 class="h5 mb-0">Request log</h3>
+                </div>
+                <div class="card-body">
+                    <ol id="request-log" class="demo-request-log overflow-auto small font-monospace mb-0" aria-label="Request log"></ol>
                 </div>
             </div>
         </section>
@@ -267,84 +231,60 @@
         <section class="mb-5" id="methods-events" aria-labelledby="methods-events-title">
             <header class="border-bottom pb-3 mb-4">
                 <h2 class="h3 mb-1" id="methods-events-title">Methods and lifecycle events</h2>
-                <p class="text-body-secondary mb-0">Select rows across pages, edit Alice by ID, or save and restore the current view. Names act as stable IDs in this example. Dispose restores the original HTML; Init starts it again.</p>
+                <p class="text-body-secondary mb-0">Select rows across pages, edit Alice by ID, or save and restore the current view. Names act as stable IDs in this example. Dispose restores the empty HTML table; Init loads the starting rows again.</p>
             </header>
-            <div class="row g-4">
-                <div class="col-xl-7">
-                    <div class="card card-body h-100 p-4">
-                        <h3 class="h5">Interactive instance</h3>
-                        <div class="d-flex flex-wrap gap-2 mb-3">
-                            <button class="btn btn-primary ripple" data-demo-method="init" type="button">Init</button>
-                            <button class="btn btn-outline-primary ripple" data-demo-method="addRows" type="button">Add two rows</button>
-                            <button class="btn btn-outline-primary ripple" data-demo-method="setData" type="button">Replace data</button>
-                            <button class="btn btn-outline-primary ripple" data-demo-method="setValue" type="button">Set first score</button>
-                            <button class="btn btn-outline-primary ripple" data-demo-method="setRowById" type="button">Set Alice’s score</button>
-                            <button class="btn btn-outline-primary ripple" data-demo-method="selectRows" type="button">Select matching rows</button>
-                            <button class="btn btn-secondary ripple" data-demo-method="getSelectedIds" type="button">Get selected IDs</button>
-                            <button class="btn btn-secondary ripple" data-demo-method="getRowById" type="button">Get Alice by ID</button>
-                            <button class="btn btn-secondary ripple" data-demo-method="getData" type="button">Get matching rows</button>
-                            <button class="btn btn-secondary ripple" data-demo-method="info" type="button">Get info</button>
-                            <button class="btn btn-secondary ripple" data-demo-method="getState" type="button">Save view</button>
-                            <button class="btn btn-outline-primary ripple" data-demo-method="setState" id="restore-state" type="button" disabled>Restore view</button>
-                            <button class="btn btn-outline-primary ripple" data-demo-method="clear" type="button">Clear rows</button>
-                            <button class="btn btn-outline-danger ripple" data-demo-method="dispose" type="button">Dispose</button>
+            <div class="card card-body p-3 p-md-4">
+                <div class="row g-3 mb-3">
+                    <div class="col-md-4" role="group" aria-labelledby="edit-actions">
+                        <h3 class="h6" id="edit-actions">Edit rows</h3>
+                        <div class="d-flex flex-wrap gap-2">
+                            <button class="btn btn-outline-primary btn-sm ripple" data-demo-method="addRows" type="button">Add two rows</button>
+                            <button class="btn btn-outline-primary btn-sm ripple" data-demo-method="setData" type="button">Replace data</button>
+                            <button class="btn btn-outline-primary btn-sm ripple" data-demo-method="setValue" type="button">Set first score</button>
+                            <button class="btn btn-outline-primary btn-sm ripple" data-demo-method="setRowById" type="button">Set Alice’s score</button>
+                            <button class="btn btn-outline-primary btn-sm ripple" data-demo-method="clear" type="button">Clear rows</button>
                         </div>
-                        <output class="small text-body-secondary mb-3" id="method-output" aria-live="polite">Ready.</output>
-                        <div class="demo-table">
-                            <table id="method-table">
-                                <caption>API playground</caption>
-                                <thead>
-                                    <tr>
-                                        <th>Name</th>
-                                        <th>Team</th>
-                                        <th>Score</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr>
-                                        <td>Alice</td>
-                                        <td>Design</td>
-                                        <td>93</td>
-                                    </tr>
-                                    <tr>
-                                        <td>Bob</td>
-                                        <td>Engineering</td>
-                                        <td>87</td>
-                                    </tr>
-                                    <tr>
-                                        <td>Café team</td>
-                                        <td>Support</td>
-                                        <td>81</td>
-                                    </tr>
-                                    <tr>
-                                        <td>Dana</td>
-                                        <td>Design</td>
-                                        <td>95</td>
-                                    </tr>
-                                    <tr>
-                                        <td>Ellis</td>
-                                        <td>Engineering</td>
-                                        <td>89</td>
-                                    </tr>
-                                    <tr>
-                                        <td>Fran</td>
-                                        <td>Support</td>
-                                        <td>84</td>
-                                    </tr>
-                                </tbody>
-                            </table>
+                    </div>
+                    <div class="col-md-4" role="group" aria-labelledby="view-actions">
+                        <h3 class="h6" id="view-actions">Selection and view</h3>
+                        <div class="d-flex flex-wrap gap-2">
+                            <button class="btn btn-outline-primary btn-sm ripple" data-demo-method="selectRows" type="button">Select matching rows</button>
+                            <button class="btn btn-secondary btn-sm ripple" data-demo-method="getState" type="button">Save view</button>
+                            <button class="btn btn-outline-primary btn-sm ripple" data-demo-method="setState" id="restore-state" type="button" disabled>Restore view</button>
+                            <button class="btn btn-primary btn-sm ripple" data-demo-method="init" type="button">Init</button>
+                            <button class="btn btn-outline-danger btn-sm ripple" data-demo-method="dispose" type="button">Dispose</button>
+                        </div>
+                    </div>
+                    <div class="col-md-4" role="group" aria-labelledby="read-actions">
+                        <h3 class="h6" id="read-actions">Read data</h3>
+                        <div class="d-flex flex-wrap gap-2">
+                            <button class="btn btn-secondary btn-sm ripple" data-demo-method="getSelectedIds" type="button">Get selected IDs</button>
+                            <button class="btn btn-secondary btn-sm ripple" data-demo-method="getRowById" type="button">Get Alice by ID</button>
+                            <button class="btn btn-secondary btn-sm ripple" data-demo-method="getData" type="button">Get matching rows</button>
+                            <button class="btn btn-secondary btn-sm ripple" data-demo-method="info" type="button">Get info</button>
                         </div>
                     </div>
                 </div>
-                <div class="col-xl-5">
-                    <div class="card h-100">
-                        <div class="card-header d-flex align-items-center justify-content-between gap-2">
-                            <h3 class="h5 mb-0">Event log</h3>
-                            <button id="clear-log" class="btn btn-outline-secondary btn-sm ripple" type="button">Clear log</button>
-                        </div>
-                        <div class="card-body demo-event-log" id="event-log" role="log" aria-label="Tables events" aria-live="polite" aria-relevant="additions"></div>
-                    </div>
+                <output class="small text-body-secondary text-break mb-3" id="method-output" aria-live="polite">Ready.</output>
+                <div class="demo-table">
+                    <table id="method-table" aria-label="API playground">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Team</th>
+                                <th>Score</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
                 </div>
+            </div>
+            <div class="card mt-4">
+                <div class="card-header d-flex align-items-center justify-content-between gap-2">
+                    <h3 class="h5 mb-0">Event log</h3>
+                    <button id="clear-log" class="btn btn-outline-secondary btn-sm ripple" type="button">Clear log</button>
+                </div>
+                <div class="card-body demo-event-log" id="event-log" role="log" aria-label="Tables events" aria-live="polite" aria-relevant="additions"></div>
             </div>
         </section>
     </main>
